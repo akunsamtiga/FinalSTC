@@ -1,15 +1,126 @@
-*.iml
-.gradle
-/local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
-.DS_Store
-/build
-/captures
-.externalNativeBuild
-.cxx
+# ======================================
+# ANDROID STUDIO & GRADLE
+# ======================================
+.gradle/
+build/
+**/build/
+!gradle/wrapper/gradle-wrapper.jar
 local.properties
+
+# ======================================
+# ANDROID / INTELLIJ SPECIFIC
+# ======================================
+.idea/
+*.iml
+*.ipr
+*.iws
+out/
+captures/
+.navigation/
+.cxx/
+
+# ======================================
+# LOG, CACHE, TEMPORARY FILES
+# ======================================
+*.log
+*.cache
+*.tmp
+*.swp
+*.bak
+*.orig
+*.rej
+
+# ======================================
+# SYSTEM FILES (Windows / Mac / Linux)
+# ======================================
+.DS_Store
+Thumbs.db
+ehthumbs.db
+*.lnk
+
+# ======================================
+# FIREBASE / GOOGLE CONFIG
+# ======================================
+google-services.json
+GoogleService-Info.plist
+
+# ======================================
+# KEYSTORE & SIGNING FILES
+# ======================================
+*.jks
+*.keystore
+*.pem
+*.p12
+*.key
+
+# ======================================
+# JETPACK COMPOSE PREVIEW
+# ======================================
+.preview/
+
+# ======================================
+# GRADLE DAEMON & WRAPPER
+# ======================================
+gradle-app.setting
+.gradle/
+buildSrc/.gradle/
+
+# ======================================
+# NDK / CMAKE / NATIVE BUILD
+# ======================================
+.externalNativeBuild/
+.cxx/
+
+# ======================================
+# OUTPUT FILES (APK / AAB / OBJ)
+# ======================================
+*.class
+*.dex
+*.apk
+*.ap_
+*.aab
+*.so
+*.obj
+
+# ======================================
+# KOTLIN SPECIFIC
+# ======================================
+*.kotlin_module
+
+# ======================================
+# INTELLIJ PROJECT CONFIG FILES
+# ======================================
+.idea/workspace.xml
+.idea/tasks.xml
+.idea/dictionaries
+.idea/libraries
+.idea/caches
+.idea/modules.xml
+.idea/gradle.xml
+.idea/compiler.xml
+.idea/misc.xml
+.idea/deploymentTargetDropDown.xml
+
+# ======================================
+# LOCAL TEST / MOCK DATA / LOGS
+# ======================================
+/test-results/
+/reports/
+/logs/
+
+# ======================================
+# ANDROID PROFILING FILES
+# ======================================
+*.hprof
+
+# ======================================
+# CUSTOM IGNORE — LOCAL DATA FOLDER
+# (hide your sensitive code or data files)
+# ======================================
+app/src/main/java/com/autotrade/finalstc/data/
+
+# ======================================
+# OPTIONAL: ENV / CONFIG FILES
+# ======================================
+.env
+*.env
