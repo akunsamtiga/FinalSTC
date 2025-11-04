@@ -7,220 +7,220 @@
 ![Kotlin](https://img.shields.io/badge/kotlin-1.9.0-purple.svg)
 ![License](https://img.shields.io/badge/license-Proprietary-red.svg)
 
-**Advanced Trading Automation System for Stockity Platform**
+**Sistem Otomasi Trading Canggih untuk Platform Stockity**
 
-[Features](#-features) • [Installation](#-installation) • [Architecture](#-architecture) • [Documentation](#-api-integration)
+[Fitur](#-fitur) • [Instalasi](#-instalasi) • [Arsitektur](#-arsitektur) • [Dokumentasi](#-integrasi-api)
 
 </div>
 
 ---
 
-## 📋 Table of Contents
+## 📋 Daftar Isi
 
-- [Overview](#-overview)
-- [Features](#-features)
+- [Ringkasan](#-ringkasan)
+- [Fitur](#-fitur)
 - [Tech Stack](#-tech-stack)
-- [Architecture](#-architecture)
-- [Getting Started](#-getting-started)
-- [Project Structure](#-project-structure)
-- [Trading Modes](#-trading-modes)
-- [Configuration](#%EF%B8%8F-configuration)
-- [API Integration](#-api-integration)
-- [Security](#-security)
-- [Performance](#-performance-optimization)
+- [Arsitektur](#-arsitektur)
+- [Memulai](#-memulai)
+- [Struktur Proyek](#-struktur-proyek)
+- [Mode Trading](#-mode-trading)
+- [Konfigurasi](#%EF%B8%8F-konfigurasi)
+- [Integrasi API](#-integrasi-api)
+- [Keamanan](#-keamanan)
+- [Performa](#-optimasi-performa)
 - [Debugging](#-debugging)
-- [Contributing](#-contributing)
-- [License](#-license)
-- [Support](#-support)
+- [Kontribusi](#-kontribusi)
+- [Lisensi](#-lisensi)
+- [Dukungan](#-dukungan)
 
 ---
 
-## 🎯 Overview
+## 🎯 Ringkasan
 
-STC Autotrade is a sophisticated Android application designed to provide automated trading capabilities for the Stockity binary options platform. Built with modern Android development practices and Jetpack Compose, it delivers multiple trading strategies, real-time market monitoring, and comprehensive trade management features.
+STC Autotrade adalah aplikasi Android canggih yang dirancang untuk menyediakan kemampuan trading otomatis untuk platform binary options Stockity. Dibangun dengan praktik pengembangan Android modern dan Jetpack Compose, aplikasi ini menghadirkan berbagai strategi trading, pemantauan pasar real-time, dan fitur manajemen trading yang komprehensif.
 
-### Key Highlights
+### Keunggulan Utama
 
-- 🚀 **Ultra-Fast Execution** - 50ms detection interval for instant trade recognition
-- 🎯 **Multiple Trading Modes** - Schedule, Follow Order, Indicator, and CTC modes
-- 💰 **Multi-Currency Support** - IDR, USD, EUR, MYR, and 15+ currencies
-- 🌍 **Multi-Language** - Support for 7 languages including Indonesian, English, Spanish, Vietnamese, Turkish, Hindi, and Malay
-- 📊 **Real-Time Analytics** - Live profit tracking and comprehensive statistics
-- 🔐 **Enterprise Security** - Encrypted sessions and whitelist management system
-- 🎨 **Modern UI** - Material Design 3 with dark/light theme support
+- 🚀 **Eksekusi Ultra-Cepat** - Interval deteksi 50ms untuk pengenalan trading instan
+- 🎯 **Berbagai Mode Trading** - Mode Schedule, Follow Order, Indicator, dan CTC
+- 💰 **Dukungan Multi-Mata Uang** - IDR, USD, EUR, MYR, dan 15+ mata uang lainnya
+- 🌐 **Multi-Bahasa** - Dukungan untuk 7 bahasa termasuk Indonesia, Inggris, Spanyol, Vietnam, Turki, Hindi, dan Melayu
+- 📊 **Analitik Real-Time** - Pelacakan profit langsung dan statistik komprehensif
+- 🔐 **Keamanan Enterprise** - Sesi terenkripsi dan sistem manajemen whitelist
+- 🎨 **UI Modern** - Material Design 3 dengan dukungan tema gelap/terang
 
 ---
 
-## ✨ Features
+## ✨ Fitur
 
-### 🤖 Automated Trading Modes
+### 🤖 Mode Trading Otomatis
 
-#### 1. Schedule Mode
-Pre-configured trading schedules with bulk execution capabilities.
+#### 1. Mode Schedule
+Jadwal trading yang telah dikonfigurasi sebelumnya dengan kemampuan eksekusi massal.
 
-**Features:**
-- Bulk order creation and management
-- Time-based automated execution
-- Martingale strategy support
-- Continuous monitoring at 50ms intervals
-- Configurable trade parameters
+**Fitur:**
+- Pembuatan dan manajemen order massal
+- Eksekusi otomatis berbasis waktu
+- Dukungan strategi Martingale
+- Pemantauan berkelanjutan pada interval 50ms
+- Parameter trading yang dapat dikonfigurasi
 
-#### 2. Follow Order Mode (Ultra-Fast)
-Real-time price analysis with industry-leading detection speed.
+#### 2. Mode Follow Order (Ultra-Cepat)
+Analisis harga real-time dengan kecepatan deteksi terdepan di industri.
 
-**Features:**
-- 50ms monitoring interval
-- Multi-layer detection system (WebSocket → Balance → API)
-- Boundary and instant execution modes
-- Automatic recovery on connection issues
-- Triple fallback mechanism for reliability
+**Fitur:**
+- Interval pemantauan 50ms
+- Sistem deteksi multi-layer (WebSocket → Balance → API)
+- Mode eksekusi boundary dan instan
+- Pemulihan otomatis pada masalah koneksi
+- Mekanisme fallback tiga lapis untuk keandalan
 
-**Performance Metrics:**
-- Detection latency: < 50ms
-- Execution response: < 100ms
-- Triple-layer redundancy
-- Cached trend detection
+**Metrik Performa:**
+- Latensi deteksi: < 50ms
+- Respons eksekusi: < 100ms
+- Redundansi tiga lapis
+- Deteksi trend yang di-cache
 
-#### 3. Indicator Order Mode
-Technical analysis-based trading with automatic cycle restart.
+#### 3. Mode Indicator Order
+Trading berbasis analisis teknikal dengan restart siklus otomatis.
 
-**Supported Indicators:**
+**Indikator yang Didukung:**
 - RSI (Relative Strength Index)
 - EMA (Exponential Moving Average)
 - Bollinger Bands
 - MACD (Moving Average Convergence Divergence)
 - Stochastic Oscillator
 
-**Features:**
-- Auto-restart on trade completion (win/loss)
-- Support and resistance level detection
-- Adjustable sensitivity parameters
-- Continuous cycle operation
-- Prediction-based execution
+**Fitur:**
+- Auto-restart saat trading selesai (menang/kalah)
+- Deteksi level support dan resistance
+- Parameter sensitivitas yang dapat disesuaikan
+- Operasi siklus berkelanjutan
+- Eksekusi berbasis prediksi
 
-#### 4. CTC Order Mode (Ultra-Fast)
-Optimized mode with identical performance to Follow Order.
+#### 4. Mode CTC Order (Ultra-Cepat)
+Mode yang dioptimalkan dengan performa identik dengan Follow Order.
 
-**Features:**
-- 50ms ultra-fast detection
-- Same speed optimization as Follow Order
-- Performance-focused design
-- Triple-layer detection system
-- Ideal for high-frequency trading
+**Fitur:**
+- Deteksi ultra-cepat 50ms
+- Kecepatan optimasi sama dengan Follow Order
+- Desain yang fokus pada performa
+- Sistem deteksi tiga lapis
+- Ideal untuk trading frekuensi tinggi
 
-### 💎 Advanced Trading Features
+### 💎 Fitur Trading Lanjutan
 
-#### Martingale Strategy
-Intelligent position sizing for loss recovery.
+#### Strategi Martingale
+Ukuran posisi cerdas untuk pemulihan kerugian.
 
-**Configuration Options:**
-- Multiplier types: Fixed or Percentage-based
-- Maximum steps: 1-10 configurable levels
-- Smart recovery system
-- Real-time step tracking
-- Automatic reset on profit
+**Opsi Konfigurasi:**
+- Jenis multiplier: Fixed atau berbasis Persentase
+- Langkah maksimum: 1-10 level yang dapat dikonfigurasi
+- Sistem pemulihan cerdas
+- Pelacakan langkah real-time
+- Reset otomatis saat profit
 
-#### Risk Management
-Comprehensive protection mechanisms.
+#### Manajemen Risiko
+Mekanisme perlindungan komprehensif.
 
-**Features:**
-- **Stop Loss** - Maximum loss threshold protection
-- **Stop Profit** - Automatic profit-taking at target
-- **Session-based Tracking** - Per-session P&L monitoring
-- **Loss Prevention** - Smart circuit breakers
-- **Real-time Alerts** - Instant notifications on thresholds
+**Fitur:**
+- **Stop Loss** - Perlindungan ambang batas kerugian maksimum
+- **Stop Profit** - Pengambilan profit otomatis pada target
+- **Pelacakan Berbasis Sesi** - Pemantauan P&L per sesi
+- **Pencegahan Kerugian** - Circuit breaker cerdas
+- **Peringatan Real-time** - Notifikasi instan pada ambang batas
 
-#### Real-Time Monitoring
-Live trading analytics and performance tracking.
+#### Pemantauan Real-Time
+Analitik trading langsung dan pelacakan performa.
 
-**Metrics:**
-- Live P&L (Profit & Loss) tracking
-- Today's profit calculation
-- Trading statistics dashboard
-- Win rate analytics
-- Trade history with details
-- Performance visualization
+**Metrik:**
+- Pelacakan P&L (Profit & Loss) langsung
+- Perhitungan profit hari ini
+- Dashboard statistik trading
+- Analitik win rate
+- Riwayat trading dengan detail
+- Visualisasi performa
 
-### 👥 User Management
+### 👥 Manajemen Pengguna
 
-- **Whitelist System** - Admin-controlled user access with device verification
-- **Multi-Admin Support** - Regular Admin and Super Admin roles with granular permissions
-- **Auto-Registration** - Seamless user onboarding from Stockity platform
-- **Session Management** - Encrypted user sessions with automatic expiry
-- **Device Tracking** - Multi-device support with security controls
+- **Sistem Whitelist** - Akses pengguna yang dikontrol admin dengan verifikasi perangkat
+- **Dukungan Multi-Admin** - Peran Admin Reguler dan Super Admin dengan izin granular
+- **Auto-Registration** - Onboarding pengguna yang mulus dari platform Stockity
+- **Manajemen Sesi** - Sesi pengguna terenkripsi dengan kedaluwarsa otomatis
+- **Pelacakan Perangkat** - Dukungan multi-perangkat dengan kontrol keamanan
 
-### 🎨 UI/UX Features
+### 🎨 Fitur UI/UX
 
-- **Material Design 3** - Modern, intuitive interface following latest design guidelines
-- **Dark/Light Theme** - System-aware or manual theme selection
-- **Multi-Language** - 7 languages with easy switching
-- **Responsive Design** - Optimized for phones and tablets
-- **Real-Time Updates** - Live data synchronization with smooth animations
-- **Accessibility** - Screen reader support and high contrast modes
+- **Material Design 3** - Interface modern dan intuitif mengikuti panduan desain terbaru
+- **Tema Gelap/Terang** - Pemilihan tema sadar sistem atau manual
+- **Multi-Bahasa** - 7 bahasa dengan perpindahan mudah
+- **Desain Responsif** - Dioptimalkan untuk ponsel dan tablet
+- **Update Real-Time** - Sinkronisasi data langsung dengan animasi halus
+- **Aksesibilitas** - Dukungan screen reader dan mode kontras tinggi
 
 ---
 
 ## 🛠 Tech Stack
 
-### Core Technologies
+### Teknologi Inti
 
-| Component | Version | Purpose |
+| Komponen | Versi | Tujuan |
 |-----------|---------|---------|
-| **Kotlin** | 1.9.0 | Primary language |
-| **Jetpack Compose** | Latest | UI framework |
+| **Kotlin** | 1.9.0 | Bahasa utama |
+| **Jetpack Compose** | Terbaru | Framework UI |
 | **Min SDK** | 24 | Android 7.0+ |
 | **Target SDK** | 34 | Android 14 |
-| **Gradle** | 8.0+ | Build system |
+| **Gradle** | 8.0+ | Sistem build |
 
-### Architecture & Libraries
+### Arsitektur & Library
 
-#### 🏗️ Dependency Injection
+#### 🗃️ Dependency Injection
 
 ```kotlin
-val hilt = Hilt 2.48                    // Dependency injection framework
+val hilt = Hilt 2.48                    // Framework dependency injection
 ```
 
 #### 🌐 Networking
 ```kotlin
 Retrofit 2.9.0               // REST API client
-OkHttp 4.11.0                // HTTP client with interceptors
-Gson 2.10.1                  // JSON serialization/deserialization
-WebSocket                    // Real-time bidirectional communication
+OkHttp 4.11.0                // HTTP client dengan interceptor
+Gson 2.10.1                  // Serialisasi/deserialisasi JSON
+WebSocket                    // Komunikasi bidirektional real-time
 ```
 
 #### 💾 Database & Storage
 ```kotlin
-Firebase Firestore           // Cloud NoSQL database
-EncryptedSharedPreferences   // Secure local key-value storage
+Firebase Firestore           // Database NoSQL cloud
+EncryptedSharedPreferences   // Penyimpanan key-value lokal yang aman
 ```
 
-#### 🎨 UI Components
+#### 🎨 Komponen UI
 ```kotlin
-Compose Material3            // Material Design 3 components
-Accompanist WebView          // WebView integration for Compose
-Compose Navigation           // Type-safe navigation system
-Compose Lifecycle            // Lifecycle-aware components
+Compose Material3            // Komponen Material Design 3
+Accompanist WebView          // Integrasi WebView untuk Compose
+Compose Navigation           // Sistem navigasi type-safe
+Compose Lifecycle            // Komponen lifecycle-aware
 ```
 
 #### 🔧 Utilities
 ```kotlin
-Kotlin Coroutines            // Asynchronous programming
-Kotlin Flow                  // Reactive data streams
-Coil                         // Efficient image loading
-Security Crypto              // Data encryption utilities
+Kotlin Coroutines            // Pemrograman asinkron
+Kotlin Flow                  // Stream data reaktif
+Coil                         // Pemuatan gambar yang efisien
+Security Crypto              // Utilitas enkripsi data
 ```
 
 ---
 
-## 🏗 Architecture
+## 🏗 Arsitektur
 
-### MVVM Pattern Implementation
+### Implementasi Pola MVVM
 
 ```
 ┌─────────────────────────────────────────────────┐
 │                  View Layer                     │
 │           Jetpack Compose Screens               │
-│        (UI Components & User Interaction)       │
+│        (Komponen UI & Interaksi User)           │
 └────────────────┬────────────────────────────────┘
                  │
                  │ State & Events
@@ -248,25 +248,25 @@ Security Crypto              // Data encryption utilities
 └──────────────────┘        └──────────────────────┘
 ```
 
-### Layer Responsibilities
+### Tanggung Jawab Layer
 
 #### 1. 🎨 Presentation Layer
-- **Screens** - Composable UI screens with Material Design 3
-- **ViewModels** - State management and business logic coordination
-- **UI State** - Immutable state classes for predictable UI updates
-- **Navigation** - Type-safe navigation between screens
+- **Screens** - UI screen Composable dengan Material Design 3
+- **ViewModels** - Manajemen state dan koordinasi logika bisnis
+- **UI State** - Kelas state immutable untuk update UI yang dapat diprediksi
+- **Navigation** - Navigasi type-safe antar screen
 
 #### 2. 🎯 Domain Layer
-- **Use Cases** - Encapsulated business logic operations
-- **Models** - Domain-specific data models
-- **Repositories** - Abstract data access interfaces
+- **Use Cases** - Operasi logika bisnis yang ter-enkapsulasi
+- **Models** - Model data spesifik domain
+- **Repositories** - Interface akses data abstrak
 
 #### 3. 💾 Data Layer
-- **Remote** - API services, WebSocket connections, Firebase integration
-- **Local** - SharedPreferences, encrypted session management
-- **Mappers** - Data transformation between layers
+- **Remote** - Layanan API, koneksi WebSocket, integrasi Firebase
+- **Local** - SharedPreferences, manajemen sesi terenkripsi
+- **Mappers** - Transformasi data antar layer
 
-### Dependency Injection Structure
+### Struktur Dependency Injection
 
 ```kotlin
 @Module
@@ -280,170 +280,170 @@ object AppModule {
     @Singleton
     fun provideUserRepository(): UserRepository
     
-    // ... additional providers
+    // ... provider tambahan
 }
 ```
 
 ---
 
-## 🚀 Getting Started
+## 🚀 Memulai
 
-### Prerequisites
+### Prasyarat
 
-Ensure you have the following installed:
+Pastikan Anda telah menginstal:
 
-- **Android Studio** - Hedgehog (2023.1.1) or later
-- **JDK** - Version 17 or later
+- **Android Studio** - Hedgehog (2023.1.1) atau lebih baru
+- **JDK** - Versi 17 atau lebih baru
 - **Android SDK** - API level 34
-- **Gradle** - Version 8.0 or later
-- **Git** - For version control
+- **Gradle** - Versi 8.0 atau lebih baru
+- **Git** - Untuk version control
 
-### Installation Steps
+### Langkah Instalasi
 
-#### 1. Clone the Repository
+#### 1. Clone Repository
 ```bash
 git clone https://github.com/yourusername/stc-autotrade.git
 cd stc-autotrade
 ```
 
-#### 2. Configure Firebase
-- Create a new Firebase project at [Firebase Console](https://console.firebase.google.com/)
-- Enable Firestore Database
-- Download `google-services.json`
-- Place the file in the `app/` directory
+#### 2. Konfigurasi Firebase
+- Buat proyek Firebase baru di [Firebase Console](https://console.firebase.google.com/)
+- Aktifkan Firestore Database
+- Unduh `google-services.json`
+- Tempatkan file di direktori `app/`
 
-#### 3. Set Up API Credentials
-Create a `local.properties` file in the project root:
+#### 3. Setup Kredensial API
+Buat file `local.properties` di root proyek:
 
 ```properties
-# Stockity API Configuration
+# Konfigurasi API Stockity
 STOCKITY_API_URL=https://api.stockity.id/
 
-# Optional: Add debug keys
+# Opsional: Tambahkan debug keys
 DEBUG_MODE=true
 ```
 
-#### 4. Sync and Build
+#### 4. Sync dan Build
 ```bash
-# Sync Gradle dependencies
+# Sync dependensi Gradle
 ./gradlew sync
 
-# Build the project
+# Build proyek
 ./gradlew build
 ```
 
-#### 5. Run the Application
+#### 5. Jalankan Aplikasi
 ```bash
 # Install debug build
 ./gradlew installDebug
 
-# Or run directly from Android Studio
+# Atau jalankan langsung dari Android Studio
 ```
 
-### Initial Configuration
+### Konfigurasi Awal
 
-#### Admin Setup
-1. **Super Admin Access**
-    - Default Super Admin email: `aryasis87@gmail.com`
-    - Login credentials are managed in Firebase
-    - Super Admin has full system access
+#### Setup Admin
+1. **Akses Super Admin**
+   - Email Super Admin default
+   - Kredensial login dikelola di Firebase
+   - Super Admin memiliki akses penuh sistem
 
-2. **System Configuration**
-    - Navigate to Admin Panel after login
-    - Configure Stockity registration URL
-    - Set WhatsApp support contact number
-    - Define default trading parameters
+2. **Konfigurasi Sistem**
+   - Navigasi ke Panel Admin setelah login
+   - Konfigurasi URL registrasi Stockity
+   - Set nomor kontak dukungan WhatsApp
+   - Tentukan parameter trading default
 
-3. **User Management**
-    - Add users to whitelist manually, OR
-    - Enable auto-registration from Stockity
-    - Configure user permissions
-    - Set device limits per user
+3. **Manajemen Pengguna**
+   - Tambahkan pengguna ke whitelist secara manual, ATAU
+   - Aktifkan auto-registration dari Stockity
+   - Konfigurasi izin pengguna
+   - Set batas perangkat per pengguna
 
 ---
 
-## 📁 Project Structure
+## 📁 Struktur Proyek
 
 ```
 com.autotrade.finalstc/
 │
 ├── data/
-│   ├── api/                    # API service interfaces
+│   ├── api/                    # Interface layanan API
 │   │   ├── StockityApiService
 │   │   └── WebSocketManager
-│   ├── local/                  # Local data management
+│   ├── local/                  # Manajemen data lokal
 │   │   ├── SessionManager
 │   │   └── PreferencesManager
-│   ├── model/                  # Data models & DTOs
+│   ├── model/                  # Model data & DTO
 │   │   ├── request/
 │   │   ├── response/
 │   │   └── entity/
-│   └── repository/             # Repository implementations
+│   └── repository/             # Implementasi repository
 │       ├── AuthRepository
 │       ├── TradingRepository
 │       └── UserRepository
 │
 ├── presentation/
-│   ├── login/                  # Login screen
+│   ├── login/                  # Screen login
 │   │   ├── LoginScreen.kt
 │   │   └── LoginViewModel.kt
-│   ├── register/               # Registration screen
+│   ├── register/               # Screen registrasi
 │   │   ├── RegisterScreen.kt
 │   │   └── RegisterViewModel.kt
-│   ├── main/                   # Main container
-│   │   ├── dashboard/          # Dashboard & trading controls
+│   ├── main/                   # Container utama
+│   │   ├── dashboard/          # Dashboard & kontrol trading
 │   │   │   ├── DashboardScreen.kt
 │   │   │   └── DashboardViewModel.kt
-│   │   ├── history/            # Trading history
+│   │   ├── history/            # Riwayat trading
 │   │   │   ├── HistoryScreen.kt
 │   │   │   └── HistoryViewModel.kt
-│   │   ├── profile/            # User profile & settings
+│   │   ├── profile/            # Profil & pengaturan user
 │   │   │   ├── ProfileScreen.kt
 │   │   │   └── ProfileViewModel.kt
-│   │   └── webview/            # Web trading view
+│   │   └── webview/            # Tampilan web trading
 │   │       ├── WebViewScreen.kt
 │   │       └── WebViewViewModel.kt
-│   ├── admin/                  # Admin panel
+│   ├── admin/                  # Panel admin
 │   │   ├── AdminScreen.kt
 │   │   └── AdminViewModel.kt
-│   └── theme/                  # Theme management
+│   └── theme/                  # Manajemen tema
 │       ├── Theme.kt
 │       ├── Color.kt
 │       └── Type.kt
 │
-├── utils/                      # Utility classes
-│   ├── StringsManager.kt       # Multi-language support
-│   ├── FileExportHelper.kt     # Export functionality
-│   ├── PermissionsHandler.kt   # Permission management
-│   ├── CurrencyFormatter.kt    # Currency formatting
-│   └── DateTimeUtils.kt        # Date/time utilities
+├── utils/                      # Kelas utilitas
+│   ├── StringsManager.kt       # Dukungan multi-bahasa
+│   ├── FileExportHelper.kt     # Fungsionalitas ekspor
+│   ├── PermissionsHandler.kt   # Manajemen izin
+│   ├── CurrencyFormatter.kt    # Format mata uang
+│   └── DateTimeUtils.kt        # Utilitas tanggal/waktu
 │
-├── di/                         # Dependency injection modules
+├── di/                         # Modul dependency injection
 │   ├── AppModule.kt
 │   ├── NetworkModule.kt
 │   └── DatabaseModule.kt
 │
-└── MainApplication.kt          # Application class
+└── MainApplication.kt          # Kelas aplikasi
 ```
 
 ---
 
-## 🎮 Trading Modes
+## 🎮 Mode Trading
 
-### 1. 📅 Schedule Mode
+### 1. 📅 Mode Schedule
 
-Execute trades based on pre-configured time schedules with bulk order support.
+Eksekusi trading berdasarkan jadwal yang telah dikonfigurasi dengan dukungan order massal.
 
-**Key Features:**
-- Bulk order creation with CSV import support
-- Precise time-based execution
-- Martingale strategy integration
-- Continuous monitoring at 50ms intervals
-- Automatic retry on failed orders
+**Fitur Utama:**
+- Pembuatan order massal dengan dukungan impor CSV
+- Eksekusi berbasis waktu yang presisi
+- Integrasi strategi Martingale
+- Pemantauan berkelanjutan pada interval 50ms
+- Retry otomatis pada order yang gagal
 
-**Usage Example:**
+**Contoh Penggunaan:**
 ```kotlin
-// Add scheduled orders
+// Tambahkan order terjadwal
 viewModel.addScheduledOrders(
     orders = listOf(
         ScheduledOrder(
@@ -455,13 +455,13 @@ viewModel.addScheduledOrders(
     )
 )
 
-// Start the bot
+// Jalankan bot
 viewModel.startBot(mode = TradingMode.SCHEDULE)
 
-// Monitor execution
+// Monitor eksekusi
 viewModel.botState.collect { state ->
     when (state) {
-        is BotState.Running -> // Handle running state
+        is BotState.Running -> // Handle state running
         is BotState.Completed -> // Handle completion
         is BotState.Error -> // Handle errors
     }
@@ -469,91 +469,91 @@ viewModel.botState.collect { state ->
 ```
 
 **Best Practices:**
-- Set realistic time windows for execution
-- Use appropriate amounts based on account balance
-- Enable stop loss for risk management
-- Monitor execution logs for optimization
+- Set jendela waktu yang realistis untuk eksekusi
+- Gunakan jumlah yang sesuai berdasarkan saldo akun
+- Aktifkan stop loss untuk manajemen risiko
+- Monitor log eksekusi untuk optimasi
 
 ---
 
-### 2. ⚡ Follow Order Mode (Ultra-Fast)
+### 2. ⚡ Mode Follow Order (Ultra-Cepat)
 
-Real-time price analysis with industry-leading 50ms detection speed.
+Analisis harga real-time dengan kecepatan deteksi 50ms terdepan di industri.
 
-**Architecture:**
+**Arsitektur:**
 ```
-Detection Pipeline:
-WebSocket (Primary) → Balance API (Secondary) → REST API (Fallback)
+Pipeline Deteksi:
+WebSocket (Primer) → Balance API (Sekunder) → REST API (Fallback)
      ↓ 50ms              ↓ 100ms                    ↓ 150ms
 ```
 
-**Key Features:**
-- **50ms monitoring interval** for instant detection
-- **Triple-layer detection** with automatic fallback
-- **Boundary execution** for precise entry points
-- **Instant execution** for immediate trades
-- **Auto-recovery system** on connection loss
-- **Cached trend analysis** for speed optimization
+**Fitur Utama:**
+- **Interval pemantauan 50ms** untuk deteksi instan
+- **Deteksi tiga lapis** dengan fallback otomatis
+- **Eksekusi boundary** untuk titik masuk yang presisi
+- **Eksekusi instan** untuk trading segera
+- **Sistem auto-recovery** saat kehilangan koneksi
+- **Analisis trend yang di-cache** untuk optimasi kecepatan
 
-**Performance Specifications:**
-- Detection latency: < 50ms (average 35ms)
-- Execution response: < 100ms (average 75ms)
-- WebSocket reliability: 99.9% uptime
-- Automatic reconnection: < 2 seconds
+**Spesifikasi Performa:**
+- Latensi deteksi: < 50ms (rata-rata 35ms)
+- Respons eksekusi: < 100ms (rata-rata 75ms)
+- Keandalan WebSocket: 99.9% uptime
+- Reconnection otomatis: < 2 detik
 
-**Usage Example:**
+**Contoh Penggunaan:**
 ```kotlin
-// Configure Follow Order mode
+// Konfigurasi mode Follow Order
 viewModel.configureFollowOrder(
     config = FollowOrderConfig(
         assetRic = "BTCUSD",
-        detectionInterval = 50, // milliseconds
+        detectionInterval = 50, // milidetik
         executionMode = ExecutionMode.BOUNDARY,
         enableCaching = true
     )
 )
 
-// Start monitoring
+// Mulai pemantauan
 viewModel.startBot(mode = TradingMode.FOLLOW_ORDER)
 
-// Real-time updates
+// Update real-time
 viewModel.priceUpdates.collect { price ->
-    // Handle price updates
+    // Handle update harga
 }
 ```
 
-**Detection Methods:**
-1. **WebSocket Stream** - Primary real-time data source
-2. **Balance Check** - Secondary verification method
-3. **REST API** - Tertiary fallback mechanism
+**Metode Deteksi:**
+1. **WebSocket Stream** - Sumber data real-time primer
+2. **Balance Check** - Metode verifikasi sekunder
+3. **REST API** - Mekanisme fallback tersier
 
 ---
 
-### 3. 📊 Indicator Order Mode
+### 3. 📊 Mode Indicator Order
 
-Technical analysis-based automated trading with continuous cycle operation.
+Trading otomatis berbasis analisis teknikal dengan operasi siklus berkelanjutan.
 
-**Supported Technical Indicators:**
+**Indikator Teknikal yang Didukung:**
 
-| Indicator | Parameters | Use Case |
+| Indikator | Parameter | Use Case |
 |-----------|-----------|----------|
-| **RSI** | Period: 14, Overbought: 70, Oversold: 30 | Momentum analysis |
+| **RSI** | Period: 14, Overbought: 70, Oversold: 30 | Analisis momentum |
 | **EMA** | Fast: 12, Slow: 26 | Trend following |
 | **Bollinger Bands** | Period: 20, StdDev: 2 | Volatility breakouts |
-| **MACD** | Fast: 12, Slow: 26, Signal: 9 | Trend confirmation |
+| **MACD** | Fast: 12, Slow: 26, Signal: 9 | Konfirmasi trend |
 | **Stochastic** | %K: 14, %D: 3 | Momentum oscillator |
 
-**Key Features:**
-- **Auto-restart** on trade completion (win or loss)
-- **Support/Resistance** level detection
-- **Adjustable sensitivity** for entry signals
-- **Prediction-based execution** using historical data
-- **Continuous cycle operation** without manual intervention
-- **Multi-indicator combination** for confirmation
+**Fitur Utama:**
+- **Auto-restart** saat trading selesai (menang atau kalah)
+- Deteksi level **Support/Resistance**
+- **Sensitivitas yang dapat disesuaikan** untuk sinyal masuk
+- **Eksekusi berbasis prediksi** menggunakan data historis
+- **Operasi siklus berkelanjutan** tanpa intervensi manual
+- **Kombinasi multi-indikator** untuk konfirmasi
 
-**Usage Example:**
+**Contoh Penggunaan:**
 ```kotlin
-// Configure indicator-based trading
+// Konfigurasi trading berbasis indikator
 viewModel.configureIndicatorMode(
     config = IndicatorConfig(
         primaryIndicator = IndicatorType.RSI,
@@ -566,51 +566,51 @@ viewModel.configureIndicatorMode(
     )
 )
 
-// Start trading
+// Mulai trading
 viewModel.startBot(mode = TradingMode.INDICATOR)
 
-// Monitor signals
+// Monitor sinyal
 viewModel.indicatorSignals.collect { signal ->
     when (signal) {
-        is Signal.Buy -> // Handle buy signal
-        is Signal.Sell -> // Handle sell signal
-        is Signal.Hold -> // No action
+        is Signal.Buy -> // Handle sinyal buy
+        is Signal.Sell -> // Handle sinyal sell
+        is Signal.Hold -> // Tidak ada aksi
     }
 }
 ```
 
-**Signal Generation:**
-- **Strong Buy** - Multiple indicators align for buy
-- **Buy** - Primary indicator shows buy signal
-- **Neutral** - No clear signal
-- **Sell** - Primary indicator shows sell signal
-- **Strong Sell** - Multiple indicators align for sell
+**Generasi Sinyal:**
+- **Strong Buy** - Beberapa indikator selaras untuk buy
+- **Buy** - Indikator primer menunjukkan sinyal buy
+- **Neutral** - Tidak ada sinyal yang jelas
+- **Sell** - Indikator primer menunjukkan sinyal sell
+- **Strong Sell** - Beberapa indikator selaras untuk sell
 
 ---
 
-### 4. 🔥 CTC Order Mode (Ultra-Fast)
+### 4. 🔥 Mode CTC Order (Ultra-Cepat)
 
-Optimized trading mode with identical performance characteristics to Follow Order mode.
+Mode trading yang dioptimalkan dengan karakteristik performa identik dengan mode Follow Order.
 
-**Key Features:**
-- **50ms ultra-fast detection** - Same as Follow Order
-- **Triple-layer detection system** - WebSocket → Balance → API
-- **Performance-optimized** for high-frequency trading
-- **Low latency execution** - < 100ms response time
-- **Ideal for scalping** and quick position trades
+**Fitur Utama:**
+- **Deteksi ultra-cepat 50ms** - Sama dengan Follow Order
+- **Sistem deteksi tiga lapis** - WebSocket → Balance → API
+- **Dioptimalkan untuk performa** untuk trading frekuensi tinggi
+- **Eksekusi latensi rendah** - Respons < 100ms
+- **Ideal untuk scalping** dan trading posisi cepat
 
-**Technical Specifications:**
+**Spesifikasi Teknis:**
 ```
-Detection Speed:    50ms
-Execution Latency:  < 100ms
-Fallback Layers:    3
-Reliability:        99.9%
-Max Trades/Minute:  120
+Kecepatan Deteksi:    50ms
+Latensi Eksekusi:     < 100ms
+Layer Fallback:       3
+Keandalan:            99.9%
+Maks Trading/Menit:   120
 ```
 
-**Usage Example:**
+**Contoh Penggunaan:**
 ```kotlin
-// Configure CTC mode
+// Konfigurasi mode CTC
 viewModel.configureCTCMode(
     config = CTCConfig(
         assetRic = "EURUSD",
@@ -620,131 +620,131 @@ viewModel.configureCTCMode(
     )
 )
 
-// Start CTC bot
+// Jalankan bot CTC
 viewModel.startBot(mode = TradingMode.CTC)
 ```
 
-**When to Use CTC Mode:**
-- High-frequency trading requirements
-- Scalping strategies
-- Quick market entry/exit
-- Maximum execution speed needed
+**Kapan Menggunakan Mode CTC:**
+- Kebutuhan trading frekuensi tinggi
+- Strategi scalping
+- Masuk/keluar pasar cepat
+- Kecepatan eksekusi maksimum diperlukan
 
 ---
 
-## ⚙️ Configuration
+## ⚙️ Konfigurasi
 
-### 💱 Currency Settings
+### 💱 Pengaturan Mata Uang
 
-**Available Currencies:**
+**Mata Uang yang Tersedia:**
 
-| Code | Currency | Symbol | Decimal Places |
+| Kode | Mata Uang | Simbol | Tempat Desimal |
 |------|----------|--------|----------------|
-| IDR | Indonesian Rupiah | Rp | 0 |
-| USD | US Dollar | $ | 2 |
+| IDR | Rupiah Indonesia | Rp | 0 |
+| USD | Dolar AS | $ | 2 |
 | EUR | Euro | € | 2 |
-| MYR | Malaysian Ringgit | RM | 2 |
-| GBP | British Pound | £ | 2 |
-| JPY | Japanese Yen | ¥ | 0 |
-| AUD | Australian Dollar | A$ | 2 |
-| SGD | Singapore Dollar | S$ | 2 |
-| THB | Thai Baht | ฿ | 2 |
+| MYR | Ringgit Malaysia | RM | 2 |
+| GBP | Poundsterling Inggris | £ | 2 |
+| JPY | Yen Jepang | ¥ | 0 |
+| AUD | Dolar Australia | A$ | 2 |
+| SGD | Dolar Singapura | S$ | 2 |
+| THB | Baht Thailand | ฿ | 2 |
 
-**Implementation:**
+**Implementasi:**
 ```kotlin
-// Define currency type
+// Tentukan tipe mata uang
 enum class CurrencyType {
     IDR, USD, EUR, MYR, GBP, JPY, AUD, SGD, THB
 }
 
-// Set currency in ViewModel
+// Set mata uang di ViewModel
 viewModel.setSelectedCurrency(CurrencyType.USD)
 
-// Format amount based on currency
+// Format jumlah berdasarkan mata uang
 val formattedAmount = CurrencyFormatter.format(
-    amount = 1000000, // in cents
+    amount = 1000000, // dalam sen
     currency = CurrencyType.USD
 ) // Returns: "$10,000.00"
 ```
 
-**Currency Conversion:**
+**Konversi Mata Uang:**
 ```kotlin
-// All amounts are stored in cents/smallest unit
-val amountInCents = 1000000L // 10,000 USD = 1,000,000 cents
+// Semua jumlah disimpan dalam sen/unit terkecil
+val amountInCents = 1000000L // 10,000 USD = 1,000,000 sen
 
-// Convert to display format
+// Konversi ke format tampilan
 val displayAmount = amountInCents / 100.0 // 10,000.00
 ```
 
 ---
 
-### 🌍 Language Settings
+### 🌐 Pengaturan Bahasa
 
-**Supported Languages:**
+**Bahasa yang Didukung:**
 
-| Code | Language | Native Name | Completion |
+| Kode | Bahasa | Nama Asli | Kelengkapan |
 |------|----------|-------------|------------|
-| `id` | Indonesian | Bahasa Indonesia | 100% |
-| `en` | English | English | 100% |
-| `es` | Spanish | Español | 100% |
-| `vi` | Vietnamese | Tiếng Việt | 100% |
-| `tr` | Turkish | Türkçe | 100% |
+| `id` | Indonesia | Bahasa Indonesia | 100% |
+| `en` | Inggris | English | 100% |
+| `es` | Spanyol | Español | 100% |
+| `vi` | Vietnam | Tiếng Việt | 100% |
+| `tr` | Turki | Türkçe | 100% |
 | `hi` | Hindi | हिन्दी | 100% |
-| `ms` | Malay | Bahasa Melayu | 100% |
+| `ms` | Melayu | Bahasa Melayu | 100% |
 
-**Implementation:**
+**Implementasi:**
 ```kotlin
-// Change language
+// Ubah bahasa
 viewModel.updateLanguage(
-    languageCode = "en",
-    countryCode = "US"
+    languageCode = "id",
+    countryCode = "ID"
 )
 
-// Get localized string
+// Dapatkan string yang dilokalkan
 val welcomeText = StringsManager.getString(
     key = "welcome_message",
     language = currentLanguage
 )
 
-// Format with parameters
+// Format dengan parameter
 val greetingText = StringsManager.getString(
     key = "greeting_with_name",
     language = currentLanguage,
     params = mapOf("name" to userName)
-) // Returns: "Hello, John!"
+) // Returns: "Halo, John!"
 ```
 
-**Adding New Languages:**
-1. Add translations to `StringsManager`
-2. Update language enum in settings
-3. Test all screens for text overflow
-4. Verify RTL support if applicable
+**Menambahkan Bahasa Baru:**
+1. Tambahkan terjemahan ke `StringsManager`
+2. Update enum bahasa di pengaturan
+3. Tes semua screen untuk text overflow
+4. Verifikasi dukungan RTL jika berlaku
 
 ---
 
-### 📈 Trading Parameters
+### 📈 Parameter Trading
 
-#### Martingale Configuration
+#### Konfigurasi Martingale
 
-**Settings Structure:**
+**Struktur Pengaturan:**
 ```kotlin
 data class MartingaleSettings(
     val isEnabled: Boolean = false,
     val maxSteps: Int = 5,            // 1-10
-    val baseAmount: Long = 1000000,   // in cents
+    val baseAmount: Long = 1000000,   // dalam sen
     val multiplierType: MultiplierType = MultiplierType.FIXED,
     val multiplierValue: Double = 2.0  // 1.5-5.0
 )
 
 enum class MultiplierType {
-    FIXED,       // 2x, 3x, 4x, etc.
-    PERCENTAGE   // +50%, +100%, etc.
+    FIXED,       // 2x, 3x, 4x, dst.
+    PERCENTAGE   // +50%, +100%, dst.
 }
 ```
 
-**Usage Example:**
+**Contoh Penggunaan:**
 ```kotlin
-// Configure Martingale
+// Konfigurasi Martingale
 viewModel.updateMartingaleSettings(
     MartingaleSettings(
         isEnabled = true,
@@ -755,33 +755,33 @@ viewModel.updateMartingaleSettings(
     )
 )
 
-// Martingale progression example (base $10):
-// Step 1: $10
-// Step 2: $20 (loss recovery)
-// Step 3: $40 (loss recovery)
-// Step 4: $80 (loss recovery)
-// Step 5: $160 (loss recovery)
-// Reset on win
+// Contoh progres Martingale (base $10):
+// Langkah 1: $10
+// Langkah 2: $20 (pemulihan loss)
+// Langkah 3: $40 (pemulihan loss)
+// Langkah 4: $80 (pemulihan loss)
+// Langkah 5: $160 (pemulihan loss)
+// Reset saat menang
 ```
 
 **Best Practices:**
-- Start with low multiplier (1.5-2.0)
-- Set maximum steps based on account size
-- Always use with stop loss
-- Monitor drawdown carefully
+- Mulai dengan multiplier rendah (1.5-2.0)
+- Set langkah maksimum berdasarkan ukuran akun
+- Selalu gunakan dengan stop loss
+- Monitor drawdown dengan hati-hati
 
-#### Risk Management
+#### Manajemen Risiko
 
-**Stop Loss Settings:**
+**Pengaturan Stop Loss:**
 ```kotlin
 data class StopLossSettings(
     val isEnabled: Boolean = false,
-    val maxLossAmount: Long = 5000000, // in cents ($50.00)
+    val maxLossAmount: Long = 5000000, // dalam sen ($50.00)
     val resetDaily: Boolean = true,
     val notifyOnTrigger: Boolean = true
 )
 
-// Implementation
+// Implementasi
 viewModel.updateStopLossSettings(
     StopLossSettings(
         isEnabled = true,
@@ -792,16 +792,16 @@ viewModel.updateStopLossSettings(
 )
 ```
 
-**Stop Profit Settings:**
+**Pengaturan Stop Profit:**
 ```kotlin
 data class StopProfitSettings(
     val isEnabled: Boolean = false,
-    val targetProfitAmount: Long = 10000000, // in cents ($100.00)
+    val targetProfitAmount: Long = 10000000, // dalam sen ($100.00)
     val resetDaily: Boolean = true,
     val notifyOnTrigger: Boolean = true
 )
 
-// Implementation
+// Implementasi
 viewModel.updateStopProfitSettings(
     StopProfitSettings(
         isEnabled = true,
@@ -812,31 +812,31 @@ viewModel.updateStopProfitSettings(
 )
 ```
 
-**Calculation Example:**
+**Contoh Perhitungan:**
 ```kotlin
-// Real-time P&L tracking
+// Pelacakan P&L real-time
 viewModel.currentSessionPnL.collect { pnl ->
-    // Check stop loss
+    // Cek stop loss
     if (stopLoss.isEnabled && pnl <= -stopLoss.maxLossAmount) {
-        viewModel.stopBot(reason = "Stop loss triggered")
+        viewModel.stopBot(reason = "Stop loss terpicu")
     }
     
-    // Check stop profit
+    // Cek stop profit
     if (stopProfit.isEnabled && pnl >= stopProfit.targetProfitAmount) {
-        viewModel.stopBot(reason = "Stop profit reached")
+        viewModel.stopBot(reason = "Stop profit tercapai")
     }
 }
 ```
 
 ---
 
-## 🔌 API Integration
+## 📌 Integrasi API
 
-### 🔐 Authentication
+### 🔐 Autentikasi
 
-**Login Endpoint:**
+**Endpoint Login:**
 ```kotlin
-// API Service Interface
+// Interface Layanan API
 interface StockityApiService {
     @POST("passport/v2/sign_in")
     suspend fun login(
@@ -844,7 +844,7 @@ interface StockityApiService {
     ): Response<LoginResponse>
 }
 
-// Request Model
+// Model Request
 data class LoginRequest(
     val email: String,
     val password: String,
@@ -852,14 +852,14 @@ data class LoginRequest(
     val deviceType: String = "android"
 )
 
-// Response Model
+// Model Response
 data class LoginResponse(
     val data: UserData,
     val token: String,
     val refreshToken: String
 )
 
-// Usage
+// Penggunaan
 suspend fun login(email: String, password: String): Result<UserSession> {
     return try {
         val response = apiService.login(
@@ -883,7 +883,7 @@ suspend fun login(email: String, password: String): Result<UserSession> {
 }
 ```
 
-**Authentication Headers:**
+**Header Autentikasi:**
 ```kotlin
 class AuthInterceptor @Inject constructor(
     private val sessionManager: SessionManager
@@ -905,79 +905,9 @@ class AuthInterceptor @Inject constructor(
 
 ### 💹 Trading API
 
-**Execute Trade Endpoint:**
-```kotlin
-@POST("v2/options/open")
-suspend fun executeTrade(
-    @Body request: TradeRequest
-): Response<TradeResponse>
 
-// Request Model
-data class TradeRequest(
-    val assetRic: String,          // e.g., "BTCUSD"
-    val trend: String,             // "CALL" or "PUT"
-    val amount: Long,              // in cents
-    val isDemoAccount: Boolean,
-    val duration: Int = 60,        // seconds
-    val leverage: Int = 1
-)
 
-// Response Model
-data class TradeResponse(
-    val success: Boolean,
-    val data: TradeData,
-    val message: String?
-)
-
-data class TradeData(
-    val orderId: String,
-    val openPrice: Double,
-    val openTime: Long,
-    val closeTime: Long,
-    val payout: Double
-)
-
-// Usage Example
-suspend fun executeTrade(
-    assetRic: String,
-    trend: String,
-    amount: Long,
-    isDemoAccount: Boolean
-): Result<TradeResult> {
-    return try {
-        val response = apiService.executeTrade(
-            TradeRequest(
-                assetRic = assetRic,
-                trend = trend,
-                amount = amount,
-                isDemoAccount = isDemoAccount
-            )
-        )
-        
-        if (response.isSuccessful && response.body()?.success == true) {
-            Result.success(mapToTradeResult(response.body()!!.data))
-        } else {
-            Result.failure(Exception(response.body()?.message ?: "Trade failed"))
-        }
-    } catch (e: Exception) {
-        Result.failure(e)
-    }
-}
-```
-
-**Get Balance Endpoint:**
-```kotlin
-@GET("v2/user/balance")
-suspend fun getBalance(): Response<BalanceResponse>
-
-data class BalanceResponse(
-    val realBalance: Long,    // in cents
-    val demoBalance: Long,    // in cents
-    val currency: String
-)
-```
-
-**Get Trade History:**
+**Dapatkan Riwayat Trade:**
 ```kotlin
 @GET("v2/options/history")
 suspend fun getTradeHistory(
@@ -988,90 +918,7 @@ suspend fun getTradeHistory(
 ): Response<TradeHistoryResponse>
 ```
 
----
-
-### 🔌 WebSocket Connection
-
-**Connection Management:**
-```kotlin
-object WebSocketManager {
-    private var webSocket: WebSocket? = null
-    private val messageFlow = MutableSharedFlow<WebSocketMessage>()
-    
-    fun connectToWebSocket(
-        userAgent: String,
-        authToken: String,
-        deviceType: String = "web",
-        deviceId: String
-    ) {
-        val request = Request.Builder()
-            .url("wss://api.stockity.id/ws")
-            .addHeader("User-Agent", userAgent)
-            .addHeader("Authorization", "Bearer $authToken")
-            .addHeader("X-Device-Type", deviceType)
-            .addHeader("X-Device-Id", deviceId)
-            .build()
-        
-        webSocket = client.newWebSocket(request, object : WebSocketListener() {
-            override fun onOpen(webSocket: WebSocket, response: Response) {
-                Log.d("WebSocket", "Connection opened")
-                subscribeToChannels()
-            }
-            
-            override fun onMessage(webSocket: WebSocket, text: String) {
-                handleMessage(text)
-            }
-            
-            override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
-                Log.d("WebSocket", "Closing: $code / $reason")
-            }
-            
-            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-                Log.d("WebSocket", "Closed: $code / $reason")
-                scheduleReconnect()
-            }
-            
-            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                Log.e("WebSocket", "Error: ${t.message}", t)
-                scheduleReconnect()
-            }
-        })
-    }
-    
-    private fun subscribeToChannels() {
-        // Subscribe to price updates
-        sendMessage("""
-            {
-                "action": "subscribe",
-                "channel": "prices",
-                "symbols": ["BTCUSD", "EURUSD", "GBPUSD"]
-            }
-        """.trimIndent())
-        
-        // Subscribe to trade updates
-        sendMessage("""
-            {
-                "action": "subscribe",
-                "channel": "trades"
-            }
-        """.trimIndent())
-    }
-    
-    fun sendMessage(message: String) {
-        webSocket?.send(message)
-    }
-    
-    fun disconnect() {
-        webSocket?.close(1000, "User disconnected")
-        webSocket = null
-    }
-    
-    // Collect messages
-    fun observeMessages(): Flow<WebSocketMessage> = messageFlow.asSharedFlow()
-}
-```
-
-**Message Types:**
+**Tipe Pesan:**
 ```kotlin
 sealed class WebSocketMessage {
     data class PriceUpdate(
@@ -1104,7 +951,7 @@ sealed class WebSocketMessage {
 ```kotlin
 private fun scheduleReconnect() {
     CoroutineScope(Dispatchers.IO).launch {
-        delay(2000) // Wait 2 seconds
+        delay(2000) // Tunggu 2 detik
         if (webSocket == null || webSocket?.close(1000, null) == true) {
             connectToWebSocket(/* params */)
         }
@@ -1114,11 +961,11 @@ private fun scheduleReconnect() {
 
 ---
 
-## 🔐 Security
+## 🔐 Keamanan
 
-### 🔒 Data Encryption
+### 🔒 Enkripsi Data
 
-**EncryptedSharedPreferences Implementation:**
+**Implementasi EncryptedSharedPreferences:**
 ```kotlin
 object SecureStorage {
     private const val PREFS_NAME = "stc_secure_prefs"
@@ -1153,15 +1000,15 @@ object SecureStorage {
 }
 ```
 
-**Encryption Specifications:**
-- **Algorithm**: AES-256-GCM (Galois/Counter Mode)
-- **Key Management**: Android Keystore System
-- **Key Scheme**: AES256_GCM for master key
-- **Preference Encryption**:
-    - Keys: AES256_SIV (Synthetic IV mode)
-    - Values: AES256_GCM
+**Spesifikasi Enkripsi:**
+- **Algoritma**: AES-256-GCM (Galois/Counter Mode)
+- **Manajemen Kunci**: Sistem Android Keystore
+- **Skema Kunci**: AES256_GCM untuk master key
+- **Enkripsi Preferensi**:
+   - Kunci: AES256_SIV (mode Synthetic IV)
+   - Nilai: AES256_GCM
 
-**Secure Data Storage:**
+**Penyimpanan Data Aman:**
 ```kotlin
 class SessionManager @Inject constructor(
     @ApplicationContext private val context: Context
@@ -1197,9 +1044,9 @@ class SessionManager @Inject constructor(
 
 ---
 
-### 🛡️ Access Control
+### 🛡️ Kontrol Akses
 
-**Whitelist Verification:**
+**Verifikasi Whitelist:**
 ```kotlin
 interface UserRepository {
     suspend fun checkUserInWhitelist(
@@ -1247,20 +1094,20 @@ class UserRepositoryImpl @Inject constructor(
 }
 ```
 
-**Firestore Security Rules:**
+**Aturan Keamanan Firestore:**
 ```javascript
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Whitelist collection - admin only
+    // Koleksi Whitelist - hanya admin
     match /whitelist/{userId} {
       allow read: if request.auth != null;
       allow write: if request.auth != null && 
                      get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role in ['admin', 'super_admin'];
     }
     
-    // Admin collection - super admin only
+    // Koleksi Admin - hanya super admin
     match /admins/{adminId} {
       allow read: if request.auth != null && 
                     get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role in ['admin', 'super_admin'];
@@ -1268,12 +1115,12 @@ service cloud.firestore {
                      get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == 'super_admin';
     }
     
-    // User data - own data only
+    // Data user - hanya data sendiri
     match /users/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
     
-    // Trading history - own data only
+    // Riwayat trading - hanya data sendiri
     match /trades/{tradeId} {
       allow read, write: if request.auth != null && resource.data.userId == request.auth.uid;
     }
@@ -1283,13 +1130,13 @@ service cloud.firestore {
 
 ---
 
-### 👥 Admin Roles & Permissions
+### 👥 Peran & Izin Admin
 
-**Role Definitions:**
+**Definisi Peran:**
 ```kotlin
 enum class AdminRole {
-    SUPER_ADMIN,  // Full system access
-    ADMIN         // Limited access
+    SUPER_ADMIN,  // Akses penuh sistem
+    ADMIN         // Akses terbatas
 }
 
 data class AdminPermissions(
@@ -1314,7 +1161,7 @@ fun getPermissions(role: AdminRole): AdminPermissions {
         AdminRole.ADMIN -> AdminPermissions(
             canManageUsers = true,
             canManageAdmins = false,
-            canViewAllData = false,  // Only own users
+            canViewAllData = false,  // Hanya user sendiri
             canModifySettings = false,
             canExportData = true,
             canDeleteUsers = false
@@ -1323,10 +1170,10 @@ fun getPermissions(role: AdminRole): AdminPermissions {
 }
 ```
 
-**Super Admin Configuration:**
+**Konfigurasi Super Admin:**
 ```kotlin
 object AdminConfig {
-    const val SUPER_ADMIN_EMAIL = "aryasis87@gmail.com"
+    const val SUPER_ADMIN_EMAIL = "*********@gmail.com"
     
     fun isSuperAdmin(email: String): Boolean {
         return email.equals(SUPER_ADMIN_EMAIL, ignoreCase = true)
@@ -1350,11 +1197,11 @@ object AdminConfig {
 
 ---
 
-## 📊 Performance Optimization
+## 📊 Optimasi Performa
 
-### ⚡ WebSocket Management
+### ⚡ Manajemen WebSocket
 
-**Health Monitoring:**
+**Pemantauan Kesehatan:**
 ```kotlin
 class WebSocketHealthMonitor {
     private var lastMessageTime = System.currentTimeMillis()
@@ -1364,12 +1211,12 @@ class WebSocketHealthMonitor {
     fun startHealthCheck() {
         CoroutineScope(Dispatchers.IO).launch {
             while (isActive) {
-                delay(10000) // Check every 10 seconds
+                delay(10000) // Cek setiap 10 detik
                 
                 val timeSinceLastMessage = System.currentTimeMillis() - lastMessageTime
                 
-                if (timeSinceLastMessage > 30000) { // 30 seconds timeout
-                    Log.w("WebSocket", "No message received for 30s, reconnecting...")
+                if (timeSinceLastMessage > 30000) { // Timeout 30 detik
+                    Log.w("WebSocket", "Tidak ada pesan diterima selama 30s, reconnecting...")
                     reconnect()
                 }
             }
@@ -1383,7 +1230,7 @@ class WebSocketHealthMonitor {
     
     private suspend fun reconnect() {
         if (reconnectAttempts >= maxReconnectAttempts) {
-            Log.e("WebSocket", "Max reconnect attempts reached")
+            Log.e("WebSocket", "Maks reconnect attempts tercapai")
             notifyConnectionLost()
             return
         }
@@ -1399,260 +1246,13 @@ class WebSocketHealthMonitor {
 }
 ```
 
-**Channel Management:**
-```kotlin
-class ChannelManager {
-    private val subscribedChannels = mutableSetOf<String>()
-    
-    fun subscribeToChannel(channel: String, params: Map<String, Any> = emptyMap()) {
-        if (subscribedChannels.contains(channel)) {
-            Log.d("Channel", "Already subscribed to $channel")
-            return
-        }
-        
-        val message = buildJsonObject {
-            put("action", "subscribe")
-            put("channel", channel)
-            params.forEach { (key, value) ->
-                put(key, value.toString())
-            }
-        }
-        
-        WebSocketManager.sendMessage(message.toString())
-        subscribedChannels.add(channel)
-    }
-    
-    fun unsubscribeFromChannel(channel: String) {
-        if (!subscribedChannels.contains(channel)) return
-        
-        val message = buildJsonObject {
-            put("action", "unsubscribe")
-            put("channel", channel)
-        }
-        
-        WebSocketManager.sendMessage(message.toString())
-        subscribedChannels.remove(channel)
-    }
-    
-    fun resubscribeAll() {
-        subscribedChannels.forEach { channel ->
-            subscribeToChannel(channel)
-        }
-    }
-}
-```
-
-**Message Queue:**
-```kotlin
-class MessageQueue {
-    private val queue = LinkedBlockingQueue<String>()
-    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    
-    init {
-        startProcessing()
-    }
-    
-    fun enqueue(message: String) {
-        queue.offer(message)
-    }
-    
-    private fun startProcessing() {
-        scope.launch {
-            while (isActive) {
-                try {
-                    val message = queue.poll(100, TimeUnit.MILLISECONDS)
-                    message?.let {
-                        WebSocketManager.sendMessage(it)
-                        delay(50) // Rate limiting
-                    }
-                } catch (e: Exception) {
-                    Log.e("MessageQueue", "Error processing message", e)
-                }
-            }
-        }
-    }
-}
-```
-
----
-
-### 🧠 Memory Management
-
-**Efficient State Management:**
-```kotlin
-class TradingViewModel @Inject constructor(
-    private val repository: TradingRepository
-) : ViewModel() {
-    
-    // Use StateFlow for UI state
-    private val _uiState = MutableStateFlow(TradingUiState())
-    val uiState: StateFlow<TradingUiState> = _uiState.asStateFlow()
-    
-    // Use SharedFlow for one-time events
-    private val _events = MutableSharedFlow<TradingEvent>()
-    val events: SharedFlow<TradingEvent> = _events.asSharedFlow()
-    
-    // Clear resources properly
-    override fun onCleared() {
-        super.onCleared()
-        cancelAllJobs()
-        clearCache()
-    }
-    
-    private fun cancelAllJobs() {
-        viewModelScope.coroutineContext.cancelChildren()
-    }
-    
-    private fun clearCache() {
-        // Clear any cached data
-        priceCache.clear()
-        tradeHistory.clear()
-    }
-}
-```
-
-**Resource Cleanup:**
-```kotlin
-class TradingService : Service() {
-    
-    override fun onDestroy() {
-        super.onDestroy()
-        
-        // Stop bot
-        botManager.stopBot()
-        
-        // Disconnect WebSocket
-        WebSocketManager.disconnect()
-        
-        // Cancel coroutines
-        serviceScope.cancel()
-        
-        // Clear notifications
-        notificationManager.cancelAll()
-        
-        Log.d("TradingService", "Service destroyed and resources cleaned up")
-    }
-}
-```
-
-**Lifecycle Awareness:**
-```kotlin
-@Composable
-fun TradingScreen(viewModel: TradingViewModel = hiltViewModel()) {
-    val lifecycleOwner = LocalLifecycleOwner.current
-    
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            when (event) {
-                Lifecycle.Event.ON_RESUME -> {
-                    viewModel.resumeMonitoring()
-                }
-                Lifecycle.Event.ON_PAUSE -> {
-                    viewModel.pauseMonitoring()
-                }
-                else -> {}
-            }
-        }
-        
-        lifecycleOwner.lifecycle.addObserver(observer)
-        
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
-        }
-    }
-}
-```
-
----
-
-### 🚀 UI Performance
-
-**Composition Optimization:**
-```kotlin
-@Composable
-fun TradingList(trades: List<Trade>) {
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp)
-    ) {
-        items(
-            items = trades,
-            key = { it.orderId } // Stable keys for recomposition
-        ) { trade ->
-            TradeItem(
-                trade = trade,
-                modifier = Modifier.animateItemPlacement() // Smooth animations
-            )
-        }
-    }
-}
-
-@Composable
-fun TradeItem(trade: Trade, modifier: Modifier = Modifier) {
-    // Use remember to avoid recomputation
-    val formattedAmount = remember(trade.amount, trade.currency) {
-        CurrencyFormatter.format(trade.amount, trade.currency)
-    }
-    
-    Card(modifier = modifier) {
-        // UI implementation
-    }
-}
-```
-
-**State Hoisting:**
-```kotlin
-@Composable
-fun TradingDashboard(viewModel: TradingViewModel) {
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    
-    DashboardContent(
-        state = uiState,
-        onStartBot = viewModel::startBot,
-        onStopBot = viewModel::stopBot,
-        onUpdateSettings = viewModel::updateSettings
-    )
-}
-
-@Composable
-private fun DashboardContent(
-    state: TradingUiState,
-    onStartBot: () -> Unit,
-    onStopBot: () -> Unit,
-    onUpdateSettings: (Settings) -> Unit
-) {
-    // Stateless composable - easier to test and optimize
-}
-```
-
-**Recomposition Control:**
-```kotlin
-@Stable
-data class TradingUiState(
-    val isRunning: Boolean = false,
-    val currentProfit: Long = 0,
-    val trades: List<Trade> = emptyList(),
-    val settings: Settings = Settings()
-)
-
-// Use @Stable or @Immutable to hint at composition optimization
-@Immutable
-data class Trade(
-    val orderId: String,
-    val asset: String,
-    val amount: Long,
-    val profit: Long?,
-    val timestamp: Long
-)
-```
-
 ---
 
 ## 🛠 Debugging
 
-### 📝 Logging System
+### 📝 Sistem Logging
 
-**Structured Logging:**
+**Logging Terstruktur:**
 ```kotlin
 object AppLogger {
     private const val TAG_PREFIX = "STC_"
@@ -1677,7 +1277,7 @@ object AppLogger {
     
     fun e(tag: String, message: String, throwable: Throwable? = null) {
         Log.e("$TAG_PREFIX$tag", message, throwable)
-        // Send to crash reporting in production
+        // Kirim ke crash reporting di production
         if (!BuildConfig.DEBUG) {
             FirebaseCrashlytics.getInstance().recordException(
                 throwable ?: Exception(message)
@@ -1687,12 +1287,12 @@ object AppLogger {
     
     fun logTrade(trade: Trade, result: String) {
         val logMessage = """
-            Trade Executed:
+            Trade Dieksekusi:
             - Order ID: ${trade.orderId}
-            - Asset: ${trade.asset}
-            - Type: ${trade.trend}
-            - Amount: ${trade.amount}
-            - Result: $result
+            - Aset: ${trade.asset}
+            - Tipe: ${trade.trend}
+            - Jumlah: ${trade.amount}
+            - Hasil: $result
             - Timestamp: ${System.currentTimeMillis()}
         """.trimIndent()
         
@@ -1707,9 +1307,9 @@ object AppLogger {
 
 ---
 
-### 📊 Performance Monitoring
+### 📊 Pemantauan Performa
 
-**Connection Statistics:**
+**Statistik Koneksi:**
 ```kotlin
 class ConnectionStatsManager {
     private var totalMessages = 0
@@ -1763,7 +1363,7 @@ data class ConnectionStats(
 )
 ```
 
-**Profit Validation:**
+**Validasi Profit:**
 ```kotlin
 class ProfitValidator(
     private val repository: TradingRepository
@@ -1775,7 +1375,7 @@ class ProfitValidator(
         val reportedProfit = repository.getTodayProfit()
         
         val discrepancy = abs(calculatedProfit - reportedProfit)
-        val isValid = discrepancy < 100 // Allow 1 cent discrepancy
+        val isValid = discrepancy < 100 // Izinkan perbedaan 1 sen
         
         return ValidationResult(
             isValid = isValid,
@@ -1796,7 +1396,7 @@ data class ValidationResult(
 )
 ```
 
-**Bot Performance Info:**
+**Info Performa Bot:**
 ```kotlin
 fun getBotPerformanceInfo(): BotPerformance {
     return BotPerformance(
@@ -1823,34 +1423,34 @@ data class BotPerformance(
 
 ---
 
-## 🤝 Contributing
+## 🤝 Kontribusi
 
-This is a **proprietary project**. Contributions are limited to authorized team members only.
+Ini adalah **proyek proprietary**. Kontribusi terbatas hanya untuk anggota tim yang berwenang.
 
-### Development Guidelines
+### Pedoman Pengembangan
 
-**Code Standards:**
-- Follow Kotlin coding conventions
-- Use meaningful variable and function names
-- Write KDoc comments for public APIs
-- Maintain consistent formatting
+**Standar Kode:**
+- Ikuti konvensi coding Kotlin
+- Gunakan nama variabel dan fungsi yang bermakna
+- Tulis komentar KDoc untuk API publik
+- Pertahankan format yang konsisten
 
 **Git Workflow:**
 ```bash
-# Create feature branch
-git checkout -b feature/your-feature-name
+# Buat branch fitur
+git checkout -b feature/nama-fitur-anda
 
-# Make changes and commit
+# Buat perubahan dan commit
 git add .
-git commit -m "feat: add your feature description"
+git commit -m "feat: tambahkan deskripsi fitur anda"
 
-# Push to remote
-git push origin feature/your-feature-name
+# Push ke remote
+git push origin feature/nama-fitur-anda
 
-# Create pull request for review
+# Buat pull request untuk review
 ```
 
-**Commit Message Format:**
+**Format Pesan Commit:**
 ```
 <type>(<scope>): <subject>
 
@@ -1859,141 +1459,107 @@ git push origin feature/your-feature-name
 <footer>
 ```
 
-**Types:**
-- `feat`: New feature
-- `fix`: Bug fix
-- `docs`: Documentation
-- `style`: Formatting
-- `refactor`: Code restructuring
-- `test`: Adding tests
-- `chore`: Maintenance
+**Tipe:**
+- `feat`: Fitur baru
+- `fix`: Perbaikan bug
+- `docs`: Dokumentasi
+- `style`: Format
+- `refactor`: Restruktur kode
+- `test`: Menambahkan test
+- `chore`: Pemeliharaan
 
 ---
 
-## 📄 License
+## 📄 Lisensi
 
-**Copyright © 2025 STC Autotrade. All rights reserved.**
+**Hak Cipta © 2025 STC Autotrade. Hak cipta dilindungi undang-undang.**
 
-This software is proprietary and confidential. Unauthorized copying, distribution, modification, or use is strictly prohibited without explicit written permission from the copyright holder.
+Software ini bersifat proprietary dan rahasia. Menyalin, mendistribusikan, memodifikasi, atau menggunakan tanpa izin tertulis eksplisit dari pemegang hak cipta sangat dilarang.
 
-**License Terms:**
-- Commercial use prohibited without license
-- Redistribution prohibited
-- Modification prohibited
-- Private use only for authorized users
+**Ketentuan Lisensi:**
+- Penggunaan komersial dilarang tanpa lisensi
+- Redistribusi dilarang
+- Modifikasi dilarang
+- Penggunaan pribadi hanya untuk pengguna yang berwenang
 
-For licensing inquiries, contact: **support@stcbroker.id**
+Untuk pertanyaan lisensi, hubungi: **support@stcbroker.id**
 
 ---
 
-## 👥 Team
+## 👥 Developer
 
-**Lead Developer:** Arya Sis  
-**Email:** aryasis87@gmail.com
+**Lead Developer:** Arya Satya Ibnu Sani  
+**Email:** sanzystoreid@gmail.com
 
-**Core Team:**
-- Backend Development
-- Android Development
-- UI/UX Design
+**Inti:**
+- Pengembangan Backend
+- Pengembangan Android
+- Desain UI/UX
 - Quality Assurance
-- DevOps & Infrastructure
+- DevOps & Infrastruktur
 
 ---
 
-## 🙏 Acknowledgments
+## 📞 Dukungan
 
-Special thanks to:
+Butuh bantuan? Hubungi kami melalui:
 
-- **Stockity Platform** - For API access and integration support
-- **Android Jetpack Team** - For excellent architecture components
-- **Kotlin Development Team** - For the amazing programming language
-- **Open Source Community** - For libraries and tools that made this possible
-- **Beta Testers** - For valuable feedback and bug reports
-
----
-
-## 📞 Support
-
-Need help? Contact us through:
-
-**Technical Support:**
+**Dukungan Teknis:**
 - 📧 Email: support@stcbroker.id
 - 💬 WhatsApp: +62 859-5986-0015
 - 📱 Telegram: @stc_support
 - 🌐 Website: https://stcbroker.id
 
-**Support Hours:**
-- Monday - Friday: 9:00 AM - 6:00 PM (WIB)
-- Saturday: 10:00 AM - 4:00 PM (WIB)
-- Sunday: Closed
+**Jam Dukungan:**
+- Senin - Jumat: 09:00 - 18:00 (WIB)
+- Sabtu: 10:00 - 16:00 (WIB)
+- Minggu: Tutup
 
-**Response Time:**
-- Critical Issues: < 2 hours
-- High Priority: < 6 hours
-- Normal: < 24 hours
+**Waktu Respons:**
+- Masalah Kritis: < 2 jam
+- Prioritas Tinggi: < 6 jam
+- Normal: < 24 jam
 
-**Documentation:**
-- User Guide: [Link to user documentation]
-- API Reference: [Link to API docs]
-- Video Tutorials: [Link to video guides]
-- FAQ: [Link to frequently asked questions]
-
----
-
-## 📈 Roadmap
-
-### Version 1.1.0 (Q1 2025)
-- [ ] Advanced indicator combinations
-- [ ] Social trading features
-- [ ] Portfolio management
-- [ ] Advanced charting tools
-
-### Version 1.2.0 (Q2 2025)
-- [ ] AI-powered trade suggestions
-- [ ] Risk calculator
-- [ ] Strategy backtesting
-- [ ] Multi-account management
-
-### Version 2.0.0 (Q3 2025)
-- [ ] Desktop application
-- [ ] Web dashboard
-- [ ] Copy trading system
-- [ ] Advanced analytics
+**Dokumentasi:**
+- Panduan Pengguna: [Link ke dokumentasi pengguna]
+- Referensi API: [Link ke dokumentasi API]
+- Tutorial Video: [Link ke panduan video]
+- FAQ: [Link ke pertanyaan yang sering diajukan]
 
 ---
 
-## 🐛 Known Issues
+## 🐛 Masalah yang Diketahui
 
-- WebSocket connection may occasionally drop on poor network
-- Indicator calculations may lag on older devices (SDK < 26)
-- Theme switching requires app restart in some cases
+- Koneksi WebSocket mungkin sesekali terputus pada jaringan yang buruk
+- Perhitungan indikator mungkin lambat pada perangkat lama (SDK < 26)
+- Perpindahan tema memerlukan restart aplikasi dalam beberapa kasus
 
-For the latest bug reports and status, check our issue tracker.
+Untuk laporan bug terbaru dan status, cek issue tracker kami.
 
 ---
 
-## 📱 System Requirements
+## 📱 Persyaratan Sistem
 
-**Minimum Requirements:**
-- Android 7.0 (API 24) or higher
+**Persyaratan Minimum:**
+- Android 7.0 (API 24) atau lebih tinggi
 - 2GB RAM
-- 100MB free storage
-- Internet connection
+- 100MB ruang penyimpanan bebas
+- Koneksi internet
 
-**Recommended:**
-- Android 10.0 (API 29) or higher
+**Direkomendasikan:**
+- Android 10.0 (API 29) atau lebih tinggi
 - 4GB RAM
-- 500MB free storage
-- Stable WiFi or 4G connection
+- 500MB ruang penyimpanan bebas
+- Koneksi WiFi atau 4G yang stabil
 
 ---
 
 <div align="center">
 
-**Made with ❤️ for Traders Worldwide**
+**Dibuat dengan ❤️ untuk Trader di Seluruh Dunia**
 
-**Version 1.0.0** | **Last Updated: November 2025**
+**Versi 1.0.0** | **Terakhir Diperbarui: November 2025**
 
-[⬆️ Back to Top](#stc-autotrade)
+[⬆️ Kembali ke Atas](#stc-autotrade)
 
 </div>
