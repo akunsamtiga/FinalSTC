@@ -1,15 +1,8 @@
-# ======================================
-# ANDROID STUDIO & GRADLE
-# ======================================
 .gradle/
 build/
 **/build/
 !gradle/wrapper/gradle-wrapper.jar
 local.properties
-
-# ======================================
-# ANDROID / INTELLIJ SPECIFIC
-# ======================================
 .idea/
 *.iml
 *.ipr
@@ -17,11 +10,6 @@ local.properties
 out/
 captures/
 .navigation/
-.cxx/
-
-# ======================================
-# LOG, CACHE, TEMPORARY FILES
-# ======================================
 *.log
 *.cache
 *.tmp
@@ -29,48 +17,21 @@ captures/
 *.bak
 *.orig
 *.rej
-
-# ======================================
-# SYSTEM FILES (Windows / Mac / Linux)
-# ======================================
 .DS_Store
 Thumbs.db
 ehthumbs.db
 *.lnk
-
-# ======================================
-# FIREBASE / GOOGLE CONFIG
-# ======================================
 app/google-services.json
 GoogleService-Info.plist
-
 *.jks
 *.keystore
 *.pem
 *.p12
 *.key
-
-# ======================================
-# JETPACK COMPOSE PREVIEW
-# ======================================
 .preview/
-
-# ======================================
-# GRADLE DAEMON & WRAPPER
-# ======================================
 gradle-app.setting
-.gradle/
 buildSrc/.gradle/
-
-# ======================================
-# NDK / CMAKE / NATIVE BUILD
-# ======================================
 .externalNativeBuild/
-.cxx/
-
-# ======================================
-# OUTPUT FILES (APK / AAB / OBJ)
-# ======================================
 *.class
 *.dex
 *.apk
@@ -78,15 +39,7 @@ buildSrc/.gradle/
 *.aab
 *.so
 *.obj
-
-# ======================================
-# KOTLIN SPECIFIC
-# ======================================
 *.kotlin_module
-
-# ======================================
-# INTELLIJ PROJECT CONFIG FILES
-# ======================================
 .idea/workspace.xml
 .idea/tasks.xml
 .idea/dictionaries
@@ -97,27 +50,11 @@ buildSrc/.gradle/
 .idea/compiler.xml
 .idea/misc.xml
 .idea/deploymentTargetDropDown.xml
-
-# ======================================
-# LOCAL TEST / MOCK DATA / LOGS
-# ======================================
 /test-results/
 /reports/
 /logs/
-
-# ======================================
-# ANDROID PROFILING FILES
-# ======================================
 *.hprof
-
-# ======================================
-# CUSTOM IGNORE — LOCAL DATA FOLDER
-# (hide your sensitive code or data files)
-# ======================================
 app/src/main/java/com/autotrade/finalstc/data/api
 app/src/main/java/com/autotrade/finalstc/data/repository
-# ======================================
-# OPTIONAL: ENV / CONFIG FILES
-# ======================================
 .env
 *.env
