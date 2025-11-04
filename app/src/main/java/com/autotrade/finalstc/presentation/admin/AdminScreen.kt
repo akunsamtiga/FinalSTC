@@ -561,7 +561,6 @@ fun ImportWhitelistDialog(
                     .padding(20.dp)
                     .verticalScroll(rememberScrollState())
             ) {
-                // ===== HEADER =====
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
@@ -616,7 +615,6 @@ fun ImportWhitelistDialog(
                     modifier = Modifier.padding(bottom = 16.dp)
                 )
 
-                // ===== INFO CARD =====
                 Card(
                     colors = CardDefaults.cardColors(
                         containerColor = InfoColor.copy(alpha = 0.1f)
@@ -648,7 +646,6 @@ fun ImportWhitelistDialog(
                     }
                 }
 
-                // ===== TEXT INPUT =====
                 Text(
                     text = "JSON Data",
                     fontSize = 13.sp,
@@ -695,7 +692,6 @@ fun ImportWhitelistDialog(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Character count
                 Text(
                     text = "${jsonInput.length} karakter",
                     fontSize = 11.sp,
@@ -705,7 +701,6 @@ fun ImportWhitelistDialog(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // ===== ERROR MESSAGE DISPLAY =====
                 if (errorMessage != null) {
                     Card(
                         colors = CardDefaults.cardColors(
@@ -738,7 +733,6 @@ fun ImportWhitelistDialog(
                     Spacer(modifier = Modifier.height(16.dp))
                 }
 
-                // ===== INSTRUCTIONS =====
                 Card(
                     colors = CardDefaults.cardColors(
                         containerColor = Color(0xFF1A2A21)
@@ -766,7 +760,6 @@ fun ImportWhitelistDialog(
 
                 Spacer(modifier = Modifier.height(20.dp))
 
-                // ===== BUTTONS =====
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -794,7 +787,6 @@ fun ImportWhitelistDialog(
                                 return@Button
                             }
 
-                            // Validasi JSON format
                             try {
                                 if (!jsonInput.trim().startsWith("[") || !jsonInput.trim().endsWith("]")) {
                                     errorMessage = "JSON harus berupa array (dimulai dengan [ dan diakhiri ])"
@@ -837,7 +829,6 @@ fun ImportWhitelistDialog(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // ===== CLEAR BUTTON =====
                 if (jsonInput.isNotBlank()) {
                     OutlinedButton(
                         onClick = { jsonInput = "" },
@@ -862,9 +853,9 @@ private fun StatsDetailDialog(
     filterType: StatsFilterType,
     users: List<WhitelistUser>,
     onDismiss: () -> Unit,
-    onEdit: (WhitelistUser) -> Unit,  // Tambah parameter ini
-    onDelete: (WhitelistUser) -> Unit,  // Tambah parameter ini
-    onToggleStatus: (WhitelistUser) -> Unit  // Tambah parameter ini
+    onEdit: (WhitelistUser) -> Unit,
+    onDelete: (WhitelistUser) -> Unit,
+    onToggleStatus: (WhitelistUser) -> Unit
 ) {
     val filteredUsers = remember(filterType, users) {
         when (filterType) {
@@ -898,7 +889,6 @@ private fun StatsDetailDialog(
                     .fillMaxWidth()
                     .padding(20.dp)
             ) {
-                // Header
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.padding(bottom = 16.dp)
@@ -951,7 +941,6 @@ private fun StatsDetailDialog(
                     modifier = Modifier.padding(bottom = 16.dp)
                 )
 
-                // Users List
                 if (filteredUsers.isEmpty()) {
                     Box(
                         modifier = Modifier
@@ -1067,7 +1056,6 @@ private fun StatsUserCardWithActions(
                     }
                 }
 
-                // Switch Status
                 Switch(
                     checked = user.isActive,
                     onCheckedChange = { onToggleStatus() },
@@ -1083,20 +1071,17 @@ private fun StatsUserCardWithActions(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Action Buttons Row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // User Info
                 Column {
                     Text(
                         text = "ID: ${user.userId}",
                         fontSize = 11.sp,
                         color = TextTertiary
                     )
-                    // Added By Info
                     if (user.addedBy.isNotEmpty()) {
                         Text(
                             text = "Added by: ${user.addedBy.substringBefore("@")}",
@@ -1106,9 +1091,7 @@ private fun StatsUserCardWithActions(
                     }
                 }
 
-                // Action Buttons
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    // Edit Button
                     IconButton(
                         onClick = onEdit,
                         modifier = Modifier.size(32.dp)
@@ -1120,7 +1103,6 @@ private fun StatsUserCardWithActions(
                             modifier = Modifier.size(16.dp)
                         )
                     }
-                    // Delete Button
                     IconButton(
                         onClick = onDelete,
                         modifier = Modifier.size(32.dp)
@@ -1481,7 +1463,6 @@ private fun MessageDisplay(
     onDismissError: () -> Unit,
     onDismissSuccess: () -> Unit
 ) {
-    // Error Display
     error?.let { errorMsg ->
         Spacer(modifier = Modifier.height(12.dp))
         Card(
@@ -1522,7 +1503,6 @@ private fun MessageDisplay(
         }
     }
 
-    // Success Display
     success?.let { successMsg ->
         Spacer(modifier = Modifier.height(12.dp))
         Card(
@@ -1645,7 +1625,6 @@ private fun AdminHeader(
                 }
             }
 
-            // Hanya tampilkan tombol Admin Management jika Super Admin
             if (isSuperAdmin) {
                 Spacer(modifier = Modifier.height(12.dp))
 
@@ -1853,7 +1832,6 @@ private fun WhitelistUserCard(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Info Section dengan Added By
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
@@ -1895,7 +1873,6 @@ private fun WhitelistUserCard(
                     }
                 }
 
-                // Added By Information
                 if (user.addedBy.isNotEmpty()) {
                     Card(
                         modifier = Modifier.fillMaxWidth(),
@@ -2127,13 +2104,13 @@ private fun EditUserDialog(
     user: WhitelistUser,
     onDismiss: () -> Unit,
     onEditUser: (WhitelistUser) -> Unit,
-    isSuperAdmin: Boolean = false  // Parameter tambahan
+    isSuperAdmin: Boolean = false
 ) {
     var name by remember { mutableStateOf(user.name) }
     var email by remember { mutableStateOf(user.email) }
     var userId by remember { mutableStateOf(user.userId) }
     var deviceId by remember { mutableStateOf(user.deviceId) }
-    var addedBy by remember { mutableStateOf(user.addedBy) }  // Field baru
+    var addedBy by remember { mutableStateOf(user.addedBy) }
     val keyboardController = LocalSoftwareKeyboardController.current
 
     Dialog(onDismissRequest = onDismiss) {
@@ -2229,7 +2206,6 @@ private fun EditUserDialog(
                     textStyle = LocalTextStyle.current.copy(fontSize = 14.sp)
                 )
 
-                // Field AddedBy - hanya tampil untuk Super Admin
                 if (isSuperAdmin) {
                     Spacer(modifier = Modifier.height(12.dp))
 
@@ -2336,7 +2312,7 @@ private fun EditUserDialog(
                                         email = email,
                                         userId = userId,
                                         deviceId = deviceId,
-                                        addedBy = addedBy  // Simpan perubahan addedBy
+                                        addedBy = addedBy
                                     )
                                 )
                             }
@@ -2439,8 +2415,6 @@ private fun DeleteConfirmationDialog(
         }
     )
 }
-
-// Additional utility composables for better UX
 
 @Composable
 private fun SearchResultsBadge(

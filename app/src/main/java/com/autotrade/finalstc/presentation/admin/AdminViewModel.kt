@@ -41,7 +41,6 @@ class AdminViewModel @Inject constructor(
     private val fileExportHelper = FileExportHelper(context)
 
     init {
-        // Whitelist users akan di-load setelah setCurrentUserEmail dipanggil
 
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoadingConfig = true)
@@ -88,7 +87,6 @@ class AdminViewModel @Inject constructor(
                 isSuperAdmin = isSuperAdmin
             )
 
-            // Load whitelist users dengan filter berdasarkan role
             loadWhitelistUsers(email, isSuperAdmin)
         }
     }
@@ -116,7 +114,6 @@ class AdminViewModel @Inject constructor(
         }
     }
 
-    // ===== WHITELIST USER METHODS =====
 
     fun addUser(user: WhitelistUser) {
         viewModelScope.launch {
@@ -195,7 +192,6 @@ class AdminViewModel @Inject constructor(
         }
     }
 
-    // ===== ADMIN USER METHODS (SUPER ADMIN ONLY) =====
 
     fun addAdmin(admin: AdminUser) {
         if (!_uiState.value.isSuperAdmin) {
@@ -289,7 +285,6 @@ class AdminViewModel @Inject constructor(
         }
     }
 
-    // ===== REGISTRATION CONFIG METHODS (SUPER ADMIN ONLY) =====
 
     fun updateRegistrationUrl(newUrl: String) {
         if (!_uiState.value.isSuperAdmin) {
@@ -347,7 +342,6 @@ class AdminViewModel @Inject constructor(
         }
     }
 
-    // ===== EXPORT/IMPORT METHODS =====
 
     fun exportWhitelist(format: String = "json") {
         viewModelScope.launch {
@@ -475,7 +469,6 @@ class AdminViewModel @Inject constructor(
             try {
                 _uiState.value = _uiState.value.copy(isLoadingConfig = true)
 
-                // Clean the number (remove spaces, dashes, etc)
                 val cleanNumber = newNumber.replace(Regex("[^0-9]"), "")
 
                 val success = firebaseRepository.updateWhatsappNumber(cleanNumber, "admin")
@@ -503,7 +496,6 @@ class AdminViewModel @Inject constructor(
     fun validateWhatsappNumber(number: String): Boolean {
         return firebaseRepository.validateWhatsappNumber(number)
     }
-    // ===== UTILITY METHODS =====
 
     fun clearError() {
         _uiState.value = _uiState.value.copy(error = null)
