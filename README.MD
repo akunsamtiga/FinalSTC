@@ -1510,22 +1510,6 @@ Butuh bantuan? Hubungi kami melalui:
 - 📱 Telegram: @stc_support
 - 🌐 Website: https://stcbroker.id
 
-**Jam Dukungan:**
-- Senin - Jumat: 09:00 - 18:00 (WIB)
-- Sabtu: 10:00 - 16:00 (WIB)
-- Minggu: Tutup
-
-**Waktu Respons:**
-- Masalah Kritis: < 2 jam
-- Prioritas Tinggi: < 6 jam
-- Normal: < 24 jam
-
-**Dokumentasi:**
-- Panduan Pengguna: [Link ke dokumentasi pengguna]
-- Referensi API: [Link ke dokumentasi API]
-- Tutorial Video: [Link ke panduan video]
-- FAQ: [Link ke pertanyaan yang sering diajukan]
-
 ---
 
 ## 🐛 Masalah yang Diketahui
