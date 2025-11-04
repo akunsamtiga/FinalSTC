@@ -29,10 +29,8 @@ data class CountryLanguage(
 
 object AllCountriesData {
     val allCountries = listOf(
-        // Indonesia
         CountryLanguage("ID", "Indonesia", "🇮🇩", "id", "Bahasa Indonesia"),
 
-        // English - Africa & Asia
         CountryLanguage("NG", "Nigeria", "🇳🇬", "en", "English"),
         CountryLanguage("ZA", "South Africa", "🇿🇦", "en", "English"),
         CountryLanguage("KE", "Kenya", "🇰🇪", "en", "English"),
@@ -41,21 +39,18 @@ object AllCountriesData {
         CountryLanguage("TZ", "Tanzania", "🇹🇿", "en", "English"),
         CountryLanguage("ET", "Ethiopia", "🇪🇹", "en", "English"),
 
-        // English - Asia-Pacific
         CountryLanguage("PH", "Philippines", "🇵🇭", "en", "English"),
         CountryLanguage("SG", "Singapore", "🇸🇬", "en", "English"),
         CountryLanguage("HK", "Hong Kong", "🇭🇰", "en", "English"),
         CountryLanguage("BD", "Bangladesh", "🇧🇩", "en", "English"),
         CountryLanguage("PK", "Pakistan", "🇵🇰", "en", "English"),
 
-        // English - Europe
         CountryLanguage("GB", "United Kingdom", "🇬🇧", "en", "English"),
         CountryLanguage("UA", "Ukraine", "🇺🇦", "en", "English"),
         CountryLanguage("PL", "Poland", "🇵🇱", "en", "English"),
         CountryLanguage("RO", "Romania", "🇷🇴", "en", "English"),
         CountryLanguage("CZ", "Czech Republic", "🇨🇿", "en", "English"),
 
-        // Español - Latin America
         CountryLanguage("MX", "México", "🇲🇽", "es", "Español"),
         CountryLanguage("AR", "Argentina", "🇦🇷", "es", "Español"),
         CountryLanguage("CL", "Chile", "🇨🇱", "es", "Español"),
@@ -74,22 +69,18 @@ object AllCountriesData {
         CountryLanguage("DO", "República Dominicana", "🇩🇴", "es", "Español"),
         CountryLanguage("CU", "Cuba", "🇨🇺", "es", "Español"),
 
-        // Tiếng Việt - Southeast Asia
         CountryLanguage("VN", "Việt Nam", "🇻🇳", "vi", "Tiếng Việt"),
         CountryLanguage("LA", "Laos", "🇱🇦", "vi", "Tiếng Việt"),
         CountryLanguage("TH", "Thailand", "🇹🇭", "vi", "Tiếng Việt"),
         CountryLanguage("KH", "Cambodia", "🇰🇭", "vi", "Tiếng Việt"),
 
-        // Türkçe
         CountryLanguage("TR", "Türkiye", "🇹🇷", "tr", "Türkçe"),
         CountryLanguage("CY", "Cyprus", "🇨🇾", "tr", "Türkçe"),
 
-        // Hindi - South Asia
         CountryLanguage("IN", "India", "🇮🇳", "hi", "हिन्दी"),
         CountryLanguage("NP", "Nepal", "🇳🇵", "hi", "हिन्दी"),
         CountryLanguage("FJ", "Fiji", "🇫🇯", "hi", "हिन्दी"),
 
-        // Bahasa Melayu - Southeast Asia
         CountryLanguage("MY", "Malaysia", "🇲🇾", "ms", "Bahasa Melayu"),
         CountryLanguage("BN", "Brunei", "🇧🇳", "ms", "Bahasa Melayu"),
     )
@@ -115,7 +106,6 @@ fun LanguageSelectorDialog(
             Column(
                 modifier = Modifier.fillMaxWidth()
             ) {
-                // Header
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -149,7 +139,6 @@ fun LanguageSelectorDialog(
 
                 Divider(color = Color(0xFFDADCE0))
 
-                // Content - All Countries List
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxWidth()

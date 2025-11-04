@@ -42,7 +42,6 @@ class LoginViewModel @Inject constructor(
     private val _uiState = mutableStateOf(LoginUiState())
     val uiState: State<LoginUiState> = _uiState
 
-    // Expose languageManager flows directly untuk reactive updates
     val currentLanguage: StateFlow<String> = languageManager.currentLanguage
     val currentCountry: StateFlow<String> = languageManager.currentCountry
 

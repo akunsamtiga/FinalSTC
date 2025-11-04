@@ -28,7 +28,6 @@ fun TradingLineChart(selectedAsset: Asset?, colors: DashboardColors) {
     var entries by remember { mutableStateOf(generateInitialData(100)) }
     var timeStep by remember { mutableStateOf(entries.size) }
 
-    // Simulasi data berjalan
     LaunchedEffect(Unit) {
         while (true) {
             delay(500)
@@ -77,7 +76,6 @@ fun TradingLineChart(selectedAsset: Asset?, colors: DashboardColors) {
             )
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
-            // Menampilkan nama aset di atas chart
             Text(
                 text = selectedAsset?.let { "${it.name} (${it.ric})" } ?: "No Asset Selected",
                 style = MaterialTheme.typography.titleSmall,
@@ -155,7 +153,6 @@ private fun generateInitialData(count: Int): ArrayList<Entry> {
     return list
 }
 
-// Gunakan warna dari DashboardColors untuk fill area chart
 private fun android.content.Context.getGradientDrawable(colors: DashboardColors) =
     android.graphics.drawable.GradientDrawable(
         android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,

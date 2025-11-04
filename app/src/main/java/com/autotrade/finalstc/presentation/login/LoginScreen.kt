@@ -52,11 +52,10 @@ fun LoginScreen(
         }
     }
 
-    // Language Selector Dialog
     if (uiState.showLanguageDialog) {
         LanguageSelectorDialog(
-            currentLanguage = lang,           // ✅ Dari StateFlow
-            currentCountry = currentCountry,  // ✅ Dari StateFlow
+            currentLanguage = lang,
+            currentCountry = currentCountry,
             onDismiss = { viewModel.showLanguageDialog(false) },
             onLanguageSelected = { languageCode, countryCode ->
                 viewModel.updateLanguage(languageCode, countryCode)
@@ -205,7 +204,6 @@ fun LoginScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // Remember Me Checkbox
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -233,7 +231,6 @@ fun LoginScreen(
 
                     Spacer(modifier = Modifier.height(4.dp))
 
-                    // Loading State Indicator
                     if (uiState.isLoading) {
                         Card(
                             modifier = Modifier.fillMaxWidth(),
@@ -270,7 +267,6 @@ fun LoginScreen(
                         Spacer(modifier = Modifier.height(20.dp))
                     }
 
-                    // Error Message
                     uiState.errorMessage?.let { error ->
                         Card(
                             modifier = Modifier.fillMaxWidth(),
@@ -353,7 +349,6 @@ fun LoginScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // Register Button
                     OutlinedButton(
                         onClick = onRegisterClick,
                         modifier = Modifier
@@ -438,7 +433,6 @@ fun LoginScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // Language Selector Button
                     OutlinedButton(
                         onClick = { viewModel.showLanguageDialog(true) },
                         modifier = Modifier
@@ -454,7 +448,7 @@ fun LoginScreen(
                         shape = RoundedCornerShape(24.dp)
                     ) {
                         Text(
-                            text = when(currentCountry) {  // ✅ Dari StateFlow
+                            text = when(currentCountry) {
                                 "ID" -> "🇮🇩"
                                 "NG" -> "🇳🇬"
                                 "PH" -> "🇵🇭"
