@@ -44,9 +44,6 @@ ehthumbs.db
 app/google-services.json
 GoogleService-Info.plist
 
-# ======================================
-# KEYSTORE & SIGNING FILES
-# ======================================
 *.jks
 *.keystore
 *.pem
