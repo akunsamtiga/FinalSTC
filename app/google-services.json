@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "945559730547",
+    "project_id": "stc-autotrade-18f67",
+    "storage_bucket": "stc-autotrade-18f67.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:945559730547:android:71785c14791f5485fe2d06",
+        "android_client_info": {
+          "package_name": "com.autotrade.finalstc"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAiPFdlI8uV0tkNrLR_NBNNuEu6YccACSQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
