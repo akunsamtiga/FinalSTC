@@ -38,7 +38,6 @@ class ThemeViewModel @Inject constructor(
             )
             _currentTheme.value = newTheme
 
-            // Save theme preference
             themeRepository.saveThemePreference(newTheme.isDarkMode)
         }
     }
@@ -48,7 +47,6 @@ class ThemeViewModel @Inject constructor(
             val newTheme = _currentTheme.value.copy(isDarkMode = isDarkMode)
             _currentTheme.value = newTheme
 
-            // Save theme preference
             themeRepository.saveThemePreference(isDarkMode)
         }
     }

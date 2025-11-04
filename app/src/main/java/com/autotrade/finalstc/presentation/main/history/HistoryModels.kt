@@ -31,10 +31,10 @@ data class TradingHistoryNew(
     val openQuoteCreatedAt: String?,
     val openRate: Double,
     val tradeType: String,
-    val accountType: String? = null, // "demo" or "real"
-    val isDemoAccount: Boolean? = null, // Alternative field if you prefer boolean
+    val accountType: String? = null,
+    val isDemoAccount: Boolean? = null,
 
-    val isDemo: Boolean = false // This would be the preferred approach
+    val isDemo: Boolean = false
 
 )
 
@@ -64,5 +64,5 @@ data class TradingHistoryRaw(
 data class HistoryUiState(
     val isLoading: Boolean = false,
     val error: String? = null,
-    val showDemoAccount: Boolean = true // ADD: Track current account type being displayed
+    val showDemoAccount: Boolean = true
 )

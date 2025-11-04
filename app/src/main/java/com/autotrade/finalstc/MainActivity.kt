@@ -34,17 +34,14 @@ class AppViewModel @Inject constructor(
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
-    // ✅ NEW: Initialize permissions handler
     private lateinit var permissionsHandler: PermissionsHandler
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        // ✅ NEW: Initialize permissions handler for API 35
         permissionsHandler = PermissionsHandler(this)
 
-        // ✅ NEW: Check and request permissions - CRITICAL for trading alerts!
         permissionsHandler.checkAndRequestPermissions()
 
         setContent {
@@ -89,7 +86,6 @@ fun TradingApp(
                 onBackClick = {
                     navController.popBackStack()
                 },
-                // ✅ TAMBAHKAN parameter ini
                 onNavigateToDashboard = {
                     navController.navigate("main") {
                         popUpTo("register") { inclusive = true }

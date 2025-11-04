@@ -42,7 +42,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.autotrade.finalstc.presentation.theme.ThemeViewModel
 import androidx.compose.material.icons.filled.Help
 
-// Pastel Blue Color Palette
 object GoogleColors {
     val Blue = Color(0xFF4285F4)
     val Green = Color(0xFF34A853)
@@ -54,7 +53,6 @@ object GoogleColors {
     val White = Color(0xFFFFFFFF)
 }
 
-// Pastel Blue Palette for Loading Dots
 object PastelBlueColors {
     val LightBlue = Color(0xFF87CEEB)
     val SoftBlue = Color(0xFF9BB4D6)
@@ -264,7 +262,6 @@ fun RegisterScreen(
     val coroutineScope = rememberCoroutineScope()
     val uiState by viewModel.uiState.collectAsState()
 
-    // Get current theme
     val currentTheme by themeViewModel.currentTheme.collectAsStateWithLifecycle()
     val colors = currentTheme.colors
 
@@ -278,20 +275,16 @@ fun RegisterScreen(
     var showSavingDialog by remember { mutableStateOf(false) }
     var isExtractingData by remember { mutableStateOf(false) }
 
-    // Loading states
     var showLoading by remember { mutableStateOf(true) }
     var loadingProgress by remember { mutableStateOf(0f) }
 
-    // Current URL tracking
     var currentDetectedUrl by remember { mutableStateOf<String?>(null) }
 
-    // Registration data
     var registrationAuthToken by remember { mutableStateOf<String?>(null) }
     var registrationDeviceId by remember { mutableStateOf<String?>(null) }
     var registrationEmail by remember { mutableStateOf<String?>(null) }
     var isDataExtracted by remember { mutableStateOf(false) }
 
-    // Navigation items
     val successNavItems = listOf(
         SuccessNavItem("dashboard", Icons.Outlined.Dashboard, "Dashboard"),
         SuccessNavItem("history", Icons.Outlined.History, "History"),
@@ -299,14 +292,11 @@ fun RegisterScreen(
         SuccessNavItem("profile", Icons.Outlined.Person, "Profile")
     )
 
-    // State untuk menampilkan bottom navigation
     var showBottomNavigation by remember { mutableStateOf(false) }
 
-    // Accompanist WebView State
     val webViewState = rememberWebViewState(url = uiState.registrationUrl)
     val navigator = rememberWebViewNavigator()
 
-    // Success URL patterns
     val successUrlPatterns = listOf(
         "/trading", "/onboarding", "/welcome", "/dashboard",
         "/home", "/account", "/main", "/member", "/profile",
@@ -643,7 +633,7 @@ fun RegisterScreen(
     }
 
     if (uiState.saveToWhitelistError != null) {
-        val context = LocalContext.current  // ✅ TAMBAHAN BARU
+        val context = LocalContext.current
 
         AlertDialog(
             onDismissRequest = { viewModel.clearSaveError() },
@@ -677,7 +667,6 @@ fun RegisterScreen(
             confirmButton = {
                 Button(
                     onClick = {
-                        // ✅ LOGIC BARU: Buka WhatsApp untuk bantuan
                         val waUrl = "https://wa.me/$whatsappNumber"
                         val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
                             data = android.net.Uri.parse(waUrl)
@@ -686,18 +675,18 @@ fun RegisterScreen(
                         viewModel.clearSaveError()
                     },
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = GoogleColors.Green,  // ✅ Warna hijau WhatsApp
+                        containerColor = GoogleColors.Green,
                         contentColor = GoogleColors.White
                     ),
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Help,  // ✅ Icon baru
+                        imageVector = Icons.Default.Help,
                         contentDescription = null,
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("Hubungi Admin", fontWeight = FontWeight.Medium)  // ✅ Text baru
+                    Text("Hubungi Admin", fontWeight = FontWeight.Medium)
                 }
             },
             dismissButton = {
@@ -1120,7 +1109,6 @@ fun RegisterScreen(
             isVisible = showLoading || uiState.isLoading
         )
 
-        // Bottom Navigation dengan warna dari theme
         if (showBottomNavigation) {
             Surface(
                 modifier = Modifier
@@ -1142,7 +1130,7 @@ fun RegisterScreen(
                         tonalElevation = 0.dp
                     ) {
                         successNavItems.forEach { item ->
-                            val selected = false // Always false during registration
+                            val selected = false
 
                             NavigationBarItem(
                                 icon = {
@@ -1181,7 +1169,6 @@ fun RegisterScreen(
                                 },
                                 selected = selected,
                                 onClick = {
-                                    // Show success dialog again when trying to navigate
                                     if (!showSuccessDialog) {
                                         showSuccessDialog = true
                                     }

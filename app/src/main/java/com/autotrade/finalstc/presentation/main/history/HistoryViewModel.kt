@@ -35,7 +35,7 @@ interface TradingHistoryApi {
 class HistoryViewModel @Inject constructor(
     private val tradingHistoryRepository: TradingHistoryRepository,
     private val languageManager: LanguageManager,
-    private val sessionManager: SessionManager // ADD: SessionManager injection
+    private val sessionManager: SessionManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HistoryUiState())
@@ -44,20 +44,19 @@ class HistoryViewModel @Inject constructor(
     private val _historyList = MutableStateFlow<List<TradingHistoryNew>>(emptyList())
     val historyList: StateFlow<List<TradingHistoryNew>> = _historyList.asStateFlow()
 
-    private val _currentAccountType = MutableStateFlow(true) // true = demo, false = real
+    private val _currentAccountType = MutableStateFlow(true)
     val currentAccountType: StateFlow<Boolean> = _currentAccountType.asStateFlow()
 
     private val _currentLanguage = MutableStateFlow("id")
     val currentLanguage: StateFlow<String> = _currentLanguage.asStateFlow()
 
-    // ADD: Currency state
     private val _currentCurrency = MutableStateFlow("IDR")
     val currentCurrency: StateFlow<String> = _currentCurrency.asStateFlow()
 
     init {
         loadLanguage()
-        loadCurrency() // ADD: Load currency on init
-        observeLanguageChanges() // ADD: Observe language changes
+        loadCurrency()
+        observeLanguageChanges()
 
     }
 
@@ -74,7 +73,6 @@ class HistoryViewModel @Inject constructor(
         }
     }
 
-    // ADD: Load currency from session
     private fun loadCurrency() {
         val currency = sessionManager.getCurrency()
         _currentCurrency.value = currency
@@ -86,13 +84,11 @@ class HistoryViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
 
             try {
-                // If isDemoAccount is provided, update current account type
                 isDemoAccount?.let {
                     _currentAccountType.value = it
                     _uiState.value = _uiState.value.copy(showDemoAccount = it)
                 }
 
-                // Load history data from repository
                 val history = tradingHistoryRepository.getTradingHistory(
                     isDemoAccount ?: _currentAccountType.value
                 )
@@ -119,7 +115,7 @@ class HistoryViewModel @Inject constructor(
     }
 
     fun refreshHistory() {
-        loadCurrency() // ADD: Refresh currency when refreshing history
+        loadCurrency()
         loadTradingHistory(_currentAccountType.value)
     }
 

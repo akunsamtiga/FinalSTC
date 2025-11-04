@@ -61,7 +61,7 @@ android {
     }
 
     composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.15" // ✅ FIXED: Updated for API 35 compatibility
+        kotlinCompilerExtensionVersion = "1.5.15" //
     }
 
     packaging {
@@ -72,16 +72,13 @@ android {
 }
 
 dependencies {
-    // Core Android dependencies
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
 
-    // WebSocket and HTTP dependencies - UPDATED
     implementation(libs.okhttp)
     implementation(libs.logging.interceptor)
 
-    // ✅ FIXED: Updated Compose BOM for API 35
     implementation(platform("androidx.compose:compose-bom:2024.09.00"))
     implementation(libs.androidx.ui)
     implementation(libs.androidx.ui.graphics)
@@ -89,27 +86,21 @@ dependencies {
     implementation(libs.androidx.material3)
     implementation(libs.androidx.material.icons.extended)
 
-    // Navigation Compose
     implementation(libs.androidx.navigation.compose)
 
-    // Hilt dependencies
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
 
-    // Retrofit dependencies
     implementation(libs.retrofit)
     implementation(libs.converter.gson)
     implementation(libs.gson)
     implementation(libs.logging.interceptor)
 
-    // Security and encryption
     implementation(libs.androidx.security.crypto)
 
-    // JSON parsing - ADDED for WebSocket message parsing
     implementation(libs.json)
 
-    // ✅ FIXED: Updated Firebase BOM for API 35
     implementation(platform("com.google.firebase:firebase-bom:33.4.0"))
     implementation("com.google.firebase:firebase-firestore-ktx")
     implementation("com.google.firebase:firebase-auth-ktx")
@@ -117,7 +108,6 @@ dependencies {
     implementation("com.google.firebase:firebase-config-ktx")
 
     implementation(libs.mpandroidchart)
-    // Test dependencies
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
@@ -126,7 +116,6 @@ dependencies {
 
     implementation("com.google.accompanist:accompanist-webview:0.34.0")
 
-    // Debug dependencies
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
 }

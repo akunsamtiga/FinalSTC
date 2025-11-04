@@ -57,7 +57,6 @@ class DashboardViewModel @Inject constructor(
     private val _followOrders = MutableStateFlow<List<FollowOrder>>(emptyList())
     val followOrders: StateFlow<List<FollowOrder>> = _followOrders.asStateFlow()
 
-    // NEW: StateFlow untuk Indicator Orders
     private val _indicatorOrders = MutableStateFlow<List<IndicatorOrder>>(emptyList())
     val indicatorOrders: StateFlow<List<IndicatorOrder>> = _indicatorOrders.asStateFlow()
 
@@ -74,7 +73,6 @@ class DashboardViewModel @Inject constructor(
     private val _todayStats = MutableStateFlow(TodayStats())
     val todayStats: StateFlow<TodayStats> = _todayStats.asStateFlow()
 
-    // NEW: Fixed today profit calculation
     private val _todayProfit = MutableStateFlow(0L)
     val todayProfit: StateFlow<Long> = _todayProfit.asStateFlow()
 
@@ -116,10 +114,9 @@ class DashboardViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             try {
-                // 1️⃣ Ambil dan set currency dari server
                 val userCurrency = currencyRepository.getCurrencyWithFetch()
                 Log.d("DashboardViewModel", "Currency fetched in init: $userCurrency")
-                loadUserCurrency() // ← langsung set ke UI State setelah dapat
+                loadUserCurrency()
 
             } catch (e: Exception) {
                 Log.e("DashboardViewModel", "Gagal refresh currency: ${e.message}")
@@ -159,7 +156,6 @@ class DashboardViewModel @Inject constructor(
                     val currentCurrency = currencyData.current
                     Log.d("DashboardViewModel", "Currency fetched successfully: $currentCurrency")
 
-                    // Map currency ISO to CurrencyType
                     val currencyType = when (currentCurrency) {
                         "IDR" -> CurrencyType.IDR
                         "USD" -> CurrencyType.USD
@@ -171,11 +167,9 @@ class DashboardViewModel @Inject constructor(
                         }
                     }
 
-                    // Update currency settings
                     val newCurrencySettings = _uiState.value.currencySettings.adjustForCurrency(currencyType)
                     _uiState.value = _uiState.value.copy(currencySettings = newCurrencySettings)
 
-                    // Update managers
                     tradeManager.updateCurrency(currencyType)
                     martingaleManager.updateCurrency(currencyType)
 
@@ -185,7 +179,6 @@ class DashboardViewModel @Inject constructor(
 
                 result.onFailure { exception ->
                     Log.e("DashboardViewModel", "Failed to fetch currency: ${exception.message}")
-                    // Keep default IDR
                 }
 
             } catch (e: Exception) {
@@ -194,7 +187,6 @@ class DashboardViewModel @Inject constructor(
         }
     }
 
-    // ✅ TAMBAH: Function untuk refresh currency
     fun refreshCurrency() {
         viewModelScope.launch {
             try {
@@ -214,7 +206,6 @@ class DashboardViewModel @Inject constructor(
                         else -> CurrencyType.IDR
                     }
 
-                    // Only update if different
                     if (_uiState.value.currencySettings.selectedCurrency != currencyType) {
                         val newCurrencySettings = _uiState.value.currencySettings.adjustForCurrency(currencyType)
                         _uiState.value = _uiState.value.copy(currencySettings = newCurrencySettings)
@@ -232,7 +223,6 @@ class DashboardViewModel @Inject constructor(
         }
     }
 
-    // ✅ TAMBAH: Get current currency info
     fun getCurrentCurrencyFromApi(): Map<String, Any> {
         val currency = _uiState.value.currencySettings.selectedCurrency
         return mapOf(
@@ -272,9 +262,8 @@ class DashboardViewModel @Inject constructor(
             martingaleSettings = updatedMartingale
         )
 
-        // 🔥 UPDATE TradeManager with new currency
         tradeManager.updateCurrency(currency)
-        martingaleManager.updateCurrency(currency) // If MartingaleManager also needs it
+        martingaleManager.updateCurrency(currency)
 
         println("Currency changed to ${currency.code}")
         println("  Minimum amount: ${currency.formatAmount(currency.minAmountInCents)}")
@@ -282,10 +271,6 @@ class DashboardViewModel @Inject constructor(
         println("All managers updated with new currency: ${currency.code}")
     }
 
-
-    /**
-     * Set base amount in current currency
-     */
     fun setBaseAmountInCurrency(input: String) {
         if (!_uiState.value.canModifySettings()) return
 
@@ -321,16 +306,10 @@ class DashboardViewModel @Inject constructor(
         )
     }
 
-    /**
-     * Get available currencies for selection
-     */
     fun getAvailableCurrencies(): List<CurrencyType> {
         return CurrencyType.values().toList()
     }
 
-    /**
-     * Get current currency info
-     */
     fun getCurrentCurrencyInfo(): Map<String, String> {
         val settings = _uiState.value.currencySettings
         val currency = settings.selectedCurrency
@@ -348,15 +327,13 @@ class DashboardViewModel @Inject constructor(
         viewModelScope.launch {
             while (true) {
                 try {
-                    // Check every minute for date changes
-                    delay(60000L) // 1 minute
+                    delay(60000L)
 
-                    // Initialize or reset if needed (handles day change automatically)
                     localStatsTracker.initializeOrReset(_uiState.value.isDemoAccount)
 
                 } catch (e: Exception) {
                     println("Error in local stats reset scheduler: ${e.message}")
-                    delay(300000L) // Wait 5 minutes on error
+                    delay(300000L)
                 }
             }
         }
@@ -367,7 +344,6 @@ class DashboardViewModel @Inject constructor(
         val channelsReady = webSocketManager.isRequiredChannelsReady()
         val isConnected = _uiState.value.isWebSocketConnected
 
-        // Get detailed connection stats for debugging
         val connectionStats = webSocketManager.getConnectionStats()
         val reconnectionAttempts = connectionStats["reconnection_attempts"] as? Int ?: 0
         val timeSinceLastMessage = connectionStats["time_since_last_message_ms"] as? Long ?: 0L
@@ -382,23 +358,18 @@ class DashboardViewModel @Inject constructor(
                     "Connecting: $isConnecting"
         )
 
-        // Don't allow starting if we're still connecting or recently reconnected
         if (isConnecting || reconnectionAttempts > 0) {
             Log.w("DashboardViewModel", "Connection unstable - still connecting or recent reconnections")
             return false
         }
 
-        // Don't allow if no message received in a while (indicating connection issues)
-        if (timeSinceLastMessage > 30000) { // 30 seconds
+        if (timeSinceLastMessage > 30000) {
             Log.w("DashboardViewModel", "Connection unstable - no recent messages")
             return false
         }
 
         return connectionHealthy && channelsReady && isConnected
     }
-
-
-
 
     private fun isTradeCompleted(trade: TradingHistoryNew): Boolean {
         val status = trade.status.lowercase().trim()
@@ -459,7 +430,6 @@ class DashboardViewModel @Inject constructor(
         return System.currentTimeMillis() + serverTimeOffset
     }
 
-
     private fun validateTradeData(trade: TradingHistoryNew): String? {
         return when {
             trade.status.lowercase() in listOf("won", "win") -> {
@@ -494,47 +464,39 @@ class DashboardViewModel @Inject constructor(
         viewModelScope.launch {
             while (true) {
                 try {
-                    // Get current Jakarta time
                     val jakartaCalendar = Calendar.getInstance(TimeZone.getTimeZone("Asia/Jakarta"))
 
-                    // Check if it's midnight (00:00)
                     if (jakartaCalendar.get(Calendar.HOUR_OF_DAY) == 0 &&
                         jakartaCalendar.get(Calendar.MINUTE) == 0) {
 
                         println("MIDNIGHT DETECTED - Resetting today profit")
 
-                        // Reset all today profit related state
                         _todayProfit.value = 0L
                         _todayStats.value = TodayStats()
                         _uiState.value = _uiState.value.copy(todayProfit = 0L)
 
-                        // Wait to avoid multiple resets
-                        delay(70000L) // Wait 70 seconds
+                        delay(70000L)
                     } else {
-                        // Check every 30 seconds
                         delay(30000L)
                     }
 
                 } catch (e: Exception) {
                     println("Error in today profit reset scheduler: ${e.message}")
-                    delay(60000L) // Wait 1 minute on error
+                    delay(60000L)
                 }
             }
         }
     }
-
 
     fun validateTodayProfitCalculation(): Map<String, Any> {
         return try {
             val historyList = _historyList.value
             val isDemoAccount = _uiState.value.isDemoAccount
 
-            // Get current calculation
             val result = todayProfitCalculator.calculateTodayProfit(historyList, isDemoAccount)
             val warnings = todayProfitCalculator.validateResults(result)
             val calculatorStatus = todayProfitCalculator.getCalculatorStatus()
 
-            // Compare with UI state
             val uiProfit = _todayProfit.value
             val calculatedProfit = result.totalProfit
             val isConsistent = (uiProfit == calculatedProfit)
@@ -626,39 +588,34 @@ class DashboardViewModel @Inject constructor(
             val calculatorStatus = todayProfitCalculator.getCalculatorStatus()
             val processedTrades = todayProfitCalculator.getProcessedTrades()
             val calculationHistory = todayProfitCalculator.getCalculationHistory()
-            val currentCurrency = _uiState.value.currencySettings.selectedCurrency  // ✅ GET CURRENCY
+            val currentCurrency = _uiState.value.currencySettings.selectedCurrency
 
-            // Get current calculation for validation
             val result = todayProfitCalculator.calculateTodayProfit(
                 historyList = historyList,
                 isDemoAccount = _uiState.value.isDemoAccount,
                 forceFull = false,
-                currencyCode = currentCurrency.code  // ✅ PASS CURRENCY
+                currencyCode = currentCurrency.code
             )
 
             val warnings = todayProfitCalculator.validateResults(result)
 
             mapOf(
-                // Current state
                 "current_profit_ui" to (_todayProfit.value / 100.0),
                 "calculated_profit" to (result.totalProfit / 100.0),
                 "profit_match" to (_todayProfit.value == result.totalProfit),
-                "currency_code" to currentCurrency.code,  // ✅ ADD
-                "currency_symbol" to currentCurrency.symbol,  // ✅ ADD
-                "formatted_profit" to currentCurrency.formatAmount(_todayProfit.value),  // ✅ ADD
+                "currency_code" to currentCurrency.code,
+                "currency_symbol" to currentCurrency.symbol,
+                "formatted_profit" to currentCurrency.formatAmount(_todayProfit.value),
 
-                // Calculation info
                 "calculation_method" to "STABLE_INCREMENTAL",
                 "is_incremental" to result.isIncremental,
                 "debug_info" to result.debugInfo,
                 "validation_warnings" to warnings,
 
-                // Calculator status
                 "calculator_status" to calculatorStatus,
                 "processed_trades_count" to processedTrades.size,
                 "calculation_history" to calculationHistory,
 
-                // Statistics
                 "statistics" to mapOf(
                     "win_count" to result.stats.winCount,
                     "lose_count" to result.stats.loseCount,
@@ -667,8 +624,7 @@ class DashboardViewModel @Inject constructor(
                     "win_rate" to "${String.format("%.1f", result.stats.getWinRate())}%"
                 ),
 
-                // System info
-                "currency_info" to mapOf(  // ✅ ADD SECTION
+                "currency_info" to mapOf(
                     "current_currency" to currentCurrency.code,
                     "symbol" to currentCurrency.symbol,
                     "min_amount" to currentCurrency.formatAmount(currentCurrency.minAmountInCents),
@@ -676,7 +632,6 @@ class DashboardViewModel @Inject constructor(
                     "source" to "API"
                 ),
 
-                // Timezone info
                 "timezone_info" to mapOf(
                     "calculation_timezone" to "Asia/Jakarta",
                     "server_offset_ms" to serverTimeOffset,
@@ -684,7 +639,6 @@ class DashboardViewModel @Inject constructor(
                     "uses_server_time" to (serverTimeService != null)
                 ),
 
-                // Data integrity
                 "data_source_info" to mapOf(
                     "total_history_records" to historyList.size,
                     "history_empty" to historyList.isEmpty(),
@@ -692,13 +646,12 @@ class DashboardViewModel @Inject constructor(
                     "last_update" to System.currentTimeMillis()
                 ),
 
-                // Performance tracking
                 "performance_info" to mapOf(
                     "anti_fluctuation" to "ENABLED",
                     "incremental_calculation" to "ENABLED",
                     "state_tracking" to "ENABLED",
                     "auto_new_day_reset" to "ENABLED",
-                    "currency_aware" to "ENABLED"  // ✅ ADD
+                    "currency_aware" to "ENABLED"
                 )
             )
         } catch (e: Exception) {
@@ -706,7 +659,7 @@ class DashboardViewModel @Inject constructor(
                 "error" to (e.message ?: "Unknown error"),
                 "current_profit_ui" to (_todayProfit.value / 100.0),
                 "calculation_method" to "ERROR_FALLBACK",
-                "currency_code" to _uiState.value.currencySettings.selectedCurrency.code  // ✅ ADD
+                "currency_code" to _uiState.value.currencySettings.selectedCurrency.code
             )
         }
     }
@@ -719,7 +672,6 @@ class DashboardViewModel @Inject constructor(
                         val predictionInfo = indicatorOrderManager.getPredictionInfo()
                         _indicatorPredictionInfo.value = predictionInfo
 
-                        // Also update support/resistance levels in UI state
                         val (supportLevel, resistanceLevel) = indicatorOrderManager.getSupportResistanceLevels()
                         val lastValues = indicatorOrderManager.getLastIndicatorValues()
 
@@ -733,16 +685,14 @@ class DashboardViewModel @Inject constructor(
                         Log.e("DashboardViewModel", "Error updating prediction info: ${e.message}")
                     }
                 } else {
-                    // Clear prediction info when indicator mode is not active
                     _indicatorPredictionInfo.value = emptyMap()
                 }
 
-                delay(5000L) // Update every 5 seconds
+                delay(5000L)
             }
         }
     }
 
-    // NEW: Get current indicator prediction info
     fun getCurrentIndicatorPredictionInfo(): Map<String, Any> {
         return if (_uiState.value.isIndicatorModeActive) {
             try {
@@ -756,10 +706,6 @@ class DashboardViewModel @Inject constructor(
         }
     }
 
-
-    /**
-     * NEW: Force recalculation and clear any cache issues
-     */
     fun forceRecalculateTodayProfit() {
         viewModelScope.launch {
             try {
@@ -771,14 +717,12 @@ class DashboardViewModel @Inject constructor(
 
                 println("Currency: ${currentCurrency.code}")
 
-                // Force full recalculation with currency
                 val result = todayProfitCalculator.forceFullRecalculation(
                     historyList = historyList,
                     isDemoAccount = _uiState.value.isDemoAccount,
-                    currencyCode = currentCurrency.code  // ✅ PASS CURRENCY
+                    currencyCode = currentCurrency.code
                 )
 
-                // Update UI
                 _todayProfit.value = result.totalProfit
                 _todayStats.value = result.stats
                 _uiState.value = _uiState.value.copy(todayProfit = result.totalProfit)
@@ -811,11 +755,9 @@ class DashboardViewModel @Inject constructor(
 
                 todayProfitCalculator.manualCorrection(adjustmentCents, reason)
 
-                // Get updated values
                 val calculatorStatus = todayProfitCalculator.getCalculatorStatus()
                 val newProfit = calculatorStatus["cached_total_profit"] as Long
 
-                // Update UI
                 _todayProfit.value = newProfit
                 _uiState.value = _uiState.value.copy(todayProfit = newProfit)
 
@@ -827,36 +769,29 @@ class DashboardViewModel @Inject constructor(
         }
     }
 
-
     fun updateHistoryList(historyList: List<TradingHistoryNew>) {
         println("DashboardViewModel: Updating history list with ${historyList.size} items")
 
-        // Update history state
         _historyList.value = historyList
 
-        // Update today profit using FIXED single source method
         updateTodayProfitSingleSource(historyList)
 
-        // Update session separately (don't mix with today profit)
         updateTradingSession(historyList)
 
-        // NEW: Initialize local stats tracker for current account type
         localStatsTracker.initializeOrReset(_uiState.value.isDemoAccount)
 
-        // Check stop conditions
         checkStopConditionsAfterUpdate()
     }
 
     private fun handleTradeResultForLocalStats(
-        tradeId: String?, // CHANGED: Now accepts nullable tradeId
+        tradeId: String?,
         orderId: String,
-        result: String, // "WIN", "LOSE", "DRAW"
+        result: String,
         isMartingaleAttempt: Boolean = false,
         martingaleStep: Int = 0,
         maxMartingaleSteps: Int = 5
     ) {
         try {
-            // Generate fallback tradeId if null
             val safeTradeId = tradeId ?: "generated_${orderId}_${System.currentTimeMillis()}"
 
             localStatsTracker.handleTradeResult(
@@ -881,7 +816,6 @@ class DashboardViewModel @Inject constructor(
         tradeId: String? = null
     ) {
         try {
-            // ✅ Generate fallback tradeId jika null
             val safeTradeId = tradeId ?: "martingale_completion_${orderId}_${finalStep}_${System.currentTimeMillis()}"
 
             println("🔥 MARTINGALE COMPLETION FOR LOCAL STATS:")
@@ -926,8 +860,6 @@ class DashboardViewModel @Inject constructor(
         }
     }
 
-
-
     private fun updateTodayProfitSingleSource(historyList: List<TradingHistoryNew>) {
         viewModelScope.launch {
             try {
@@ -935,30 +867,25 @@ class DashboardViewModel @Inject constructor(
 
                 println("=== UPDATING TODAY PROFIT (STABLE VERSION WITH CURRENCY) ===")
 
-                // ✅ GET CURRENT CURRENCY
                 val currentCurrency = _uiState.value.currencySettings.selectedCurrency
                 println("Currency: ${currentCurrency.code}")
 
-                // ✅ PASS CURRENCY TO CALCULATOR
                 val result = todayProfitCalculator.calculateTodayProfit(
                     historyList = historyList,
                     isDemoAccount = _uiState.value.isDemoAccount,
                     forceFull = false,
-                    currencyCode = currentCurrency.code  // ✅ PASS CURRENCY
+                    currencyCode = currentCurrency.code
                 )
 
-                // Validate results
                 val warnings = todayProfitCalculator.validateResults(result)
                 warnings.forEach { warning ->
                     println("TODAY PROFIT WARNING: $warning")
                 }
 
-                // Update UI atomically
                 _todayProfit.value = result.totalProfit
                 _todayStats.value = result.stats
                 _uiState.value = _uiState.value.copy(todayProfit = result.totalProfit)
 
-                // Log for monitoring
                 val calculatorStatus = todayProfitCalculator.getCalculatorStatus()
                 println("TODAY PROFIT UPDATED (${if (result.isIncremental) "INCREMENTAL" else "FULL"}):")
                 println("  Currency: ${currentCurrency.code} (${currentCurrency.symbol})")
@@ -978,8 +905,6 @@ class DashboardViewModel @Inject constructor(
         }
     }
 
-
-
     private fun checkStopConditionsAfterUpdate() {
         viewModelScope.launch {
             delay(100)
@@ -989,8 +914,6 @@ class DashboardViewModel @Inject constructor(
             )
         }
     }
-
-
 
     private fun initializeManagers() {
         val retrofit = Retrofit.Builder()
@@ -1020,7 +943,6 @@ class DashboardViewModel @Inject constructor(
 
         todayProfitCalculator = TodayProfitCalculator(serverTimeService)
 
-
         stopLossProfitManager = StopLossProfitManager(
             scope = viewModelScope,
             onStopTriggered = { type, reason ->
@@ -1039,7 +961,7 @@ class DashboardViewModel @Inject constructor(
                 if (!isConnected && (_uiState.value.botState == BotState.RUNNING ||
                             _uiState.value.isFollowModeActive ||
                             _uiState.value.isIndicatorModeActive)
-                ) { // NEW: Check indicator mode
+                ) {
                     viewModelScope.launch {
                         delay(5000)
                         if (!webSocketManager.isConnectionHealthy() && !isConnected) {
@@ -1059,7 +981,7 @@ class DashboardViewModel @Inject constructor(
                 martingaleManager.handleWebSocketTradeUpdate(message)
                 continuousTradeMonitor.handleWebSocketTradeUpdate(message)
                 followOrderManager.handleWebSocketTradeUpdate(message)
-                indicatorOrderManager.handleWebSocketTradeUpdate(message) // NEW
+                indicatorOrderManager.handleWebSocketTradeUpdate(message)
 
                 handleTradingEventForTodayProfit(message)
             },
@@ -1083,9 +1005,7 @@ class DashboardViewModel @Inject constructor(
             serverTimeService = serverTimeService
         )
 
-        // 🔥 ADD: Initialize with current currency
         tradeManager.updateCurrency(_uiState.value.currencySettings.selectedCurrency)
-
 
         martingaleManager = MartingaleManager(
             scope = viewModelScope,
@@ -1108,12 +1028,11 @@ class DashboardViewModel @Inject constructor(
                 } else null
             },
             webSocketManager = webSocketManager,
-            onStepUpdate = { orderId, step ->  // ✅ ADD THIS
+            onStepUpdate = { orderId, step ->
                 println("🔗 VM: Received step update - Order: $orderId, Step: $step")
                 scheduleManager.updateMartingaleStepRealtime(orderId, step)
             }
         )
-
 
         continuousTradeMonitor = ContinuousTradeMonitor(
             scope = viewModelScope,
@@ -1177,7 +1096,6 @@ class DashboardViewModel @Inject constructor(
                 _followOrders.value = orders
             },
             onExecuteFollowTrade = { trend, followOrderId, amount, isBoundaryMode ->
-                // PRECISION FIXED: Route to correct execution method based on mode
                 executeFollowTrade(trend, followOrderId, amount, isBoundaryMode)
             },
             onModeStatusUpdate = { status ->
@@ -1212,9 +1130,6 @@ class DashboardViewModel @Inject constructor(
             }
         )
 
-
-
-        // NEW: Initialize IndicatorOrderManager
         indicatorOrderManager = IndicatorOrderManager(
             scope = viewModelScope,
             onIndicatorOrdersUpdate = { orders ->
@@ -1243,7 +1158,7 @@ class DashboardViewModel @Inject constructor(
                 handleIndicatorMartingaleResult(result)
             },
             priceApi = retrofit.create(PriceDataApi::class.java),
-            onIndicatorModeComplete = { reason, message -> // NEW: Completion callback
+            onIndicatorModeComplete = { reason, message ->
                 handleIndicatorModeCompletion(reason, message)
             }
         )
@@ -1291,8 +1206,6 @@ class DashboardViewModel @Inject constructor(
 
     }
 
-    // ... (Keep all existing connection monitoring, user profile, server time sync methods) ...
-
     private fun startConnectionMonitoring() {
         viewModelScope.launch {
             while (true) {
@@ -1303,7 +1216,7 @@ class DashboardViewModel @Inject constructor(
                 if (currentState.botState == BotState.RUNNING ||
                     currentState.isFollowModeActive ||
                     currentState.isIndicatorModeActive ||
-                    currentState.isCTCModeActive  // 🔥 NEW
+                    currentState.isCTCModeActive
                 ) {
 
                     val isHealthy = webSocketManager.isConnectionHealthy()
@@ -1311,7 +1224,7 @@ class DashboardViewModel @Inject constructor(
 
                     if (!isHealthy && isConnected) {
                         val modeInfo = when {
-                            currentState.isCTCModeActive -> "CTC Order ULTRA-FAST mode"  // 🔥 NEW
+                            currentState.isCTCModeActive -> "CTC Order ULTRA-FAST mode"
                             currentState.isFollowModeActive -> "Follow Order ULTRA-FAST mode"
                             currentState.isIndicatorModeActive -> "Indicator Order mode"
                             else -> "Schedule mode"
@@ -1338,34 +1251,29 @@ class DashboardViewModel @Inject constructor(
 
         Log.d("DashboardViewModel", "ENHANCED: Indicator Mode Completion: $reason - $message")
 
-        // FIXED: Check if this is an auto-restart scenario
         val shouldAutoRestart = when (reason) {
-            "INDICATOR_WIN" -> true          // Regular trade win → restart
-            "MARTINGALE_WIN" -> true         // Martingale win → restart
-            "SINGLE_LOSS" -> true            // Single loss → restart (if martingale disabled)
-            "MARTINGALE_FAILED" -> true      // Martingale failed → restart
-            "CONSECUTIVE_LOSS" -> false      // Stop condition → don't restart
-            "MAX_RESTARTS" -> false          // Too many restarts → don't restart
-            "RESTART_FAILED" -> false        // Restart error → don't restart
-            "RESTART_ERROR" -> false         // Restart error → don't restart
-            else -> false                    // Unknown reason → don't restart
+            "INDICATOR_WIN" -> true
+            "MARTINGALE_WIN" -> true
+            "SINGLE_LOSS" -> true
+            "MARTINGALE_FAILED" -> true
+            "CONSECUTIVE_LOSS" -> false
+            "MAX_RESTARTS" -> false
+            "RESTART_FAILED" -> false
+            "RESTART_ERROR" -> false
+            else -> false
         }
 
         if (shouldAutoRestart) {
             Log.d("DashboardViewModel", "ENHANCED: Indicator completion will trigger auto-restart")
 
-            // Update status to show restart in progress
             _uiState.value = currentState.copy(
                 indicatorOrderStatus = "Completing cycle - Auto-restart in progress...",
                 error = null
             )
 
-            // NOTE: The actual restart is handled in IndicatorOrderManager.handleIndicatorCompletionWithRestart()
-            // This method just updates the UI to reflect the completion status
             return
         }
 
-        // ORIGINAL: Manual stop for non-restart scenarios
         Log.d("DashboardViewModel", "ENHANCED: Stopping indicator mode (reason: $reason)")
 
         viewModelScope.launch {
@@ -1447,7 +1355,6 @@ class DashboardViewModel @Inject constructor(
                 val status = payload?.optString("status", "") ?: ""
 
                 if (status.lowercase() in listOf("won", "lost", "win", "lose", "loss", "stand", "draw")) {
-                    // Handle WebSocket untuk mode aktif
                     if (_uiState.value.isCTCModeActive) {
                         ctcOrderManager.handleWebSocketTradeUpdate(message)
                     }
@@ -1458,7 +1365,6 @@ class DashboardViewModel @Inject constructor(
                         indicatorOrderManager.handleWebSocketTradeUpdate(message)
                     }
 
-                    // STABLE UPDATE: Incremental calculation dengan delay minimal
                     viewModelScope.launch {
                         delay(500L)
 
@@ -1600,7 +1506,6 @@ class DashboardViewModel @Inject constructor(
         viewModelScope.launch {
             val currentState = _uiState.value
 
-            // Simple health check first
             if (webSocketManager.isConnectionHealthy()) {
                 _uiState.value = currentState.copy(
                     connectionStatus = "Connection is already healthy"
@@ -1614,12 +1519,10 @@ class DashboardViewModel @Inject constructor(
             )
 
             try {
-                // Simple force reconnect call
                 webSocketManager.forceReconnect()
 
-                // Wait for reconnection with simple timeout
                 var attempts = 0
-                val maxAttempts = 30 // 15 seconds total
+                val maxAttempts = 30
 
                 while (attempts < maxAttempts) {
                     delay(500L)
@@ -1634,14 +1537,12 @@ class DashboardViewModel @Inject constructor(
                         return@launch
                     }
 
-                    // Update progress
                     val remainingSeconds = ((maxAttempts - attempts) * 500) / 1000
                     _uiState.value = _uiState.value.copy(
                         connectionStatus = "Reconnecting... (${remainingSeconds}s remaining)"
                     )
                 }
 
-                // Timeout
                 _uiState.value = _uiState.value.copy(
                     error = "Force reconnect timeout. Please check your internet connection.",
                     connectionStatus = "Reconnect failed - connection timeout"
@@ -1660,7 +1561,6 @@ class DashboardViewModel @Inject constructor(
     fun startCTCMode() {
         val currentState = _uiState.value
 
-        // Check connection stability first
         if (!ensureStableConnection()) {
             _uiState.value = currentState.copy(
                 error = "WebSocket connection not stable. Please wait or force reconnect."
@@ -1684,7 +1584,6 @@ class DashboardViewModel @Inject constructor(
                     error = null
                 )
 
-                // Stop other modes
                 if (currentState.botState != BotState.STOPPED) {
                     stopBot()
                 }
@@ -1752,8 +1651,6 @@ class DashboardViewModel @Inject constructor(
         }
     }
 
-// 🔥 TAMBAHKAN fungsi stopCTCMode()
-
     fun stopCTCMode() {
         val currentState = _uiState.value
 
@@ -1790,8 +1687,6 @@ class DashboardViewModel @Inject constructor(
         )
     }
 
-// 🔥 TAMBAHKAN fungsi executeCTCTrade()
-
     private fun executeCTCTrade(trend: String, ctcOrderId: String, amount: Long, isBoundaryMode: Boolean) {
         val currentState = _uiState.value
 
@@ -1800,7 +1695,6 @@ class DashboardViewModel @Inject constructor(
             return
         }
 
-        // Check stop conditions
         val (shouldPreventTrade, preventReason) = stopLossProfitManager.shouldPreventNewTrade(
             currentState.stopLossSettings,
             currentState.stopProfitSettings
@@ -1821,7 +1715,6 @@ class DashboardViewModel @Inject constructor(
             return
         }
 
-        // Execute CTC trade (always use instant mode like Follow Order)
         val isMartingaleAttempt = ctcOrderManager.isMartingaleActive()
         val martingaleStep = if (isMartingaleAttempt) ctcOrderManager.getCurrentMartingaleStep() else 0
 
@@ -1857,8 +1750,6 @@ class DashboardViewModel @Inject constructor(
         }
     }
 
-// 🔥 TAMBAHKAN fungsi handleCTCMartingaleResult()
-
     private fun handleCTCMartingaleResult(result: CTCMartingaleResult) {
         val currentState = _uiState.value
 
@@ -1878,7 +1769,6 @@ class DashboardViewModel @Inject constructor(
 
                 Log.d("DashboardViewModel", "CTC Martingale WIN at step ${result.step}")
 
-                // Handle CTC martingale completion - WIN
                 handleMartingaleCompletionForLocalStats(
                     orderId = currentState.activeCTCOrderId ?: "ctc_${System.currentTimeMillis()}",
                     isWin = true,
@@ -1904,7 +1794,6 @@ class DashboardViewModel @Inject constructor(
 
                 Log.d("DashboardViewModel", "CTC Martingale failed at step ${result.step}")
 
-                // Handle CTC martingale completion - FAILED
                 handleMartingaleCompletionForLocalStats(
                     orderId = currentState.activeCTCOrderId ?: "ctc_${System.currentTimeMillis()}",
                     isWin = false,
@@ -1913,8 +1802,6 @@ class DashboardViewModel @Inject constructor(
             }
         }
     }
-
-// 🔥 TAMBAHKAN fungsi getCTCModeStartError()
 
     private fun getCTCModeStartError(state: DashboardUiState): String {
         return when {
@@ -1925,7 +1812,6 @@ class DashboardViewModel @Inject constructor(
             state.isFollowModeActive -> "Follow Order mode masih aktif, hentikan terlebih dahulu"
             state.isIndicatorModeActive -> "Indicator Order mode masih aktif, hentikan terlebih dahulu"
             state.botState != BotState.STOPPED -> "Schedule mode masih aktif, hentikan terlebih dahulu"
-            // ✅ FIX: Pass currency to validation
             state.martingaleSettings.validate(state.currencySettings.selectedCurrency).isFailure ->
                 "Pengaturan martingale tidak valid: ${state.getMartingaleValidationError()}"
             state.stopLossSettings.validate().isFailure -> "Stop loss settings tidak valid"
@@ -1965,11 +1851,9 @@ class DashboardViewModel @Inject constructor(
         }
     }
 
-
     fun startIndicatorMode() {
         val currentState = _uiState.value
 
-        // Check connection stability first
         if (!ensureStableConnection()) {
             _uiState.value = currentState.copy(
                 error = "WebSocket connection not stable. Please wait or force reconnect."
@@ -1993,7 +1877,6 @@ class DashboardViewModel @Inject constructor(
                     error = null
                 )
 
-                // Stop other modes
                 if (currentState.botState != BotState.STOPPED) {
                     stopBot()
                 }
@@ -2041,9 +1924,8 @@ class DashboardViewModel @Inject constructor(
                             error = null
                         )
 
-                        // Initialize prediction info immediately
                         viewModelScope.launch {
-                            delay(2000) // Wait for predictions to be generated
+                            delay(2000)
                             try {
                                 val predictionInfo = indicatorOrderManager.getPredictionInfo()
                                 _indicatorPredictionInfo.value = predictionInfo
@@ -2080,7 +1962,6 @@ class DashboardViewModel @Inject constructor(
         }
     }
 
-
     fun stopIndicatorMode() {
         val currentState = _uiState.value
 
@@ -2097,7 +1978,6 @@ class DashboardViewModel @Inject constructor(
 
         result.fold(
             onSuccess = { message ->
-                // Clear prediction info
                 _indicatorPredictionInfo.value = emptyMap()
 
                 _uiState.value = currentState.copy(
@@ -2125,8 +2005,6 @@ class DashboardViewModel @Inject constructor(
         )
     }
 
-
-    // NEW: Manual refresh prediction info
     fun refreshIndicatorPredictions() {
         if (_uiState.value.isIndicatorModeActive) {
             viewModelScope.launch {
@@ -2141,7 +2019,6 @@ class DashboardViewModel @Inject constructor(
             }
         }
     }
-
 
     private fun executeIndicatorTrade(trend: String, indicatorOrderId: String, amount: Long) {
         val currentState = _uiState.value
@@ -2199,8 +2076,6 @@ class DashboardViewModel @Inject constructor(
         Log.d("DashboardViewModel", "   - Monitoring: ACTIVE_TRADE_ONLY")
     }
 
-
-
     private fun handleIndicatorMartingaleResult(result: IndicatorMartingaleResult) {
         val currentState = _uiState.value
 
@@ -2220,7 +2095,6 @@ class DashboardViewModel @Inject constructor(
 
                 Log.d("DashboardViewModel", "Martingale WIN at step ${result.step} - Auto-stop will trigger")
 
-                // NEW: Handle indicator martingale completion - WIN
                 handleMartingaleCompletionForLocalStats(
                     orderId = currentState.activeIndicatorOrderId ?: "indicator_${System.currentTimeMillis()}",
                     isWin = true,
@@ -2246,7 +2120,6 @@ class DashboardViewModel @Inject constructor(
 
                 Log.d("DashboardViewModel", "Martingale failed at step ${result.step} - Auto-stop will trigger")
 
-                // NEW: Handle indicator martingale completion - FAILED
                 handleMartingaleCompletionForLocalStats(
                     orderId = currentState.activeIndicatorOrderId ?: "indicator_${System.currentTimeMillis()}",
                     isWin = false,
@@ -2255,7 +2128,6 @@ class DashboardViewModel @Inject constructor(
             }
         }
 
-        // Update indicator values and levels in UI state
         val (supportLevel, resistanceLevel) = indicatorOrderManager.getSupportResistanceLevels()
         val lastValues = indicatorOrderManager.getLastIndicatorValues()
 
@@ -2270,7 +2142,6 @@ class DashboardViewModel @Inject constructor(
         return localStatsTracker.getDebugInfo()
     }
 
-    // NEW: Manual stats adjustment methods (for testing/debugging)
     fun manualAddWin() {
         localStatsTracker.manualAddWin()
     }
@@ -2296,7 +2167,6 @@ class DashboardViewModel @Inject constructor(
             state.isFollowModeActive -> "Follow Order mode masih aktif, hentikan terlebih dahulu"
             state.botState != BotState.STOPPED -> "Schedule mode masih aktif, hentikan terlebih dahulu"
             state.getIndicatorValidationError() != null -> "Pengaturan indicator tidak valid: ${state.getIndicatorValidationError()}"
-            // ✅ FIX: Pass currency to validation
             state.martingaleSettings.validate(state.currencySettings.selectedCurrency).isFailure ->
                 "Pengaturan martingale tidak valid: ${state.getMartingaleValidationError()}"
             state.stopLossSettings.validate().isFailure -> "Stop loss settings tidak valid"
@@ -2305,7 +2175,6 @@ class DashboardViewModel @Inject constructor(
         }
     }
 
-    // NEW: Indicator settings methods
     fun setIndicatorType(type: IndicatorType) {
         if (!_uiState.value.canModifySettings()) {
             _uiState.value = _uiState.value.copy(
@@ -2317,7 +2186,6 @@ class DashboardViewModel @Inject constructor(
         val newSettings = IndicatorSettings.getDefaultSettings(type)
         _uiState.value = _uiState.value.copy(indicatorSettings = newSettings)
     }
-
 
     fun setIndicatorPeriod(period: Int) {
         if (!_uiState.value.canModifySettings()) return
@@ -2335,8 +2203,6 @@ class DashboardViewModel @Inject constructor(
 
         _uiState.value = _uiState.value.copy(indicatorSettings = newSettings)
     }
-
-
 
     fun setIndicatorRSILevels(overbought: BigDecimal, oversold: BigDecimal) {
         if (!_uiState.value.canModifySettings()) return
@@ -2357,7 +2223,6 @@ class DashboardViewModel @Inject constructor(
 
         _uiState.value = _uiState.value.copy(indicatorSettings = newSettings)
     }
-
 
     fun setIndicatorSensitivity(sensitivity: BigDecimal) {
         if (!_uiState.value.canModifySettings()) return
@@ -2391,7 +2256,6 @@ class DashboardViewModel @Inject constructor(
         setIndicatorSensitivity(sensitivityValue)
     }
 
-    // NEW: Helper method to parse sensitivity from string input
     fun setIndicatorSensitivityFromString(sensitivityInput: String) {
         if (!_uiState.value.canModifySettings()) return
 
@@ -2404,8 +2268,6 @@ class DashboardViewModel @Inject constructor(
             )
         }
     }
-
-
 
     fun setConsecutiveLossLimit(enabled: Boolean, maxLosses: Int = 5) {
         if (!_uiState.value.canModifySettings()) {
@@ -2431,11 +2293,9 @@ class DashboardViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(consecutiveLossSettings = newSettings)
     }
 
-
     fun startFollowMode() {
         val currentState = _uiState.value
 
-        // Enhanced connection stability check for ultra-fast mode
         if (!ensureStableConnection()) {
             _uiState.value = currentState.copy(
                 error = "WebSocket connection not stable for ULTRA-FAST Follow Order execution. Please wait or force reconnect."
@@ -2459,7 +2319,6 @@ class DashboardViewModel @Inject constructor(
                     error = null
                 )
 
-                // Stop other modes
                 if (currentState.botState != BotState.STOPPED) {
                     stopBot()
                 }
@@ -2467,10 +2326,8 @@ class DashboardViewModel @Inject constructor(
                     stopIndicatorMode()
                 }
 
-                // Wait a bit after stopping other modes to ensure clean state
                 delay(1000)
 
-                // Triple-check connection stability for ultra-fast mode
                 if (!ensureStableConnection()) {
                     _uiState.value = currentState.copy(
                         error = "WebSocket connection became unstable during mode switching. Try force reconnect.",
@@ -2527,9 +2384,6 @@ class DashboardViewModel @Inject constructor(
         }
     }
 
-
-
-
     fun stopFollowMode() {
         val currentState = _uiState.value
 
@@ -2569,7 +2423,6 @@ class DashboardViewModel @Inject constructor(
         val channelsReady = webSocketManager.isRequiredChannelsReady()
         val isConnected = _uiState.value.isWebSocketConnected
 
-        // Get detailed connection stats for debugging
         val connectionStats = webSocketManager.getConnectionStats()
         val reconnectionAttempts = connectionStats["reconnection_attempts"] as? Int ?: 0
         val timeSinceLastMessage = connectionStats["time_since_last_message_ms"] as? Long ?: 0L
@@ -2583,14 +2436,12 @@ class DashboardViewModel @Inject constructor(
         Log.d("DashboardViewModel", "  Time Since Msg: ${timeSinceLastMessage}ms")
         Log.d("DashboardViewModel", "  Is Connecting: $isConnecting")
 
-        // Stricter requirements for Follow Order precision
         if (isConnecting || reconnectionAttempts > 0) {
             Log.w("DashboardViewModel", "PRECISION FIXED: Connection unstable for Follow Order - still connecting or recent reconnections")
             return false
         }
 
-        // More stringent message timeout for Follow Order
-        if (timeSinceLastMessage > 20000) { // 20 seconds for Follow Order
+        if (timeSinceLastMessage > 20000) {
             Log.w("DashboardViewModel", "PRECISION FIXED: Connection unstable for Follow Order - no recent messages")
             return false
         }
@@ -2628,7 +2479,6 @@ class DashboardViewModel @Inject constructor(
         }
     }
 
-
     private fun executeFollowTrade(trend: String, followOrderId: String, amount: Long, isBoundaryMode: Boolean) {
         val currentState = _uiState.value
 
@@ -2637,7 +2487,6 @@ class DashboardViewModel @Inject constructor(
             return
         }
 
-        // Check stop conditions
         val (shouldPreventTrade, preventReason) = stopLossProfitManager.shouldPreventNewTrade(
             currentState.stopLossSettings,
             currentState.stopProfitSettings
@@ -2658,9 +2507,7 @@ class DashboardViewModel @Inject constructor(
             return
         }
 
-        // CYCLE MODE: Route to correct execution method
         if (isBoundaryMode) {
-            // Boundary mode: First order of cycle (1-minute expiry)
             Log.d("DashboardViewModel", "CYCLE: Executing boundary order (first of cycle)")
             _uiState.value = currentState.copy(
                 activeFollowOrderId = followOrderId,
@@ -2675,7 +2522,6 @@ class DashboardViewModel @Inject constructor(
                 followOrderId = followOrderId
             )
         } else {
-            // Immediate mode: Subsequent orders (realtime expiry)
             val isMartingaleAttempt = followOrderManager.isMartingaleActive()
             val martingaleStep = if (isMartingaleAttempt) followOrderManager.getCurrentMartingaleStep() else 0
 
