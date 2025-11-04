@@ -29,7 +29,6 @@ import com.autotrade.finalstc.data.model.AdminUser
 import java.text.SimpleDateFormat
 import java.util.*
 
-// Colors
 private val DarkBackground = Color(0xFF0B1A14)
 private val DarkCard = Color(0xFF15241C)
 private val DarkCardHover = Color(0xFF1A2A21)
@@ -82,10 +81,9 @@ fun AdminManagementDialog(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .verticalScroll(rememberScrollState())  // ✅ SELURUH dialog bisa scroll
+                    .verticalScroll(rememberScrollState())
                     .padding(20.dp)
             ) {
-                // Header
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.padding(bottom = 16.dp)
@@ -133,7 +131,6 @@ fun AdminManagementDialog(
                     }
                 }
 
-                // Add Admin Button - Only for Super Admin
                 if (isSuperAdmin) {
                     Button(
                         onClick = { showAddAdminDialog = true },
@@ -158,7 +155,6 @@ fun AdminManagementDialog(
                     }
                     Spacer(modifier = Modifier.height(16.dp))
                 } else {
-                    // Info card for regular admin
                     Card(
                         colors = CardDefaults.cardColors(
                             containerColor = InfoColor.copy(alpha = 0.1f)
@@ -187,7 +183,6 @@ fun AdminManagementDialog(
                     Spacer(modifier = Modifier.height(16.dp))
                 }
 
-                // Search Bar
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
@@ -243,9 +238,7 @@ fun AdminManagementDialog(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Configuration Cards - Hanya untuk Super Admin
                 if (isSuperAdmin) {
-                    // Registration URL Card
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -320,7 +313,6 @@ fun AdminManagementDialog(
                         }
                     }
 
-                    // WhatsApp Help Number Card
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -401,7 +393,7 @@ fun AdminManagementDialog(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(200.dp),  // ✅ Fixed height, tanpa weight
+                            .height(200.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         CircularProgressIndicator(
@@ -414,7 +406,7 @@ fun AdminManagementDialog(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(200.dp),  // ✅ Fixed height, tanpa weight
+                            .height(200.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Column(
@@ -443,7 +435,6 @@ fun AdminManagementDialog(
                         }
                     }
                 } else {
-                    // ✅ TANPA Box wrapper, TANPA weight, TANPA nested scroll
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -466,7 +457,6 @@ fun AdminManagementDialog(
                                 onToggleStatus = { viewModel.toggleAdminStatus(admin) }
                             )
                         }
-                        // Spacer di akhir untuk memberikan ruang scroll
                         Spacer(modifier = Modifier.height(8.dp))
                     }
                 }
@@ -474,7 +464,6 @@ fun AdminManagementDialog(
         }
     }
 
-    // Add Admin Dialog - Only for Super Admin
     if (showAddAdminDialog && isSuperAdmin) {
         AddAdminDialog(
             onDismiss = { showAddAdminDialog = false },
@@ -486,7 +475,6 @@ fun AdminManagementDialog(
         )
     }
 
-    // Edit Admin Dialog - Only for Super Admin
     if (showEditAdminDialog && selectedAdmin != null && isSuperAdmin) {
         EditAdminDialog(
             admin = selectedAdmin!!,
@@ -504,7 +492,6 @@ fun AdminManagementDialog(
         )
     }
 
-    // Delete Admin Dialog - Only for Super Admin
     if (showDeleteAdminDialog && selectedAdmin != null && isSuperAdmin) {
         DeleteAdminDialog(
             admin = selectedAdmin!!,
@@ -521,7 +508,6 @@ fun AdminManagementDialog(
         )
     }
 
-    // Edit Registration URL Dialog
     if (showUrlEditDialog) {
         EditRegistrationUrlDialog(
             currentUrl = uiState.registrationConfig.registrationUrl,
@@ -535,7 +521,6 @@ fun AdminManagementDialog(
         )
     }
 
-    // Edit WhatsApp Dialog
     if (showWhatsAppEditDialog) {
         EditWhatsAppDialog(
             currentNumber = uiState.registrationConfig.whatsappHelpNumber,
@@ -579,7 +564,6 @@ private fun AdminCard(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Avatar with role indicator
                 Box(
                     modifier = Modifier
                         .size(48.dp)
@@ -642,7 +626,6 @@ private fun AdminCard(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.padding(top = 4.dp)
                     ) {
-                        // Role Badge
                         Surface(
                             shape = RoundedCornerShape(6.dp),
                             color = if (isAdminSuperAdmin) WarningColor.copy(alpha = 0.15f)
@@ -656,7 +639,6 @@ private fun AdminCard(
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                             )
                         }
-                        // Status Badge
                         Surface(
                             shape = RoundedCornerShape(6.dp),
                             color = if (admin.isActive) SuccessColor.copy(alpha = 0.15f)
@@ -673,7 +655,6 @@ private fun AdminCard(
                     }
                 }
 
-                // Toggle Status Switch - Only for Super Admin modifying other admins
                 if (canModify) {
                     Switch(
                         checked = admin.isActive,
@@ -691,7 +672,6 @@ private fun AdminCard(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Admin Info
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -712,7 +692,6 @@ private fun AdminCard(
                     }
                 }
 
-                // Action Buttons - Only for Super Admin modifying other admins
                 if (canModify) {
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         IconButton(
@@ -739,7 +718,6 @@ private fun AdminCard(
                         }
                     }
                 } else if (!isSuperAdmin) {
-                    // Show "View Only" badge for regular admins
                     Surface(
                         shape = RoundedCornerShape(8.dp),
                         color = TextTertiary.copy(alpha = 0.15f)
@@ -863,7 +841,6 @@ private fun AddAdminDialog(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Role Selection
                 Column {
                     Text(
                         text = "Role",
@@ -1082,7 +1059,6 @@ private fun EditAdminDialog(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Role Selection
                 Column {
                     Text(
                         text = "Role",

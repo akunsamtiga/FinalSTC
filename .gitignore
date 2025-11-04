@@ -117,8 +117,8 @@ buildSrc/.gradle/
 # CUSTOM IGNORE — LOCAL DATA FOLDER
 # (hide your sensitive code or data files)
 # ======================================
-app/src/main/java/com/autotrade/finalstc/data/
-
+app/src/main/java/com/autotrade/finalstc/data/api
+app/src/main/java/com/autotrade/finalstc/data/repository
 # ======================================
 # OPTIONAL: ENV / CONFIG FILES
 # ======================================

@@ -39,7 +39,6 @@ import com.autotrade.finalstc.data.model.WhitelistUser
 import java.text.SimpleDateFormat
 import java.util.*
 
-// Production Theme Colors
 private val DarkBackground = Color(0xFF0B1A14)
 private val DarkCard = Color(0xFF15241C)
 private val DarkCardHover = Color(0xFF1A2A21)
@@ -53,7 +52,6 @@ private val ErrorColor = Color(0xFFEF4444)
 private val WarningColor = Color(0xFFF59E0B)
 private val InfoColor = Color(0xFF3B82F6)
 
-// Enum untuk filter type
 enum class StatsFilterType {
     TOTAL, ACTIVE, INACTIVE, RECENT
 }
@@ -142,7 +140,6 @@ fun AdminScreen(
                     .verticalScroll(rememberScrollState())
                     .padding(16.dp)
             ) {
-                // Header
                 AdminHeader(
                     onNavigateBack = onNavigateBack,
                     onAdminManagement = { showAdminManagement = true },
@@ -152,7 +149,6 @@ fun AdminScreen(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Stats Cards
                 AdminStatsRow(
                     users = uiState.whitelistUsers,
                     onStatsClick = { filterType ->
@@ -182,7 +178,6 @@ fun AdminScreen(
                             .fillMaxWidth()
                             .padding(20.dp)
                     ) {
-                        // HEADER DENGAN TOMBOL ADD USER
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.padding(bottom = 16.dp)
@@ -244,14 +239,12 @@ fun AdminScreen(
                             }
                         }
 
-                        // ===== EXPORT/IMPORT BUTTONS =====
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(bottom = 16.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            // Download JSON Button
                             Button(
                                 onClick = { viewModel.exportWhitelist("json") },
                                 modifier = Modifier
@@ -273,7 +266,6 @@ fun AdminScreen(
                                 Text("JSON", fontSize = 11.sp, fontWeight = FontWeight.Medium)
                             }
 
-                            // Download CSV Button
                             Button(
                                 onClick = { viewModel.exportWhitelist("csv") },
                                 modifier = Modifier
@@ -295,7 +287,6 @@ fun AdminScreen(
                                 Text("CSV", fontSize = 11.sp, fontWeight = FontWeight.Medium)
                             }
 
-                            // Import Button
                             Button(
                                 onClick = { showImportDialog = true },
                                 modifier = Modifier
@@ -318,9 +309,6 @@ fun AdminScreen(
                             }
                         }
 
-                        // ===== END EXPORT/IMPORT BUTTONS =====
-
-                        // Search Bar
                         OutlinedTextField(
                             value = searchQuery,
                             onValueChange = { searchQuery = it },
@@ -419,7 +407,6 @@ fun AdminScreen(
                     }
                 }
 
-                // Messages Display
                 MessageDisplay(
                     error = uiState.error,
                     success = uiState.successMessage,
@@ -432,7 +419,6 @@ fun AdminScreen(
         }
     }
 
-    // ===== DIALOGS =====
     if (showAddDialog) {
         AddUserDialog(
             onDismiss = { showAddDialog = false },
@@ -455,7 +441,7 @@ fun AdminScreen(
                 showEditDialog = false
                 selectedUser = null
             },
-            isSuperAdmin = uiState.isSuperAdmin  // Tambahkan parameter ini
+            isSuperAdmin = uiState.isSuperAdmin
         )
     }
 
