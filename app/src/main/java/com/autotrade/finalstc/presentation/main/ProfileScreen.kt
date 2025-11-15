@@ -27,6 +27,7 @@ import com.autotrade.finalstc.presentation.main.MainViewModel
 import com.autotrade.finalstc.data.repository.FirebaseRepository
 import com.autotrade.finalstc.data.local.LanguageManager
 import com.autotrade.finalstc.utils.StringsManager
+import android.os.Build
 import kotlinx.coroutines.delay
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -42,6 +43,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import com.autotrade.finalstc.presentation.login.components.LanguageSelectorDialog
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.ui.platform.LocalContext
 
 private val DarkBackground = Color(0xFF1B1B1B)
 private val DarkSurface = Color(0xFF1F1F1F)
@@ -66,8 +72,6 @@ class ProfileViewModel @Inject constructor(
 
     private val _isSuperAdmin = MutableStateFlow(false)
     val isSuperAdmin: StateFlow<Boolean> = _isSuperAdmin.asStateFlow()
-
-
 
     private val _showLanguageDialog = MutableStateFlow(false)
     val showLanguageDialog: StateFlow<Boolean> = _showLanguageDialog.asStateFlow()
@@ -107,6 +111,7 @@ fun ProfileScreen(
     historyViewModel: HistoryViewModel = hiltViewModel(),
     dashboardViewModel: DashboardViewModel = hiltViewModel()
 ) {
+    val context = LocalContext.current
     val userSession = viewModel.getUserSession()
     var showLogoutDialog by remember { mutableStateOf(false) }
     var isVisible by remember { mutableStateOf(false) }
@@ -202,9 +207,10 @@ fun ProfileScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(280.dp)
+                        .wrapContentHeight()
                 ) {
-                    val infiniteTransition = rememberInfiniteTransition(label = "gradient_animation")
+                    val infiniteTransition =
+                        rememberInfiniteTransition(label = "gradient_animation")
                     val gradientOffset by infiniteTransition.animateFloat(
                         initialValue = 0f,
                         targetValue = 1f,
@@ -221,8 +227,8 @@ fun ProfileScreen(
                             .background(
                                 brush = Brush.radialGradient(
                                     colors = listOf(
-                                        DarkSurface.copy(alpha = 0.8f + gradientOffset * 0.2f),
-                                        DarkBackground.copy(alpha = 0.6f + gradientOffset * 0.3f),
+                                        DarkSurface.copy(alpha = 0.9f + gradientOffset * 0.4f),
+                                        DarkBackground.copy(alpha = 0.8f + gradientOffset * 0.5f),
                                         DarkBackground.copy(alpha = 0.9f)
                                     ),
                                     radius = 800f + gradientOffset * 200f
@@ -240,19 +246,19 @@ fun ProfileScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Box(
-                                modifier = Modifier.size(96.dp),
+                                modifier = Modifier.size(80.dp),  // ✅ DIKURANGI dari 96.dp
                                 contentAlignment = Alignment.Center
                             ) {
                                 Box(
                                     modifier = Modifier
-                                        .size(96.dp)
+                                        .size(80.dp)  // ✅ DIKURANGI dari 96.dp
                                         .background(
                                             brush = Brush.radialGradient(
                                                 colors = listOf(
                                                     StatusBlue.copy(alpha = 0.3f),
                                                     Color.Transparent
                                                 ),
-                                                radius = 48f
+                                                radius = 40f  // ✅ DIKURANGI dari 48f
                                             ),
                                             shape = CircleShape
                                         )
@@ -260,7 +266,7 @@ fun ProfileScreen(
 
                                 Box(
                                     modifier = Modifier
-                                        .size(88.dp)
+                                        .size(72.dp)  // ✅ DIKURANGI dari 88.dp
                                         .border(
                                             width = 2.dp,
                                             brush = Brush.linearGradient(
@@ -276,7 +282,7 @@ fun ProfileScreen(
                                 ) {
                                     Box(
                                         modifier = Modifier
-                                            .size(80.dp)
+                                            .size(64.dp)  // ✅ DIKURANGI dari 80.dp
                                             .background(
                                                 brush = Brush.linearGradient(
                                                     colors = listOf(
@@ -291,16 +297,17 @@ fun ProfileScreen(
                                         Icon(
                                             imageVector = if (isAdmin) Icons.Default.AdminPanelSettings else Icons.Default.Person,
                                             contentDescription = null,
-                                            modifier = Modifier.size(36.dp),
+                                            modifier = Modifier.size(32.dp),  // ✅ DIKURANGI dari 36.dp
                                             tint = Color.White
                                         )
                                     }
                                 }
                             }
 
-                            Spacer(modifier = Modifier.width(20.dp))
+                            Spacer(modifier = Modifier.width(16.dp))  // ✅ DIKURANGI dari 20.dp
 
                             Column {
+                                // ✅ AFTER: Nama saja (tanpa badge)
                                 Text(
                                     text = extractNameFromEmail(userSession?.email ?: "User"),
                                     fontSize = 24.sp,
@@ -309,26 +316,28 @@ fun ProfileScreen(
                                     letterSpacing = 0.5.sp
                                 )
 
+                                Spacer(modifier = Modifier.height(6.dp))
+
+                                // Teks akun (Admin/User)
                                 Text(
                                     text = when {
                                         isSuperAdmin -> StringsManager.getSuperAdminAccount(lang)
                                         isAdmin -> StringsManager.getAdminAccount(lang)
                                         else -> StringsManager.getStockityAccount(lang)
                                     },
-                                    fontSize = 16.sp,
+                                    fontSize = 14.sp,
                                     fontWeight = FontWeight.Medium,
                                     color = when {
                                         isSuperAdmin -> AccentWarning
                                         isAdmin -> AccentWarning
                                         else -> StatusBlue
-                                    },
-                                    modifier = Modifier.padding(top = 4.dp)
+                                    }
                                 )
 
                                 Spacer(modifier = Modifier.height(8.dp))
 
+                                // ✅ AFTER: Badge Online DI BAWAH ROLE
                                 Card(
-                                    modifier = Modifier,
                                     colors = CardDefaults.cardColors(
                                         containerColor = WifiGreen.copy(alpha = 0.15f)
                                     ),
@@ -336,8 +345,13 @@ fun ProfileScreen(
                                 ) {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                        modifier = Modifier.padding(
+                                            horizontal = 10.dp,
+                                            vertical = 4.dp
+                                        )
                                     ) {
+                                        val infiniteTransition =
+                                            rememberInfiniteTransition(label = "pulse_animation")
                                         val pulseAnimation by infiniteTransition.animateFloat(
                                             initialValue = 0.7f,
                                             targetValue = 1f,
@@ -350,16 +364,16 @@ fun ProfileScreen(
 
                                         Box(
                                             modifier = Modifier
-                                                .size(8.dp)
+                                                .size(6.dp)
                                                 .background(
                                                     WifiGreen.copy(alpha = pulseAnimation),
                                                     CircleShape
                                                 )
                                         )
-                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
                                         Text(
                                             text = StringsManager.getOnline(lang),
-                                            fontSize = 12.sp,
+                                            fontSize = 11.sp,
                                             fontWeight = FontWeight.SemiBold,
                                             color = WifiGreen
                                         )
@@ -371,7 +385,9 @@ fun ProfileScreen(
                         Spacer(modifier = Modifier.height(24.dp))
 
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp),
                             horizontalArrangement = Arrangement.SpaceEvenly
                         ) {
                             QuickStatCard(
@@ -393,47 +409,28 @@ fun ProfileScreen(
                                 color = AccentWarning
                             )
                         }
-                    }
-                }
 
-                Column(
-                    modifier = Modifier.padding(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(20.dp)
-                ) {
-                    if (isAdmin) {
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 2.dp, vertical = 8.dp),
-                            colors = CardDefaults.cardColors(containerColor = CardBackground),
-                            elevation = CardDefaults.cardElevation(
-                                defaultElevation = 2.dp,
-                                pressedElevation = 4.dp,
-                                focusedElevation = 4.dp,
-                                hoveredElevation = 3.dp
-                            ),
-                            shape = RoundedCornerShape(24.dp),
-                            border = BorderStroke(0.5.dp, Color(0xFF4A4A4A))
-                        ) {
+                        if (isAdmin) {
                             Button(
                                 onClick = onNavigateToAdmin,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(64.dp),
+                                    .padding(vertical = 12.dp, horizontal = 12.dp),
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = AccentWarning,
-                                    contentColor = Color.Black
+                                    contentColor = Color.White  // ✅ DIPERBAIKI: Putih kontras dengan orange
                                 ),
-                                shape = RoundedCornerShape(24.dp),
+                                shape = RoundedCornerShape(16.dp),
                                 elevation = ButtonDefaults.buttonElevation(
-                                    defaultElevation = 0.dp,
-                                    pressedElevation = 8.dp
+                                    defaultElevation = 3.dp,
+                                    pressedElevation = 6.dp
                                 )
                             ) {
                                 Icon(
                                     imageVector = Icons.Outlined.AdminPanelSettings,
                                     contentDescription = null,
-                                    modifier = Modifier.size(24.dp)
+                                    modifier = Modifier.size(24.dp),
+                                    tint = Color.White  // ✅ DIPERBAIKI: Icon putih
                                 )
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Text(
@@ -443,12 +440,18 @@ fun ProfileScreen(
                                         StringsManager.getAdminPanel(lang),
                                     fontSize = 16.sp,
                                     fontWeight = FontWeight.Bold,
-                                    letterSpacing = 0.5.sp
+                                    letterSpacing = 0.5.sp,
+                                    color = Color.White  // ✅ DIPERBAIKI: Teks putih eksplisit
                                 )
                             }
                         }
                     }
+                }
 
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(20.dp)
+                ) {
                     PremiumCard(
                         title = StringsManager.getProfileInformation(lang),
                         icon = Icons.Outlined.Person,
@@ -516,8 +519,8 @@ fun ProfileScreen(
                             )
                             ProfileDetailItem(
                                 icon = Icons.Outlined.Web,
-                                label = StringsManager.getBrowser(lang),
-                                value = "com.android.chrome",
+                                label = "OS",
+                                value = "Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})",
                                 iconColor = AccentWarning
                             )
                             Divider(
@@ -726,12 +729,37 @@ fun ProfileScreen(
                                 color = TextMuted,
                                 modifier = Modifier.padding(top = 2.dp)
                             )
-                            Text(
-                                text = "Developer support@stcbroker.id",
-                                fontSize = 11.sp,
-                                color = TextMuted,
-                                modifier = Modifier.padding(top = 2.dp)
-                            )
+
+                            // Email yang clickable
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .clickable {
+                                        val intent = Intent(Intent.ACTION_SENDTO).apply {
+                                            data = Uri.parse("mailto:support@stcbroker.id")
+                                            putExtra(Intent.EXTRA_SUBJECT, "Support Request")
+                                        }
+                                        try {
+                                            context.startActivity(intent)
+                                        } catch (e: Exception) {
+                                            // Handle jika tidak ada email client
+                                        }
+                                    }
+                                    .padding(top = 2.dp, bottom = 4.dp, start = 8.dp, end = 8.dp)
+                            ) {
+                                Text(
+                                    text = "Developer ",
+                                    fontSize = 11.sp,
+                                    color = TextMuted
+                                )
+                                Text(
+                                    text = "support@stcbroker.id",
+                                    fontSize = 11.sp,
+                                    color = StatusBlue, // Beri warna biru untuk menunjukkan clickable
+                                    fontWeight = FontWeight.Medium,
+                                    textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline
+                                )
+                            }
                         }
                     }
                 }
@@ -976,4 +1004,22 @@ private fun extractNameFromEmail(email: String): String {
         .joinToString(" ") { word ->
             word.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
         }
+}
+
+private fun getAndroidVersionName(): String {
+    val versionName = when (Build.VERSION.SDK_INT) {
+        Build.VERSION_CODES.UPSIDE_DOWN_CAKE -> "Android 14"
+        Build.VERSION_CODES.TIRAMISU -> "Android 13"
+        Build.VERSION_CODES.S_V2 -> "Android 12L"
+        Build.VERSION_CODES.S -> "Android 12"
+        Build.VERSION_CODES.R -> "Android 11"
+        Build.VERSION_CODES.Q -> "Android 10"
+        Build.VERSION_CODES.P -> "Android 9 Pie"
+        Build.VERSION_CODES.O_MR1 -> "Android 8.1 Oreo"
+        Build.VERSION_CODES.O -> "Android 8.0 Oreo"
+        Build.VERSION_CODES.N_MR1 -> "Android 7.1 Nougat"
+        Build.VERSION_CODES.N -> "Android 7.0 Nougat"
+        else -> "Android ${Build.VERSION.RELEASE}"
+    }
+    return "$versionName (API ${Build.VERSION.SDK_INT})"
 }

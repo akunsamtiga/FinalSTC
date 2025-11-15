@@ -1,5 +1,11 @@
 package com.autotrade.finalstc.presentation.main
 
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -101,7 +107,74 @@ fun MainScreen(
         ) {
             NavHost(
                 navController = navController,
-                startDestination = "dashboard"
+                startDestination = "dashboard",
+                enterTransition = {
+                    when (targetState.destination.route) {
+                        "admin" -> slideInHorizontally(
+                            initialOffsetX = { fullWidth -> fullWidth },
+                            animationSpec = tween(
+                                durationMillis = 350,
+                                easing = FastOutSlowInEasing
+                            )
+                        ) + fadeIn(
+                            animationSpec = tween(
+                                durationMillis = 350,
+                                easing = FastOutSlowInEasing
+                            )
+                        )
+                        else -> fadeIn(
+                            animationSpec = tween(durationMillis = 250)
+                        )
+                    }
+                },
+                exitTransition = {
+                    when (targetState.destination.route) {
+                        "admin" -> slideOutHorizontally(
+                            targetOffsetX = { fullWidth -> -fullWidth / 3 },
+                            animationSpec = tween(
+                                durationMillis = 350,
+                                easing = FastOutSlowInEasing
+                            )
+                        ) + fadeOut(
+                            animationSpec = tween(durationMillis = 250)
+                        )
+                        else -> fadeOut(
+                            animationSpec = tween(durationMillis = 200)
+                        )
+                    }
+                },
+                popEnterTransition = {
+                    when (initialState.destination.route) {
+                        "admin" -> slideInHorizontally(
+                            initialOffsetX = { fullWidth -> -fullWidth / 3 },
+                            animationSpec = tween(
+                                durationMillis = 350,
+                                easing = FastOutSlowInEasing
+                            )
+                        ) + fadeIn(
+                            animationSpec = tween(durationMillis = 350)
+                        )
+                        else -> fadeIn(
+                            animationSpec = tween(durationMillis = 250)
+                        )
+                    }
+                },
+                popExitTransition = {
+                    when (initialState.destination.route) {
+                        "admin" -> slideOutHorizontally(
+                            targetOffsetX = { fullWidth -> fullWidth },
+                            animationSpec = tween(
+                                durationMillis = 350,
+                                easing = FastOutSlowInEasing
+                            )
+                        ) + fadeOut(
+                            animationSpec = tween(durationMillis = 250)
+                        )
+                        else -> fadeOut(
+                            animationSpec = tween(durationMillis = 200)
+                        )
+                    }
+                }
             ) {
                 composable("dashboard") {
                     DashboardScreen(

@@ -27,17 +27,30 @@ import kotlinx.coroutines.flow.combine
 import com.autotrade.finalstc.data.repository.CurrencyRepository
 import com.autotrade.finalstc.data.local.LanguageManager
 import com.autotrade.finalstc.data.local.SessionManager
+import com.autotrade.finalstc.data.repository.FirebaseRepository
+import kotlin.math.abs
 
 @HiltViewModel
 class DashboardViewModel @Inject constructor(
     private val loginRepository: LoginRepository,
     private val currencyRepository: CurrencyRepository,
     private val languageManager: LanguageManager,
-    private val sessionManager: SessionManager
+    private val sessionManager: SessionManager,
+    private val firebaseRepository: FirebaseRepository
 ) : ViewModel() {
 
-    val currentLanguage: StateFlow<String> = languageManager.currentLanguage
+    private val _multiMomentumOrders = MutableStateFlow<List<MultiMomentumOrder>>(emptyList())
+    val multiMomentumOrders: StateFlow<List<MultiMomentumOrder>> = _multiMomentumOrders.asStateFlow()
 
+    private lateinit var multiMomentumOrderManager: MultiMomentumOrderManager
+
+    private val _whatsappNumber = MutableStateFlow("6285959860015")
+    val whatsappNumber: StateFlow<String> = _whatsappNumber.asStateFlow()
+
+    private val _whitelistCheckState = MutableStateFlow<WhitelistCheckState>(WhitelistCheckState.Checking)
+    val whitelistCheckState: StateFlow<WhitelistCheckState> = _whitelistCheckState.asStateFlow()
+
+    val currentLanguage: StateFlow<String> = languageManager.currentLanguage
 
     private val _historyList = MutableStateFlow<List<TradingHistoryNew>>(emptyList())
     val historyList: StateFlow<List<TradingHistoryNew>> = _historyList.asStateFlow()
@@ -112,6 +125,8 @@ class DashboardViewModel @Inject constructor(
     )
 
     init {
+        checkWhitelistStatus()
+
         viewModelScope.launch {
             try {
                 val userCurrency = currencyRepository.getCurrencyWithFetch()
@@ -139,6 +154,102 @@ class DashboardViewModel @Inject constructor(
         startIndicatorPredictionInfoUpdates()
         startLocalStatsResetScheduler()
         loadUserCurrency()
+    }
+
+    private fun checkWhitelistStatus() {
+        viewModelScope.launch {
+            try {
+                _whitelistCheckState.value = WhitelistCheckState.Checking
+                Log.d("DashboardViewModel", "🔍 Checking whitelist status...")
+
+                val userSession = loginRepository.getUserSession()
+
+                if (userSession == null) {
+                    Log.e("DashboardViewModel", "❌ No user session found")
+                    _whitelistCheckState.value = WhitelistCheckState.Failed(
+                        reason = "NO_SESSION",
+                        message = "Sesi pengguna tidak ditemukan. Silakan login kembali."
+                    )
+                    return@launch
+                }
+
+                val userId = userSession.userId
+                val email = userSession.email
+
+                Log.d("DashboardViewModel", "Checking whitelist for:")
+                Log.d("DashboardViewModel", "  UserID: $userId")
+                Log.d("DashboardViewModel", "  Email: $email")
+
+                // Cek koneksi Firestore
+                val isFirestoreConnected = firebaseRepository.testFirestoreConnection()
+                if (!isFirestoreConnected) {
+                    Log.e("DashboardViewModel", "❌ Firestore connection failed")
+                    _whitelistCheckState.value = WhitelistCheckState.Failed(
+                        reason = "FIRESTORE_CONNECTION",
+                        message = "Tidak dapat terhubung ke database. Periksa koneksi internet Anda."
+                    )
+                    return@launch
+                }
+
+                // Cek whitelist by userId
+                val isWhitelisted = firebaseRepository.checkUserInWhitelistByUserId(userId)
+
+                if (!isWhitelisted) {
+                    Log.e("DashboardViewModel", "❌ User not in whitelist")
+
+                    // Cek apakah user ada tapi tidak aktif
+                    val userExists = firebaseRepository.debugCheckUserIdExists(userId)
+
+                    val failureReason = if (userExists) {
+                        WhitelistCheckState.Failed(
+                            reason = "INACTIVE",
+                            message = "Akun Anda terdaftar tetapi tidak aktif.\n\n" +
+                                    "UserID: $userId\n" +
+                                    "Email: $email\n\n" +
+                                    "Silakan hubungi administrator untuk mengaktifkan akses Anda."
+                        )
+                    } else {
+                        WhitelistCheckState.Failed(
+                            reason = "NOT_REGISTERED",
+                            message = "Akun Anda belum terdaftar di aplikasi ini.\n\n" +
+                                    "UserID: $userId\n" +
+                                    "Email: $email\n\n" +
+                                    "Silakan hubungi administrator untuk mendaftarkan akses Anda."
+                        )
+                    }
+
+                    _whitelistCheckState.value = failureReason
+                    return@launch
+                }
+
+                // Update last login
+                try {
+                    firebaseRepository.updateLastLogin(userId)
+                    Log.d("DashboardViewModel", "✅ Last login updated")
+                } catch (e: Exception) {
+                    Log.w("DashboardViewModel", "⚠️ Failed to update last login: ${e.message}")
+                }
+
+                // ✅ WHITELIST CHECK PASSED
+                Log.d("DashboardViewModel", "✅ Whitelist check passed")
+                _whitelistCheckState.value = WhitelistCheckState.Verified(
+                    userId = userId,
+                    email = email
+                )
+
+            } catch (e: Exception) {
+                Log.e("DashboardViewModel", "❌ Whitelist check error: ${e.message}", e)
+                _whitelistCheckState.value = WhitelistCheckState.Failed(
+                    reason = "EXCEPTION",
+                    message = "Terjadi kesalahan saat memverifikasi akses:\n${e.message}"
+                )
+            }
+        }
+    }
+
+    // ✅ PUBLIC FUNCTION UNTUK RETRY
+    fun retryWhitelistCheck() {
+        checkWhitelistStatus()
     }
 
     fun updateLanguage(languageCode: String, countryCode: String) {
@@ -339,6 +450,15 @@ class DashboardViewModel @Inject constructor(
         }
     }
 
+    fun getMultiMomentumCandleHistory(): List<Map<String, Any>> {
+        return if (_uiState.value.isMultiMomentumModeActive) {
+            val stats = multiMomentumOrderManager.getPerformanceStats()
+            stats["recent_candles"] as? List<Map<String, Any>> ?: emptyList()
+        } else {
+            emptyList()
+        }
+    }
+
     private fun ensureStableConnection(): Boolean {
         val connectionHealthy = webSocketManager.isConnectionHealthy()
         val channelsReady = webSocketManager.isRequiredChannelsReady()
@@ -407,6 +527,19 @@ class DashboardViewModel @Inject constructor(
             else -> {
                 println("   Trade ${trade.uuid}: Unknown status '$status' - excluding from calculation")
                 false
+            }
+        }
+    }
+
+    private fun loadWhatsappNumber() {
+        viewModelScope.launch {
+            try {
+                val config = firebaseRepository.getRegistrationConfig()
+                _whatsappNumber.value = config.whatsappHelpNumber
+                Log.d("DashboardViewModel", "WhatsApp number loaded: ${config.whatsappHelpNumber}")
+            } catch (e: Exception) {
+                Log.e("DashboardViewModel", "Error loading WhatsApp number: ${e.message}")
+                // Keep default value
             }
         }
     }
@@ -1203,7 +1336,45 @@ class DashboardViewModel @Inject constructor(
             }
         )
 
-
+        multiMomentumOrderManager = MultiMomentumOrderManager(
+            scope = viewModelScope,
+            onMultiMomentumOrdersUpdate = { orders ->
+                _multiMomentumOrders.value = orders
+            },
+            onExecuteMultiMomentumTrade = { trend, orderId, amount, momentumType ->
+                executeMultiMomentumTrade(trend, orderId, amount, momentumType)
+            },
+            onModeStatusUpdate = { status ->
+                _uiState.value = _uiState.value.copy(multiMomentumOrderStatus = status)
+            },
+            getUserSession = {
+                val session = loginRepository.getUserSession()
+                if (session != null) {
+                    UserSession(
+                        authtoken = session.authtoken ?: "",
+                        deviceType = session.deviceType ?: "",
+                        deviceId = session.deviceId ?: "",
+                        email = session.email ?: "",
+                        userAgent = session.userAgent ?: ""
+                    )
+                } else null
+            },
+            serverTimeService = serverTimeService,
+            onMultiMomentumMartingaleResult = { result ->
+                handleMultiMomentumMartingaleResult(result)
+            },
+            tradeManager = tradeManager,
+            onMultiMomentumTradeStatsUpdate = { tradeId, orderId, result ->
+                localStatsTracker.handleTradeResult(
+                    tradeId = tradeId,
+                    orderId = orderId,
+                    result = result,
+                    isMartingaleAttempt = false,
+                    martingaleStep = 0,
+                    maxMartingaleSteps = _uiState.value.martingaleSettings.maxSteps
+                )
+            }
+        )
     }
 
     private fun startConnectionMonitoring() {
@@ -1355,6 +1526,10 @@ class DashboardViewModel @Inject constructor(
                 val status = payload?.optString("status", "") ?: ""
 
                 if (status.lowercase() in listOf("won", "lost", "win", "lose", "loss", "stand", "draw")) {
+                    // ADD THIS:
+                    if (_uiState.value.isMultiMomentumModeActive) {
+                        multiMomentumOrderManager.handleWebSocketTradeUpdate(message)
+                    }
                     if (_uiState.value.isCTCModeActive) {
                         ctcOrderManager.handleWebSocketTradeUpdate(message)
                     }
@@ -1367,10 +1542,6 @@ class DashboardViewModel @Inject constructor(
 
                     viewModelScope.launch {
                         delay(500L)
-
-                        println("Trade completed event detected: $event (status: $status)")
-                        println("Triggering incremental today profit update")
-
                         _refreshTrigger.emit(System.currentTimeMillis())
                     }
                 }
@@ -2615,7 +2786,6 @@ class DashboardViewModel @Inject constructor(
             state.isFollowModeActive -> "Follow Order mode sudah aktif"
             state.isIndicatorModeActive -> "Indicator Order mode masih aktif, hentikan terlebih dahulu"
             state.botState != BotState.STOPPED -> "Schedule mode masih aktif, hentikan terlebih dahulu"
-            // ✅ FIX: Pass currency to validation
             state.martingaleSettings.validate(state.currencySettings.selectedCurrency).isFailure ->
                 "Pengaturan martingale tidak valid: ${state.getMartingaleValidationError()}"
             state.stopLossSettings.validate().isFailure -> "Stop loss settings tidak valid"
@@ -3724,8 +3894,10 @@ class DashboardViewModel @Inject constructor(
 
         val updatedSession = stopLossProfitManager.getCurrentSession()
 
-        // Stop all modes
-        if (currentState.isCTCModeActive) {
+        // ADD THIS:
+        if (currentState.isMultiMomentumModeActive) {
+            stopMultiMomentumMode()
+        } else if (currentState.isCTCModeActive) {
             stopCTCMode()
         } else if (currentState.isIndicatorModeActive) {
             stopIndicatorMode()
@@ -3739,13 +3911,12 @@ class DashboardViewModel @Inject constructor(
             botState = BotState.STOPPED,
             isFollowModeActive = false,
             isIndicatorModeActive = false,
-            isCTCModeActive = false,  // 🔥 NEW
+            isCTCModeActive = false,
+            isMultiMomentumModeActive = false, // ADD THIS
             botStatus = "$type - $reason",
             tradingSession = updatedSession,
             error = null
         )
-
-        println("Bot dihentikan karena $type: $reason")
     }
 
     // Method utility tetap sama
@@ -4018,7 +4189,290 @@ class DashboardViewModel @Inject constructor(
         return baseMap.toMap()
     }
 
-    // NEW: Get indicator performance info
+    fun startMultiMomentumMode() {
+        val currentState = _uiState.value
+
+        if (!ensureStableConnection()) {
+            _uiState.value = currentState.copy(
+                error = "WebSocket connection not stable. Please wait or force reconnect."
+            )
+            return
+        }
+
+        if (!currentState.canStartMultiMomentumMode()) {
+            _uiState.value = currentState.copy(
+                error = "Cannot start Multi-Momentum: ${getMultiMomentumModeStartError(currentState)}"
+            )
+            return
+        }
+
+        val selectedAsset = currentState.selectedAsset ?: return
+
+        viewModelScope.launch {
+            try {
+                _uiState.value = currentState.copy(
+                    multiMomentumOrderStatus = "Starting Multi-Momentum mode...",
+                    error = null
+                )
+
+                // Stop other modes
+                if (currentState.botState != BotState.STOPPED) {
+                    stopBot()
+                }
+                if (currentState.isFollowModeActive) {
+                    stopFollowMode()
+                }
+                if (currentState.isIndicatorModeActive) {
+                    stopIndicatorMode()
+                }
+                if (currentState.isCTCModeActive) {
+                    stopCTCMode()
+                }
+
+                delay(1000)
+
+                if (!ensureStableConnection()) {
+                    _uiState.value = currentState.copy(
+                        error = "WebSocket connection became unstable. Try force reconnect.",
+                        multiMomentumOrderStatus = "Multi-Momentum inactive"
+                    )
+                    return@launch
+                }
+
+                stopLossProfitManager.startNewSession()
+
+                Log.d("DashboardViewModel", "MULTI-MOMENTUM MODE: Starting with 4 parallel momentums")
+                Log.d("DashboardViewModel", "  Asset: ${selectedAsset.name}")
+                Log.d("DashboardViewModel", "  Account: ${if (currentState.isDemoAccount) "Demo" else "Real"}")
+
+                val result = multiMomentumOrderManager.startMultiMomentumMode(
+                    selectedAsset = selectedAsset,
+                    isDemoAccount = currentState.isDemoAccount,
+                    martingaleSettings = currentState.martingaleSettings
+                )
+
+                result.fold(
+                    onSuccess = { message ->
+                        _uiState.value = currentState.copy(
+                            isMultiMomentumModeActive = true,
+                            tradingMode = TradingMode.MULTI_MOMENTUM,
+                            multiMomentumOrderStatus = "Multi-Momentum ACTIVE - ${selectedAsset.name}",
+                            tradingSession = stopLossProfitManager.getCurrentSession(),
+                            connectionStatus = "Connected - Multi-Momentum active",
+                            error = null
+                        )
+
+                        Log.d("DashboardViewModel", "Multi-Momentum mode started successfully")
+                    },
+                    onFailure = { exception ->
+                        _uiState.value = currentState.copy(
+                            error = exception.message,
+                            multiMomentumOrderStatus = "Multi-Momentum inactive"
+                        )
+                    }
+                )
+
+            } catch (e: Exception) {
+                Log.e("DashboardViewModel", "Error starting Multi-Momentum: ${e.message}", e)
+                _uiState.value = currentState.copy(
+                    error = "Error starting Multi-Momentum: ${e.message}",
+                    multiMomentumOrderStatus = "Multi-Momentum inactive"
+                )
+            }
+        }
+    }
+
+    // 5. ADD STOP FUNCTION
+    fun stopMultiMomentumMode() {
+        val currentState = _uiState.value
+
+        if (!currentState.canStopMultiMomentumMode()) {
+            _uiState.value = currentState.copy(
+                error = "Multi-Momentum mode is not active"
+            )
+            return
+        }
+
+        Log.d("DashboardViewModel", "Manual stop of Multi-Momentum mode requested")
+
+        val result = multiMomentumOrderManager.stopMultiMomentumMode()
+
+        result.fold(
+            onSuccess = { message ->
+                _uiState.value = currentState.copy(
+                    isMultiMomentumModeActive = false,
+                    tradingMode = TradingMode.SCHEDULE,
+                    multiMomentumOrderStatus = "Multi-Momentum manually stopped",
+                    activeMultiMomentumOrderId = null,
+                    multiMomentumMartingaleSteps = emptyMap(),
+                    multiMomentumCandleCount = 0,
+                    connectionStatus = "Connected - Mode can be changed",
+                    error = null
+                )
+
+                Log.d("DashboardViewModel", "Multi-Momentum mode manually stopped")
+            },
+            onFailure = { exception ->
+                _uiState.value = currentState.copy(
+                    error = exception.message
+                )
+            }
+        )
+    }
+
+    // 6. ADD TRADE EXECUTION HANDLER
+    private fun executeMultiMomentumTrade(
+        trend: String,
+        orderId: String,
+        amount: Long,
+        momentumType: String
+    ) {
+        val currentState = _uiState.value
+
+        if (!currentState.isMultiMomentumModeActive) return
+
+        val (shouldPreventTrade, preventReason) = stopLossProfitManager.shouldPreventNewTrade(
+            currentState.stopLossSettings,
+            currentState.stopProfitSettings
+        )
+
+        if (shouldPreventTrade) {
+            Log.w("DashboardViewModel", "Multi-Momentum Trade prevented: $preventReason")
+            return
+        }
+
+        val selectedAsset = currentState.selectedAsset ?: return
+
+        if (!currentState.isWebSocketConnected || !webSocketManager.isRequiredChannelsReady()) {
+            Log.w("DashboardViewModel", "WebSocket not ready for Multi-Momentum Trade")
+            return
+        }
+
+        Log.d("DashboardViewModel", "Executing Multi-Momentum order:")
+        Log.d("DashboardViewModel", "  Momentum: $momentumType")
+        Log.d("DashboardViewModel", "  Trend: $trend")
+        Log.d("DashboardViewModel", "  Amount: ${formatAmount(amount)}")
+
+        _uiState.value = currentState.copy(
+            activeMultiMomentumOrderId = orderId,
+            multiMomentumOrderStatus = "$momentumType: Executing $trend - ${formatAmount(amount)}"
+        )
+
+        tradeManager.executeFollowInstantTrade(
+            assetRic = selectedAsset.ric,
+            trend = trend,
+            amount = amount,
+            isDemoAccount = currentState.isDemoAccount,
+            followOrderId = orderId,
+            isMartingaleAttempt = false,
+            martingaleStep = 0
+        )
+    }
+
+    // 7. ADD MARTINGALE RESULT HANDLER
+    private fun handleMultiMomentumMartingaleResult(result: MultiMomentumMartingaleResult) {
+        val currentState = _uiState.value
+
+        Log.d("DashboardViewModel", "Multi-Momentum Martingale result:")
+        Log.d("DashboardViewModel", "  Momentum: ${result.momentumType}")
+        Log.d("DashboardViewModel", "  Step: ${result.step}")
+        Log.d("DashboardViewModel", "  Is Win: ${result.isWin}")
+
+        when {
+            result.isWin -> {
+                val updatedSteps = currentState.multiMomentumMartingaleSteps.toMutableMap()
+                updatedSteps.remove(result.momentumType)
+
+                _uiState.value = currentState.copy(
+                    multiMomentumMartingaleSteps = updatedSteps,
+                    multiMomentumOrderStatus = "${result.momentumType} Martingale WIN - Continuing"
+                )
+
+                Log.d("DashboardViewModel", "${result.momentumType} Martingale WIN at step ${result.step}")
+            }
+
+            result.shouldContinue -> {
+                val updatedSteps = currentState.multiMomentumMartingaleSteps.toMutableMap()
+                updatedSteps[result.momentumType] = result.step
+
+                _uiState.value = currentState.copy(
+                    multiMomentumMartingaleSteps = updatedSteps,
+                    multiMomentumOrderStatus = "${result.momentumType} Martingale Step ${result.step}"
+                )
+
+                Log.d("DashboardViewModel", "${result.momentumType} continues to step ${result.step}")
+            }
+
+            result.isMaxReached -> {
+                val updatedSteps = currentState.multiMomentumMartingaleSteps.toMutableMap()
+                updatedSteps.remove(result.momentumType)
+
+                _uiState.value = currentState.copy(
+                    multiMomentumMartingaleSteps = updatedSteps,
+                    multiMomentumOrderStatus = "${result.momentumType} Martingale failed"
+                )
+
+                Log.d("DashboardViewModel", "${result.momentumType} Martingale failed at step ${result.step}")
+            }
+        }
+    }
+
+    // 8. ADD HELPER FUNCTIONS
+    private fun getMultiMomentumModeStartError(state: DashboardUiState): String {
+        return when {
+            state.selectedAsset == null -> "Belum ada aset yang dipilih"
+            !state.isWebSocketConnected -> "WebSocket tidak terhubung"
+            !webSocketManager.isRequiredChannelsReady() -> "WebSocket channels belum siap"
+            state.isMultiMomentumModeActive -> "Multi-Momentum mode sudah aktif"
+            state.isCTCModeActive -> "CTC Order masih aktif"
+            state.isFollowModeActive -> "Follow Order masih aktif"
+            state.isIndicatorModeActive -> "Indicator Order masih aktif"
+            state.botState != BotState.STOPPED -> "Schedule mode masih aktif"
+            state.martingaleSettings.validate(state.currencySettings.selectedCurrency).isFailure ->
+                "Pengaturan martingale tidak valid"
+            else -> "Kondisi tidak memenuhi syarat"
+        }
+    }
+
+    fun getMultiMomentumPerformanceInfo(): Map<String, Any> {
+        return if (_uiState.value.isMultiMomentumModeActive) {
+            val baseStats = multiMomentumOrderManager.getPerformanceStats()
+            val lastOrders = _multiMomentumOrders.value.takeLast(5)
+
+            // ✅ EXTRACT OHLC DATA FROM LAST 5 ORDERS
+            val ohlcData = lastOrders.mapNotNull { order ->
+                order.sourceCandle?.let { candle ->
+                    mapOf(
+                        "momentum_type" to order.momentumType,
+                        "open" to candle.open.toPlainString(),
+                        "high" to candle.high.toPlainString(),
+                        "low" to candle.low.toPlainString(),
+                        "close" to candle.close.toPlainString(),
+                        "trend" to candle.getTrend(),
+                        "body_size" to String.format("%.5f", abs((candle.close - candle.open).toDouble())),
+                        "range" to String.format("%.5f", (candle.high - candle.low).toDouble()),
+                        "timestamp" to Date(order.executionTime).toString(),
+                        "is_executed" to order.isExecuted
+                    )
+                }
+            }
+
+            // ✅ FIX: Filter out null values from baseStats
+            val filteredBaseStats = baseStats.filterValues { it != null }
+
+            filteredBaseStats + mapOf(
+                "last_5_orders_ohlc" to ohlcData,
+                "total_candles_analyzed" to (baseStats["candle_count"] ?: 0)
+            )
+        } else {
+            mapOf(
+                "is_active" to false,
+                "message" to "Multi-Momentum mode tidak aktif",
+                "last_5_orders_ohlc" to emptyList<Map<String, Any>>()
+            )
+        }
+    }
+
     fun getIndicatorPerformanceInfo(): Map<String, Any> {
         return if (_uiState.value.isIndicatorModeActive) {
             val baseStats = indicatorOrderManager.getPerformanceStats()
@@ -4163,6 +4617,7 @@ class DashboardViewModel @Inject constructor(
         indicatorOrderManager.cleanup()
         ctcOrderManager.cleanup()  // 🔥 NEW
         loginRepository.logout()
+        stopMultiMomentumMode() // ADD THIS
     }
 
     override fun onCleared() {
@@ -4180,5 +4635,20 @@ class DashboardViewModel @Inject constructor(
         followOrderManager.cleanup()
         indicatorOrderManager.cleanup()
         ctcOrderManager.cleanup()  // 🔥 NEW
+        stopMultiMomentumMode() // ADD THIS
     }
+}
+
+sealed class WhitelistCheckState {
+    object Checking : WhitelistCheckState()
+
+    data class Verified(
+        val userId: String,
+        val email: String
+    ) : WhitelistCheckState()
+
+    data class Failed(
+        val reason: String,
+        val message: String
+    ) : WhitelistCheckState()
 }

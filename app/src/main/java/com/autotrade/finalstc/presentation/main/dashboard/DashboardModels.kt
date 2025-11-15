@@ -47,17 +47,40 @@ data class DashboardUiState(
     val activeCTCOrderId: String? = null,
     val ctcMartingaleStep: Int = 0,
     val currencySettings: CurrencySettings = CurrencySettings(),
+    val isMultiMomentumModeActive: Boolean = false,
+    val multiMomentumOrderStatus: String = "Multi-Momentum Order tidak aktif",
+    val activeMultiMomentumOrderId: String? = null,
+    val multiMomentumMartingaleSteps: Map<String, Int> = emptyMap(),
+    val multiMomentumCandleCount: Int = 0,
     ) {
+    fun canStartMultiMomentumMode(): Boolean {
+        return botState == BotState.STOPPED &&
+                !isFollowModeActive &&
+                !isIndicatorModeActive &&
+                !isCTCModeActive &&
+                !isMultiMomentumModeActive &&
+                selectedAsset != null &&
+                isWebSocketConnected &&
+                martingaleSettings.validate(currencySettings.selectedCurrency).isSuccess &&
+                stopLossSettings.validate().isSuccess &&
+                stopProfitSettings.validate().isSuccess &&
+                getMartingaleValidationError() == null
+    }
+
+    fun canStopMultiMomentumMode(): Boolean = isMultiMomentumModeActive
+
     fun canModifySettings(): Boolean = botState == BotState.STOPPED &&
             !isFollowModeActive &&
             !isIndicatorModeActive &&
-            !isCTCModeActive
+            !isCTCModeActive &&
+            !isMultiMomentumModeActive
 
     fun canStartBot(): Boolean {
         return botState == BotState.STOPPED &&
                 !isFollowModeActive &&
                 !isIndicatorModeActive &&
                 !isCTCModeActive &&
+                !isMultiMomentumModeActive &&
                 selectedAsset != null &&
                 isWebSocketConnected &&
                 martingaleSettings.validate(currencySettings.selectedCurrency).isSuccess &&
@@ -72,6 +95,7 @@ data class DashboardUiState(
                 !isFollowModeActive &&
                 !isIndicatorModeActive &&
                 !isCTCModeActive &&
+                !isMultiMomentumModeActive &&
                 selectedAsset != null &&
                 isWebSocketConnected &&
                 martingaleSettings.validate(currencySettings.selectedCurrency).isSuccess &&
@@ -87,6 +111,7 @@ data class DashboardUiState(
                 !isFollowModeActive &&
                 !isIndicatorModeActive &&
                 !isCTCModeActive &&
+                !isMultiMomentumModeActive &&
                 selectedAsset != null &&
                 isWebSocketConnected &&
                 martingaleSettings.validate(currencySettings.selectedCurrency).isSuccess &&
@@ -102,6 +127,7 @@ data class DashboardUiState(
                 !isFollowModeActive &&
                 !isIndicatorModeActive &&
                 !isCTCModeActive &&
+                !isMultiMomentumModeActive &&
                 selectedAsset != null &&
                 isWebSocketConnected &&
                 martingaleSettings.validate(currencySettings.selectedCurrency).isSuccess &&
@@ -122,6 +148,7 @@ data class DashboardUiState(
 
     fun getBotStatusText(): String {
         return when {
+            isMultiMomentumModeActive -> "Multi-Momentum Order Active"
             isCTCModeActive -> "CTC Order Active"
             isIndicatorModeActive -> "Indicator Order Active"
             isFollowModeActive -> "Follow Order Active"
@@ -136,6 +163,7 @@ data class DashboardUiState(
 
     fun getBotStatusColor(): String {
         return when {
+            isMultiMomentumModeActive -> "#00BCD4"
             isCTCModeActive -> "#FF9800"
             isIndicatorModeActive -> "#9C27B0"
             isFollowModeActive -> "#4ECDC4"
@@ -146,7 +174,6 @@ data class DashboardUiState(
             }
         }
     }
-
 
     fun getSessionInfo(): Map<String, String> {
         return mapOf(

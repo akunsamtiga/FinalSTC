@@ -8,7 +8,8 @@ enum class TradingMode {
     SCHEDULE,
     FOLLOW_ORDER,
     INDICATOR_ORDER,
-    CTC_ORDER
+    CTC_ORDER,
+    MULTI_MOMENTUM
 }
 
 enum class BotState {
@@ -833,5 +834,90 @@ fun validateMultiplier(type: MultiplierType, value: Double): String? {
         }
     } catch (e: Exception) {
         "Multiplier validation error: ${e.message}"
+    }
+}
+
+data class MultiMomentumOrder(
+    val id: String,
+    val assetRic: String,
+    val assetName: String,
+    val trend: String,
+    val amount: Long,
+    val executionTime: Long,
+    val momentumType: String,
+    val confidence: Double,
+    val sourceCandle: Candle,
+    val isExecuted: Boolean = false,
+    val isSkipped: Boolean = false,
+    val skipReason: String? = null,
+    val martingaleState: MultiMomentumOrderMartingaleState = MultiMomentumOrderMartingaleState()
+) {
+    fun getStatusDisplay(): String {
+        return when {
+            isSkipped -> "Skipped: ${skipReason ?: "Unknown reason"}"
+            isExecuted && martingaleState.isCompleted -> {
+                when (martingaleState.finalResult) {
+                    "WIN", "MENANG" -> "WIN (${formatAmount(martingaleState.totalRecovered)})"
+                    "LOSS", "KALAH" -> "LOSE (${formatAmount(martingaleState.totalLoss)})"
+                    else -> "Monitoring..."
+                }
+            }
+            isExecuted && martingaleState.isActive -> "Martingale ${martingaleState.getStatusDisplay()}"
+            isExecuted -> "Monitoring..."
+            else -> "Pending"
+        }
+    }
+
+    fun getExecutionTimeFormatted(): String {
+        val format = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+        return format.format(java.util.Date(executionTime))
+    }
+
+    fun getMomentumDisplayName(): String {
+        return when (momentumType) {
+            "CANDLE_SABIT" -> "Candle Sabit"
+            "DOJI_TERJEPIT" -> "Doji Terjepit"
+            "DOJI_PEMBATALAN" -> "Doji Pembatalan"
+            "BB_SAR_BREAK" -> "BB/SAR Break"
+            else -> momentumType
+        }
+    }
+
+    private fun formatAmount(amount: Long): String {
+        return when {
+            amount >= 1_000_000 -> "${amount / 1_000_000}M"
+            amount >= 1_000 -> "${amount / 1_000}K"
+            else -> amount.toString()
+        }
+    }
+}
+
+data class MultiMomentumOrderMartingaleState(
+    val isActive: Boolean = false,
+    val currentStep: Int = 0,
+    val isCompleted: Boolean = false,
+    val finalResult: String? = null,
+    val totalLoss: Long = 0L,
+    val totalRecovered: Long = 0L
+) {
+    fun getStatusDisplay(): String {
+        return when {
+            !isActive && !isCompleted -> "Siap"
+            isActive -> "Langkah ${currentStep + 1} (Loss: ${formatAmount(totalLoss)})"
+            isCompleted -> when (finalResult) {
+                "WIN" -> "MENANG (Pulih: ${formatAmount(totalRecovered)})"
+                "LOSS" -> "KALAH (Total: ${formatAmount(totalLoss)})"
+                else -> "Selesai"
+            }
+            else -> "Tidak diketahui"
+        }
+    }
+
+    private fun formatAmount(amount: Long): String {
+        return when {
+            amount >= 1_000_000 -> "${amount / 1_000_000}M"
+            amount >= 1_000 -> "${amount / 1_000}K"
+            else -> amount.toString()
+        }
     }
 }

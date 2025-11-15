@@ -18,15 +18,20 @@ import javax.inject.Inject
 
 data class AdminUiState(
     val whitelistUsers: List<WhitelistUser> = emptyList(),
+    val allUsersForStats: List<WhitelistUser> = emptyList(),
     val adminUsers: List<AdminUser> = emptyList(),
     val registrationConfig: RegistrationConfig = RegistrationConfig(),
     val isLoading: Boolean = false,
+    val isLoadingMore: Boolean = false,
     val isLoadingConfig: Boolean = false,
     val isLoadingAdmins: Boolean = false,
+    val hasMoreData: Boolean = true,
+    val currentPage: Int = 1,
     val error: String? = null,
     val successMessage: String? = null,
     val currentUserEmail: String = "",
-    val isSuperAdmin: Boolean = false
+    val isSuperAdmin: Boolean = false,
+    val totalUserCount: Int = 0 // ✅ ADDED: Total user sesuai role
 )
 
 @HiltViewModel
@@ -40,8 +45,11 @@ class AdminViewModel @Inject constructor(
 
     private val fileExportHelper = FileExportHelper(context)
 
-    init {
+    private val pageSize = 50
+    private var lastVisibleUser: WhitelistUser? = null
+    private var isInitialLoad = true
 
+    init {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoadingConfig = true)
             try {
@@ -86,34 +94,99 @@ class AdminViewModel @Inject constructor(
                 currentUserEmail = email,
                 isSuperAdmin = isSuperAdmin
             )
-
-            loadWhitelistUsers(email, isSuperAdmin)
+            loadWhitelistUsers(email, isSuperAdmin, reset = true)
         }
     }
 
-    private fun loadWhitelistUsers(email: String, isSuperAdmin: Boolean) {
+    private fun loadWhitelistUsers(
+        email: String,
+        isSuperAdmin: Boolean,
+        reset: Boolean = false
+    ) {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+            if (reset) {
+                _uiState.value = _uiState.value.copy(
+                    isLoading = true,
+                    error = null,
+                    whitelistUsers = emptyList(),
+                    currentPage = 1,
+                    hasMoreData = true
+                )
+                lastVisibleUser = null
+                isInitialLoad = true
+            } else {
+                _uiState.value = _uiState.value.copy(isLoadingMore = true)
+            }
+
             try {
                 firebaseRepository.getWhitelistUsers(
                     adminEmail = email,
                     isSuperAdmin = isSuperAdmin
                 ).collect { users ->
+                    val currentList = if (reset) emptyList() else _uiState.value.whitelistUsers
+                    val startIndex = currentList.size
+                    val endIndex = minOf(startIndex + pageSize, users.size)
+
+                    val newUsers = if (startIndex < users.size) {
+                        users.subList(startIndex, endIndex)
+                    } else {
+                        emptyList()
+                    }
+
+                    val updatedList = if (reset) newUsers else currentList + newUsers
+                    val hasMore = endIndex < users.size
+
+                    // ✅ MODIFIED: Hitung total user berdasarkan role
+                    val totalCount = if (isSuperAdmin) {
+                        users.size // Super Admin melihat SEMUA user
+                    } else {
+                        users.count { it.addedBy == email } // Admin biasa hanya yang mereka tambahkan
+                    }
+
                     _uiState.value = _uiState.value.copy(
-                        whitelistUsers = users,
+                        whitelistUsers = updatedList,
+                        allUsersForStats = users,
+                        totalUserCount = totalCount, // ✅ ADDED
                         isLoading = false,
+                        isLoadingMore = false,
+                        hasMoreData = hasMore,
+                        currentPage = if (reset) 1 else _uiState.value.currentPage + 1,
                         error = null
                     )
+
+                    isInitialLoad = false
                 }
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
+                    isLoadingMore = false,
                     error = "Gagal memuat pengguna: ${e.message}"
                 )
             }
         }
     }
 
+    fun loadMoreUsers() {
+        val currentState = _uiState.value
+        if (currentState.hasMoreData &&
+            !currentState.isLoading &&
+            !currentState.isLoadingMore) {
+            loadWhitelistUsers(
+                currentState.currentUserEmail,
+                currentState.isSuperAdmin,
+                reset = false
+            )
+        }
+    }
+
+    fun refreshUsers() {
+        val currentState = _uiState.value
+        loadWhitelistUsers(
+            currentState.currentUserEmail,
+            currentState.isSuperAdmin,
+            reset = true
+        )
+    }
 
     fun addUser(user: WhitelistUser) {
         viewModelScope.launch {
@@ -123,6 +196,7 @@ class AdminViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(
                     successMessage = "Pengguna berhasil ditambahkan"
                 )
+                refreshUsers()
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     error = "Gagal menambah pengguna: ${e.message}"
@@ -150,7 +224,16 @@ class AdminViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 firebaseRepository.updateWhitelistUser(user)
+
+                val updatedList = _uiState.value.whitelistUsers.map {
+                    if (it.id == user.id) user else it
+                }
+                val updatedAllUsers = _uiState.value.allUsersForStats.map {
+                    if (it.id == user.id) user else it
+                }
                 _uiState.value = _uiState.value.copy(
+                    whitelistUsers = updatedList,
+                    allUsersForStats = updatedAllUsers,
                     successMessage = "Pengguna berhasil diperbarui"
                 )
             } catch (e: Exception) {
@@ -165,7 +248,23 @@ class AdminViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 firebaseRepository.deleteWhitelistUser(userId)
+
+                val updatedList = _uiState.value.whitelistUsers.filter { it.id != userId }
+                val updatedAllUsers = _uiState.value.allUsersForStats.filter { it.id != userId }
+
+                // ✅ ADDED: Recalculate total count
+                val currentEmail = _uiState.value.currentUserEmail
+                val isSuperAdmin = _uiState.value.isSuperAdmin
+                val totalCount = if (isSuperAdmin) {
+                    updatedAllUsers.size
+                } else {
+                    updatedAllUsers.count { it.addedBy == currentEmail }
+                }
+
                 _uiState.value = _uiState.value.copy(
+                    whitelistUsers = updatedList,
+                    allUsersForStats = updatedAllUsers,
+                    totalUserCount = totalCount, // ✅ ADDED
                     successMessage = "Pengguna berhasil dihapus"
                 )
             } catch (e: Exception) {
@@ -181,7 +280,16 @@ class AdminViewModel @Inject constructor(
             try {
                 val updatedUser = user.copy(isActive = !user.isActive)
                 firebaseRepository.updateWhitelistUser(updatedUser)
+
+                val updatedList = _uiState.value.whitelistUsers.map {
+                    if (it.id == user.id) updatedUser else it
+                }
+                val updatedAllUsers = _uiState.value.allUsersForStats.map {
+                    if (it.id == user.id) updatedUser else it
+                }
                 _uiState.value = _uiState.value.copy(
+                    whitelistUsers = updatedList,
+                    allUsersForStats = updatedAllUsers,
                     successMessage = "Status pengguna berhasil diperbarui"
                 )
             } catch (e: Exception) {
@@ -191,7 +299,6 @@ class AdminViewModel @Inject constructor(
             }
         }
     }
-
 
     fun addAdmin(admin: AdminUser) {
         if (!_uiState.value.isSuperAdmin) {
@@ -285,7 +392,6 @@ class AdminViewModel @Inject constructor(
         }
     }
 
-
     fun updateRegistrationUrl(newUrl: String) {
         if (!_uiState.value.isSuperAdmin) {
             _uiState.value = _uiState.value.copy(
@@ -319,6 +425,40 @@ class AdminViewModel @Inject constructor(
         }
     }
 
+    fun updateWhatsappNumber(newNumber: String) {
+        if (!_uiState.value.isSuperAdmin) {
+            _uiState.value = _uiState.value.copy(
+                error = "Akses ditolak: Hanya Super Admin yang dapat mengubah nomor WhatsApp"
+            )
+            return
+        }
+
+        viewModelScope.launch {
+            try {
+                _uiState.value = _uiState.value.copy(isLoadingConfig = true)
+                val cleanNumber = newNumber.replace(Regex("[^0-9]"), "")
+                val success = firebaseRepository.updateWhatsappNumber(cleanNumber, "admin")
+
+                if (success) {
+                    _uiState.value = _uiState.value.copy(
+                        isLoadingConfig = false,
+                        successMessage = "Nomor WhatsApp berhasil diperbarui"
+                    )
+                } else {
+                    _uiState.value = _uiState.value.copy(
+                        isLoadingConfig = false,
+                        error = "Gagal memperbarui nomor WhatsApp"
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isLoadingConfig = false,
+                    error = "Error memperbarui nomor WhatsApp: ${e.message}"
+                )
+            }
+        }
+    }
+
     fun validateRegistrationUrl(url: String): Boolean {
         return try {
             val urlPattern = Regex(
@@ -342,6 +482,9 @@ class AdminViewModel @Inject constructor(
         }
     }
 
+    fun validateWhatsappNumber(number: String): Boolean {
+        return firebaseRepository.validateWhatsappNumber(number)
+    }
 
     fun exportWhitelist(format: String = "json") {
         viewModelScope.launch {
@@ -448,6 +591,8 @@ class AdminViewModel @Inject constructor(
                     isLoading = false,
                     successMessage = "Import berhasil: $successCount user ditambahkan"
                 )
+
+                refreshUsers()
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
@@ -455,46 +600,6 @@ class AdminViewModel @Inject constructor(
                 )
             }
         }
-    }
-
-    fun updateWhatsappNumber(newNumber: String) {
-        if (!_uiState.value.isSuperAdmin) {
-            _uiState.value = _uiState.value.copy(
-                error = "Akses ditolak: Hanya Super Admin yang dapat mengubah nomor WhatsApp"
-            )
-            return
-        }
-
-        viewModelScope.launch {
-            try {
-                _uiState.value = _uiState.value.copy(isLoadingConfig = true)
-
-                val cleanNumber = newNumber.replace(Regex("[^0-9]"), "")
-
-                val success = firebaseRepository.updateWhatsappNumber(cleanNumber, "admin")
-
-                if (success) {
-                    _uiState.value = _uiState.value.copy(
-                        isLoadingConfig = false,
-                        successMessage = "Nomor WhatsApp berhasil diperbarui"
-                    )
-                } else {
-                    _uiState.value = _uiState.value.copy(
-                        isLoadingConfig = false,
-                        error = "Gagal memperbarui nomor WhatsApp"
-                    )
-                }
-            } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(
-                    isLoadingConfig = false,
-                    error = "Error memperbarui nomor WhatsApp: ${e.message}"
-                )
-            }
-        }
-    }
-
-    fun validateWhatsappNumber(number: String): Boolean {
-        return firebaseRepository.validateWhatsappNumber(number)
     }
 
     fun clearError() {

@@ -4,7 +4,7 @@ import retrofit2.Response
 import retrofit2.http.*
 
 interface PriceDataApi {
-    @GET("candles/v1/{symbol}/{date}/5")
+    @GET("candles/v1/{symbol}/{date}/5") // 5 detik
     suspend fun getLastCandle(
         @Path(value = "symbol", encoded = true) symbol: String,
         @Path("date") date: String,

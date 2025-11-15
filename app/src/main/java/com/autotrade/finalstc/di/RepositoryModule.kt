@@ -9,6 +9,8 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
+import com.autotrade.finalstc.data.repository.FirebaseRepository
+import com.google.firebase.firestore.FirebaseFirestore
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -30,4 +32,13 @@ object RepositoryModule {
     ): CurrencyRepository {
         return CurrencyRepository(currencyApiService, sessionManager)
     }
+
+    @Provides
+    @Singleton
+    fun provideFirebaseRepository(
+        firestore: FirebaseFirestore
+    ): FirebaseRepository {
+        return FirebaseRepository(firestore)
+    }
+
 }

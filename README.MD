@@ -1480,7 +1480,6 @@ Software ini bersifat proprietary dan rahasia. Menyalin, mendistribusikan, memod
 - Penggunaan komersial dilarang tanpa lisensi
 - Redistribusi dilarang
 - Modifikasi dilarang
-- Penggunaan pribadi hanya untuk pengguna yang berwenang
 
 Untuk pertanyaan lisensi, hubungi: **support@stcbroker.id**
 
@@ -1491,7 +1490,7 @@ Untuk pertanyaan lisensi, hubungi: **support@stcbroker.id**
 **Lead Developer:** Arya Satya Ibnu Sani  
 **Email:** sanzystoreid@gmail.com
 
-**Inti:**
+**Developer Job:**
 - Pengembangan Backend
 - Pengembangan Android
 - Desain UI/UX
@@ -1504,19 +1503,13 @@ Untuk pertanyaan lisensi, hubungi: **support@stcbroker.id**
 
 Butuh bantuan? Hubungi kami melalui:
 
-**Dukungan Teknis:**
-- 📧 Email: support@stcbroker.id
-- 💬 WhatsApp: +62 859-5986-0015
+**Dukungan Developer:**
+- 📧 Email: sanzystoreid@gmail.com
+- 💬 WhatsApp: +62 813-3990-8765
 - 📱 Telegram: @stc_support
 - 🌐 Website: https://stcbroker.id
 
----
 
-## 🐛 Masalah yang Diketahui
-
-- Koneksi WebSocket mungkin sesekali terputus pada jaringan yang buruk
-- Perhitungan indikator mungkin lambat pada perangkat lama (SDK < 26)
-- Perpindahan tema memerlukan restart aplikasi dalam beberapa kasus
 
 Untuk laporan bug terbaru dan status, cek issue tracker kami.
 
@@ -1531,7 +1524,7 @@ Untuk laporan bug terbaru dan status, cek issue tracker kami.
 - Koneksi internet
 
 **Direkomendasikan:**
-- Android 10.0 (API 29) atau lebih tinggi
+- Android 12.0 atau lebih tinggi
 - 4GB RAM
 - 500MB ruang penyimpanan bebas
 - Koneksi WiFi atau 4G yang stabil

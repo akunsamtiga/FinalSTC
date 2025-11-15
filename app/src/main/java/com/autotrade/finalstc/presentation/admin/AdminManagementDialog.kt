@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.autotrade.finalstc.data.model.AdminUser
+import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -58,17 +59,27 @@ fun AdminManagementDialog(
     var selectedAdmin by remember { mutableStateOf<AdminUser?>(null) }
     var searchQuery by remember { mutableStateOf("") }
 
-    val filteredAdmins = remember(uiState.adminUsers, searchQuery) {
-        if (searchQuery.isBlank()) {
+    var debouncedSearchQuery by remember { mutableStateOf("") }
+
+    // ✅ SOLUSI 2: Debounce mechanism
+    LaunchedEffect(searchQuery) {
+        delay(300) // Tunggu 300ms setelah user berhenti mengetik
+        debouncedSearchQuery = searchQuery
+    }
+
+    // ✅ SOLUSI 3: Filter menggunakan debouncedSearchQuery
+    val filteredAdmins = remember(uiState.adminUsers, debouncedSearchQuery) {
+        if (debouncedSearchQuery.isBlank()) {
             uiState.adminUsers
         } else {
             uiState.adminUsers.filter { admin ->
-                admin.name.contains(searchQuery, ignoreCase = true) ||
-                        admin.email.contains(searchQuery, ignoreCase = true) ||
-                        admin.role.contains(searchQuery, ignoreCase = true)
+                admin.name.contains(debouncedSearchQuery, ignoreCase = true) ||
+                        admin.email.contains(debouncedSearchQuery, ignoreCase = true) ||
+                        admin.role.contains(debouncedSearchQuery, ignoreCase = true)
             }
         }
     }
+
 
     Dialog(onDismissRequest = onDismiss) {
         Card(

@@ -6,6 +6,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
@@ -38,6 +39,7 @@ import kotlinx.coroutines.delay
 import com.autotrade.finalstc.data.model.WhitelistUser
 import java.text.SimpleDateFormat
 import java.util.*
+import androidx.compose.foundation.lazy.items
 
 private val DarkBackground = Color(0xFF0B1A14)
 private val DarkCard = Color(0xFF15241C)
@@ -73,19 +75,21 @@ fun AdminScreen(
     var showImportDialog by remember { mutableStateOf(false) }
     var selectedUser by remember { mutableStateOf<WhitelistUser?>(null) }
     var selectedStatsFilter by remember { mutableStateOf<StatsFilterType?>(null) }
-    var isVisible by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
     var showWhatsAppEditDialog by remember { mutableStateOf(false) }
+    var showExportImportButtons by remember { mutableStateOf(false) }
+
+    var debouncedSearchQuery by remember { mutableStateOf("") }
+
+    LaunchedEffect(searchQuery) {
+        delay(300) // Tunggu 300ms setelah user berhenti mengetik
+        debouncedSearchQuery = searchQuery
+    }
 
     LaunchedEffect(currentUserEmail) {
         if (currentUserEmail.isNotEmpty()) {
             viewModel.setCurrentUserEmail(currentUserEmail)
         }
-    }
-
-    LaunchedEffect(Unit) {
-        delay(100)
-        isVisible = true
     }
 
     LaunchedEffect(uiState.error) {
@@ -102,15 +106,15 @@ fun AdminScreen(
         }
     }
 
-    val filteredUsers = remember(uiState.whitelistUsers, searchQuery) {
-        if (searchQuery.isBlank()) {
-            uiState.whitelistUsers
+    val filteredUsers = remember(uiState.whitelistUsers, uiState.allUsersForStats, debouncedSearchQuery) {
+        if (debouncedSearchQuery.isBlank()) {
+            uiState.whitelistUsers // ✅ Tampilkan data pagination (50 pertama)
         } else {
-            uiState.whitelistUsers.filter { user ->
-                user.name.contains(searchQuery, ignoreCase = true) ||
-                        user.email.contains(searchQuery, ignoreCase = true) ||
-                        user.userId.contains(searchQuery, ignoreCase = true) ||
-                        user.deviceId.contains(searchQuery, ignoreCase = true)
+            uiState.allUsersForStats.filter { user -> // ✅ Search dari SEMUA data
+                user.name.contains(debouncedSearchQuery, ignoreCase = true) ||
+                        user.email.contains(debouncedSearchQuery, ignoreCase = true) ||
+                        user.userId.contains(debouncedSearchQuery, ignoreCase = true) ||
+                        user.deviceId.contains(debouncedSearchQuery, ignoreCase = true)
             }
         }
     }
@@ -127,295 +131,406 @@ fun AdminScreen(
                 )
             )
     ) {
-        AnimatedVisibility(
-            visible = isVisible,
-            enter = slideInVertically(
-                initialOffsetY = { it },
-                animationSpec = tween(600, easing = FastOutSlowInEasing)
-            ) + fadeIn(animationSpec = tween(600))
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp)
         ) {
-            Column(
+            AdminHeader(
+                onNavigateBack = onNavigateBack,
+                onAdminManagement = { showAdminManagement = true },
+                totalUsers = uiState.totalUserCount,
+                isSuperAdmin = uiState.isSuperAdmin
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            AdminStatsRow(
+                users = if (uiState.isSuperAdmin) {
+                    uiState.allUsersForStats // ✅ Super Admin melihat semua
+                } else {
+                    uiState.allUsersForStats.filter { it.addedBy == uiState.currentUserEmail } // ✅ Admin biasa hanya yang mereka tambahkan
+                },
+                onStatsClick = { filterType ->
+                    selectedStatsFilter = filterType
+                    showStatsDialog = true
+                },
+                isSuperAdmin = uiState.isSuperAdmin
+            )
+
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Card(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .padding(16.dp)
+                    .fillMaxWidth()
+                    .heightIn(max = 900.dp)
+                    .shadow(
+                        elevation = 8.dp,
+                        shape = RoundedCornerShape(20.dp)
+                    ),
+                colors = CardDefaults.cardColors(
+                    containerColor = DarkCard
+                ),
+                shape = RoundedCornerShape(20.dp)
             ) {
-                AdminHeader(
-                    onNavigateBack = onNavigateBack,
-                    onAdminManagement = { showAdminManagement = true },
-                    totalUsers = uiState.whitelistUsers.size,
-                    isSuperAdmin = uiState.isSuperAdmin
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                AdminStatsRow(
-                    users = uiState.whitelistUsers,
-                    onStatsClick = { filterType ->
-                        selectedStatsFilter = filterType
-                        showStatsDialog = true
-                    }
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-
-                Card(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(max = 900.dp)
-                        .shadow(
-                            elevation = 8.dp,
-                            shape = RoundedCornerShape(20.dp)
-                        ),
-                    colors = CardDefaults.cardColors(
-                        containerColor = DarkCard
-                    ),
-                    shape = RoundedCornerShape(20.dp)
+                        .padding(20.dp)
                 ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(20.dp)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(bottom = 16.dp)
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(bottom = 16.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .background(
-                                        AccentPrimary.copy(alpha = 0.15f),
-                                        RoundedCornerShape(12.dp)
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.People,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(20.dp),
-                                    tint = AccentPrimary
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "Whitelist Users",
-                                    fontSize = 18.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = TextPrimary
-                                )
-                                if (searchQuery.isNotBlank()) {
-                                    Text(
-                                        text = "${filteredUsers.size} of ${uiState.whitelistUsers.size} users",
-                                        fontSize = 12.sp,
-                                        color = TextTertiary
-                                    )
-                                }
-                            }
-
-                            Button(
-                                onClick = { showAddDialog = true },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = AccentPrimary,
-                                    contentColor = Color.White
-                                ),
-                                shape = RoundedCornerShape(10.dp),
-                                modifier = Modifier.height(36.dp),
-                                contentPadding = PaddingValues(horizontal = 12.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Add,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = "Add User",
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            }
-                        }
-
-                        Row(
+                        Box(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 16.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                .size(40.dp)
+                                .background(
+                                    AccentPrimary.copy(alpha = 0.15f),
+                                    RoundedCornerShape(12.dp)
+                                ),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Button(
-                                onClick = { viewModel.exportWhitelist("json") },
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(36.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = SuccessColor,
-                                    contentColor = Color.White
-                                ),
-                                shape = RoundedCornerShape(10.dp),
-                                contentPadding = PaddingValues(horizontal = 8.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.Download,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("JSON", fontSize = 11.sp, fontWeight = FontWeight.Medium)
-                            }
-
-                            Button(
-                                onClick = { viewModel.exportWhitelist("csv") },
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(36.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = SuccessColor.copy(alpha = 0.8f),
-                                    contentColor = Color.White
-                                ),
-                                shape = RoundedCornerShape(10.dp),
-                                contentPadding = PaddingValues(horizontal = 8.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.Download,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("CSV", fontSize = 11.sp, fontWeight = FontWeight.Medium)
-                            }
-
-                            Button(
-                                onClick = { showImportDialog = true },
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(36.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = InfoColor,
-                                    contentColor = Color.White
-                                ),
-                                shape = RoundedCornerShape(10.dp),
-                                contentPadding = PaddingValues(horizontal = 8.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.Upload,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Import", fontSize = 11.sp, fontWeight = FontWeight.Medium)
-                            }
+                            Icon(
+                                imageVector = Icons.Outlined.People,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp),
+                                tint = AccentPrimary
+                            )
                         }
-
-                        OutlinedTextField(
-                            value = searchQuery,
-                            onValueChange = { searchQuery = it },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 16.dp),
-                            placeholder = {
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Whitelist",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = TextPrimary
+                            )
+                            if (searchQuery.isNotBlank()) {
                                 Text(
-                                    "Pencarian",
-                                    fontSize = 13.sp,
+                                    text = "${filteredUsers.size} of ${uiState.totalUserCount} users", // ✅ CHANGED
+                                    fontSize = 12.sp,
                                     color = TextTertiary
                                 )
-                            },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Default.Search,
-                                    contentDescription = null,
-                                    tint = AccentPrimary,
-                                    modifier = Modifier.size(20.dp)
+                            } else {
+                                // ✅ ADDED: Display berbeda berdasarkan role
+                                Text(
+                                    text = if (uiState.isSuperAdmin) {
+                                        "${uiState.totalUserCount} total users"
+                                    } else {
+                                        "${uiState.totalUserCount} users added by you"
+                                    },
+                                    fontSize = 12.sp,
+                                    color = TextTertiary
                                 )
-                            },
-                            trailingIcon = {
-                                if (searchQuery.isNotBlank()) {
-                                    IconButton(
-                                        onClick = { searchQuery = "" },
-                                        modifier = Modifier.size(20.dp)
+                            }
+                        }
+
+
+                        // ✅ TAMBAH ICON TOGGLE INI
+                        IconButton(
+                            onClick = { showExportImportButtons = !showExportImportButtons },
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (showExportImportButtons) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                contentDescription = if (showExportImportButtons) "Hide actions" else "Show actions",
+                                tint = InfoColor,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(4.dp))
+
+                        Button(
+                            onClick = { showAddDialog = true },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = AccentPrimary,
+                                contentColor = Color.White
+                            ),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.height(36.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp)
+                        ) {
+                            Text(
+                                text = "Add User",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // ✅ BUNGKUS DENGAN AnimatedVisibility
+                        AnimatedVisibility(
+                            visible = showExportImportButtons,
+                            enter = expandHorizontally() + fadeIn(),
+                            exit = shrinkHorizontally() + fadeOut()
+                        ) {
+                            Row(
+                                modifier = Modifier.weight(1f),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Button(
+                                    onClick = { viewModel.exportWhitelist("json") },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(36.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = SuccessColor,
+                                        contentColor = Color.White
+                                    ),
+                                    shape = RoundedCornerShape(10.dp),
+                                    contentPadding = PaddingValues(horizontal = 8.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Download,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("JSON", fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                                }
+
+                                Button(
+                                    onClick = { viewModel.exportWhitelist("csv") },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(36.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = SuccessColor.copy(alpha = 0.8f),
+                                        contentColor = Color.White
+                                    ),
+                                    shape = RoundedCornerShape(10.dp),
+                                    contentPadding = PaddingValues(horizontal = 8.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Download,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("CSV", fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                                }
+
+                                Button(
+                                    onClick = { showImportDialog = true },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(36.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = InfoColor,
+                                        contentColor = Color.White
+                                    ),
+                                    shape = RoundedCornerShape(10.dp),
+                                    contentPadding = PaddingValues(horizontal = 8.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Upload,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Import", fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                                }
+                            }
+                        }
+                    }
+
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 16.dp),
+                        placeholder = {
+                            Text(
+                                "Pencarian",
+                                fontSize = 13.sp,
+                                color = TextTertiary
+                            )
+                        },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.Search,
+                                contentDescription = null,
+                                tint = AccentPrimary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        },
+                        trailingIcon = {
+                            if (searchQuery.isNotBlank()) {
+                                IconButton(
+                                    onClick = { searchQuery = "" },
+                                    modifier = Modifier.size(20.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Close,
+                                        contentDescription = "Clear",
+                                        tint = TextTertiary,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+                        },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = AccentPrimary,
+                            unfocusedBorderColor = AccentPrimary,
+                            cursorColor = AccentPrimary,
+                            focusedTextColor = TextPrimary,
+                            unfocusedTextColor = TextSecondary
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        singleLine = true,
+                        textStyle = LocalTextStyle.current.copy(fontSize = 14.sp),
+                        keyboardOptions = KeyboardOptions(
+                            imeAction = ImeAction.Search
+                        )
+                    )
+
+                    if (uiState.isLoading) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(200.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(
+                                color = AccentPrimary,
+                                modifier = Modifier.size(40.dp),
+                                strokeWidth = 3.dp
+                            )
+                        }
+                    } else if (filteredUsers.isEmpty()) {
+                        if (searchQuery.isNotBlank()) {
+                            EmptySearchView(searchQuery = searchQuery)
+                        } else {
+                            EmptyStateView()
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 700.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            contentPadding = PaddingValues(vertical = 4.dp)
+                        ) {
+                            // Render user cards
+                            items(
+                                items = filteredUsers,
+                                key = { user -> user.id } // ✅ Penting untuk performa
+                            ) { user ->
+                                WhitelistUserCard(
+                                    user = user,
+                                    onEdit = {
+                                        selectedUser = user
+                                        showEditDialog = true
+                                    },
+                                    onDelete = {
+                                        selectedUser = user
+                                        showDeleteDialog = true
+                                    },
+                                    onToggleStatus = { viewModel.toggleUserStatus(user) },
+                                    searchQuery = searchQuery
+                                )
+                            }
+
+                            // ✅ Load More Button (hanya tampil saat tidak search)
+                            if (uiState.hasMoreData && searchQuery.isBlank() && filteredUsers.isNotEmpty()) {
+                                item {
+                                    Card(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 8.dp),
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = DarkCardHover
+                                        ),
+                                        shape = RoundedCornerShape(12.dp)
                                     ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Close,
-                                            contentDescription = "Clear",
-                                            tint = TextTertiary,
-                                            modifier = Modifier.size(16.dp)
-                                        )
+                                        Button(
+                                            onClick = { viewModel.loadMoreUsers() },
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(48.dp),
+                                            colors = ButtonDefaults.buttonColors(
+                                                containerColor = AccentPrimary,
+                                                contentColor = Color.White
+                                            ),
+                                            shape = RoundedCornerShape(12.dp),
+                                            enabled = !uiState.isLoadingMore
+                                        ) {
+                                            if (uiState.isLoadingMore) {
+                                                CircularProgressIndicator(
+                                                    modifier = Modifier.size(20.dp),
+                                                    color = Color.White,
+                                                    strokeWidth = 2.dp
+                                                )
+                                                Spacer(modifier = Modifier.width(12.dp))
+                                                Text(
+                                                    text = "Loading...",
+                                                    fontSize = 14.sp,
+                                                    fontWeight = FontWeight.Medium
+                                                )
+                                            } else {
+                                                Icon(
+                                                    imageVector = Icons.Outlined.ExpandMore,
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(20.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text(
+                                                    text = "Load More Users",
+                                                    fontSize = 14.sp,
+                                                    fontWeight = FontWeight.Medium
+                                                )
+                                            }
+                                        }
                                     }
                                 }
-                            },
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = AccentPrimary,
-                                unfocusedBorderColor = DarkCardHover,
-                                cursorColor = AccentPrimary,
-                                focusedTextColor = TextPrimary,
-                                unfocusedTextColor = TextSecondary
-                            ),
-                            shape = RoundedCornerShape(12.dp),
-                            singleLine = true,
-                            textStyle = LocalTextStyle.current.copy(fontSize = 14.sp),
-                            keyboardOptions = KeyboardOptions(
-                                imeAction = ImeAction.Search
-                            )
-                        )
+                            }
 
-                        if (uiState.isLoading) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(200.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                CircularProgressIndicator(
-                                    color = AccentPrimary,
-                                    modifier = Modifier.size(40.dp),
-                                    strokeWidth = 3.dp
-                                )
-                            }
-                        } else if (filteredUsers.isEmpty()) {
-                            if (searchQuery.isNotBlank()) {
-                                EmptySearchView(searchQuery = searchQuery)
-                            } else {
-                                EmptyStateView()
-                            }
-                        } else {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .heightIn(max = 500.dp)
-                                    .verticalScroll(rememberScrollState()),
-                                verticalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                filteredUsers.forEach { user ->
-                                    WhitelistUserCard(
-                                        user = user,
-                                        onEdit = {
-                                            selectedUser = user
-                                            showEditDialog = true
-                                        },
-                                        onDelete = {
-                                            selectedUser = user
-                                            showDeleteDialog = true
-                                        },
-                                        onToggleStatus = { viewModel.toggleUserStatus(user) },
-                                        searchQuery = searchQuery
-                                    )
+                            // ✅ Info footer (total loaded)
+                            if (filteredUsers.isNotEmpty() && searchQuery.isBlank()) {
+                                item {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 12.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = if (uiState.hasMoreData) {
+                                                "Showing ${filteredUsers.size} users • Scroll for more"
+                                            } else {
+                                                "All ${filteredUsers.size} users loaded"
+                                            },
+                                            fontSize = 12.sp,
+                                            color = TextTertiary,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
                 }
-
-                MessageDisplay(
-                    error = uiState.error,
-                    success = uiState.successMessage,
-                    onDismissError = { viewModel.clearError() },
-                    onDismissSuccess = { viewModel.clearSuccessMessage() }
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
             }
+
+            MessageDisplay(
+                error = uiState.error,
+                success = uiState.successMessage,
+                onDismissError = { viewModel.clearError() },
+                onDismissSuccess = { viewModel.clearSuccessMessage() }
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
         }
     }
 
@@ -476,7 +591,7 @@ fun AdminScreen(
     if (showStatsDialog && selectedStatsFilter != null) {
         StatsDetailDialog(
             filterType = selectedStatsFilter!!,
-            users = uiState.whitelistUsers,
+            users = uiState.allUsersForStats,
             onDismiss = {
                 showStatsDialog = false
                 selectedStatsFilter = null
@@ -498,7 +613,7 @@ fun AdminScreen(
             }
         )
     }
-    
+
     if (showAdminManagement) {
         AdminManagementDialog(
             viewModel = viewModel,
@@ -529,9 +644,7 @@ fun AdminScreen(
             onValidateNumber = { number -> viewModel.validateWhatsappNumber(number) }
         )
     }
-
 }
-
 
 @Composable
 fun ImportWhitelistDialog(
@@ -857,8 +970,9 @@ private fun StatsDetailDialog(
     onDelete: (WhitelistUser) -> Unit,
     onToggleStatus: (WhitelistUser) -> Unit
 ) {
+    // ✅ Filter dan sort dari yang terbaru berdasarkan createdAt
     val filteredUsers = remember(filterType, users) {
-        when (filterType) {
+        val filtered = when (filterType) {
             StatsFilterType.TOTAL -> users
             StatsFilterType.ACTIVE -> users.filter { it.isActive }
             StatsFilterType.INACTIVE -> users.filter { !it.isActive }
@@ -867,6 +981,9 @@ private fun StatsDetailDialog(
                 users.filter { it.lastLogin > timeThreshold }
             }
         }
+
+        // ✅ Sort berdasarkan createdAt descending (terbaru dulu)
+        filtered.sortedByDescending { it.createdAt }
     }
 
     val (title, icon, color) = when (filterType) {
@@ -917,11 +1034,40 @@ private fun StatsDetailDialog(
                             fontWeight = FontWeight.Bold,
                             color = TextPrimary
                         )
-                        Text(
-                            text = "${filteredUsers.size} ${if (filteredUsers.size == 1) "user" else "users"}",
-                            fontSize = 13.sp,
-                            color = TextSecondary
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = "${filteredUsers.size} ${if (filteredUsers.size == 1) "user" else "users"}",
+                                fontSize = 13.sp,
+                                color = TextSecondary
+                            )
+                            // ✅ Indikator sorting
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = color.copy(alpha = 0.15f)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.ArrowDownward,
+                                        contentDescription = null,
+                                        tint = color,
+                                        modifier = Modifier.size(10.dp)
+                                    )
+                                    Text(
+                                        text = "Terbaru",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = color
+                                    )
+                                }
+                            }
+                        }
                     }
                     IconButton(
                         onClick = onDismiss,
@@ -966,14 +1112,16 @@ private fun StatsDetailDialog(
                         }
                     }
                 } else {
-                    Column(
+                    LazyColumn(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(max = 400.dp)
-                            .verticalScroll(rememberScrollState()),
+                            .weight(1f),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        filteredUsers.forEach { user ->
+                        items(
+                            items = filteredUsers,
+                            key = { it.id }
+                        ) { user ->
                             StatsUserCardWithActions(
                                 user = user,
                                 onEdit = { onEdit(user) },
@@ -1617,11 +1765,31 @@ private fun AdminHeader(
                             }
                         }
                     }
-                    Text(
-                        text = "$totalUsers ${if (totalUsers == 1) "user" else "users"} in whitelist",
-                        fontSize = 13.sp,
-                        color = TextSecondary
-                    )
+                    // ✅ NEW: Display berbeda berdasarkan role
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = "$totalUsers ${if (totalUsers == 1) "user" else "users"}",
+                            fontSize = 13.sp,
+                            color = TextSecondary
+                        )
+                        if (!isSuperAdmin) {
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = InfoColor.copy(alpha = 0.15f)
+                            ) {
+                                Text(
+                                    text = "added by you",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = InfoColor,
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                    }
                 }
             }
 
@@ -1657,7 +1825,8 @@ private fun AdminHeader(
 @Composable
 private fun AdminStatsRow(
     users: List<WhitelistUser>,
-    onStatsClick: (StatsFilterType) -> Unit
+    onStatsClick: (StatsFilterType) -> Unit,
+    isSuperAdmin: Boolean
 ) {
     val activeUsers = users.count { it.isActive }
     val inactiveUsers = users.size - activeUsers
@@ -1693,14 +1862,16 @@ private fun AdminStatsRow(
             modifier = Modifier.weight(1f),
             onClick = { onStatsClick(StatsFilterType.INACTIVE) }
         )
-        StatsCard(
-            icon = Icons.Outlined.Schedule,
-            value = recentLogins.toString(),
-            label = "Recent",
-            color = WarningColor,
-            modifier = Modifier.weight(1f),
-            onClick = { onStatsClick(StatsFilterType.RECENT) }
-        )
+        if (isSuperAdmin) {
+            StatsCard(
+                icon = Icons.Outlined.Schedule,
+                value = recentLogins.toString(),
+                label = "Recent",
+                color = WarningColor,
+                modifier = Modifier.weight(1f),
+                onClick = { onStatsClick(StatsFilterType.RECENT) }
+            )
+        }
     }
 }
 
@@ -1759,6 +1930,21 @@ private fun WhitelistUserCard(
     onToggleStatus: () -> Unit,
     searchQuery: String = ""
 ) {
+    // ✅ Cache expensive calculations
+    val formattedCreatedDate = remember(user.createdAt) {
+        SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date(user.createdAt))
+    }
+
+    val formattedAddedDate = remember(user.addedAt) {
+        if (user.addedAt > 0) {
+            SimpleDateFormat("dd/MM/yy", Locale.getDefault()).format(Date(user.addedAt))
+        } else ""
+    }
+
+    val statusColor = remember(user.isActive) {
+        if (user.isActive) SuccessColor else ErrorColor
+    }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -1779,8 +1965,7 @@ private fun WhitelistUserCard(
                     modifier = Modifier
                         .size(40.dp)
                         .background(
-                            if (user.isActive) SuccessColor.copy(alpha = 0.15f)
-                            else ErrorColor.copy(alpha = 0.15f),
+                            statusColor.copy(alpha = 0.15f),
                             CircleShape
                         ),
                     contentAlignment = Alignment.Center
@@ -1788,7 +1973,7 @@ private fun WhitelistUserCard(
                     Icon(
                         imageVector = Icons.Default.Person,
                         contentDescription = null,
-                        tint = if (user.isActive) SuccessColor else ErrorColor,
+                        tint = statusColor,
                         modifier = Modifier.size(20.dp)
                     )
                 }
@@ -1797,23 +1982,28 @@ private fun WhitelistUserCard(
 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "${user.name.take(12)}...",
+                        text = user.name,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = TextPrimary,
                         maxLines = 1,
-                        )
+                        overflow = TextOverflow.Ellipsis
+                    )
+
                     Text(
-                        text = "${user.email.take(17)}...",
+                        text = user.email,
                         fontSize = 13.sp,
                         color = TextSecondary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
+
                     Text(
                         text = "ID: ${user.userId}",
                         fontSize = 11.sp,
-                        color = TextTertiary
+                        color = TextTertiary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
@@ -1842,7 +2032,7 @@ private fun WhitelistUserCard(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Created: ${SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date(user.createdAt))}",
+                        text = "Created: $formattedCreatedDate", // ✅ Use cached value
                         fontSize = 11.sp,
                         color = TextTertiary
                     )
@@ -1903,9 +2093,9 @@ private fun WhitelistUserCard(
                                 overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.weight(1f)
                             )
-                            if (user.addedAt > 0) {
+                            if (formattedAddedDate.isNotEmpty()) {
                                 Text(
-                                    text = SimpleDateFormat("dd/MM/yy", Locale.getDefault()).format(Date(user.addedAt)),
+                                    text = formattedAddedDate, // ✅ Use cached value
                                     fontSize = 10.sp,
                                     color = TextTertiary
                                 )

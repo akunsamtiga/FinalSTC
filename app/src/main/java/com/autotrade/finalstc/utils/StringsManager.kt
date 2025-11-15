@@ -1076,14 +1076,14 @@ object StringsManager {
     }
 
     fun getMaxSteps(lang: String) = when(lang) {
-        "id" -> "Langkah Maks"
+        "id" -> "Kompensasi"
         "en" -> "Max Steps"
         "es" -> "Pasos Máximos"
         "vi" -> "Số Bước Tối Đa"
         "tr" -> "Maksimum Adım"
         "hi" -> "अधिकतम कदम"
-        "ms" -> "Langkah Maksimum"
-        else -> "Langkah Maks"
+        "ms" -> "Kompensasi"
+        else -> "Kompensasi Maks"
     }
 
     fun getSettings(lang: String) = when(lang) {

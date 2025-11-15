@@ -3,10 +3,15 @@ package com.autotrade.finalstc.presentation.main.dashboard
 import android.graphics.Color
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
@@ -24,7 +29,12 @@ import kotlinx.coroutines.delay
 import kotlin.random.Random
 
 @Composable
-fun TradingLineChart(selectedAsset: Asset?, colors: DashboardColors) {
+fun TradingLineChart(
+    selectedAsset: Asset?,
+    colors: DashboardColors,
+    onAssetClick: () -> Unit = {},
+    isBotRunning: Boolean = false  // ✅ TAMBAHKAN PARAMETER INI
+) {
     var entries by remember { mutableStateOf(generateInitialData(100)) }
     var timeStep by remember { mutableStateOf(entries.size) }
 
@@ -49,7 +59,7 @@ fun TradingLineChart(selectedAsset: Asset?, colors: DashboardColors) {
         colors = CardDefaults.cardColors(containerColor = androidx.compose.ui.graphics.Color.Transparent),
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 8.dp)
+            .padding(top = 8.dp)
             .shadow(
                 elevation = 12.dp,
                 shape = RoundedCornerShape(16.dp),
@@ -76,12 +86,57 @@ fun TradingLineChart(selectedAsset: Asset?, colors: DashboardColors) {
             )
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
-            Text(
-                text = selectedAsset?.let { "${it.name} (${it.ric})" } ?: "No Asset Selected",
-                style = MaterialTheme.typography.titleSmall,
-                color = colors.textPrimary,
-                modifier = Modifier.padding(start = 10.dp, end = 10.dp, top = 12.dp, bottom = 8.dp)
-            )
+            // ✅ Asset Header dengan kondisi disable saat bot running
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .padding(top = 2.dp)
+                    .then(
+                        if (!isBotRunning) {
+                            Modifier.clickable {
+                                println("🔥 Asset header clicked!")
+                                onAssetClick()
+                            }
+                        } else {
+                            Modifier  // No clickable when bot is running
+                        }
+                    ),
+                color = if (isBotRunning)
+                    colors.surface.copy(alpha = 0.2f)  // Lebih redup saat disabled
+                else
+                    colors.surface.copy(alpha = 0.3f),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = selectedAsset?.let { "${it.name} (${it.ric})" } ?: "No Asset Selected",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = if (isBotRunning)
+                            colors.textPrimary.copy(alpha = 0.5f)  // Text redup saat disabled
+                        else
+                            colors.textPrimary,
+                        modifier = Modifier.weight(1f),
+                        maxLines = 1
+                    )
+
+                    Icon(
+                        imageVector = Icons.Default.ArrowDropDown,
+                        contentDescription = if (isBotRunning) "Asset selection disabled" else "Select Asset",
+                        tint = if (isBotRunning)
+                            colors.textPrimary.copy(alpha = 0.3f)  // Icon redup saat disabled
+                        else
+                            colors.textPrimary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
 
             AndroidView(
                 factory = { context ->

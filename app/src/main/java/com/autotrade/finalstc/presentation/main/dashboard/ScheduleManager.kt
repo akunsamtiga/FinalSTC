@@ -31,12 +31,33 @@ class ScheduleManager(
     private val COMPLETION_CHECK_INTERVAL = 5000L
     private val COMPLETION_CONFIRMATION_DELAY = 3000L
 
-    private val EXECUTION_ADVANCE_SECONDS = 0L
-    private val PRECISION_CHECK_INTERVAL_MS = 50L
-    private val MIN_PREP_TIME_SECONDS = 10L
-    private val EXECUTION_WINDOW_MS = 2000L
+    // ========================================
+    // 🔥 TIMING PRECISION CONFIGURATION
+    // ========================================
 
-    private val PRE_WARM_SECONDS = 8L
+    /**
+     * EXECUTION_ADVANCE_SECONDS: Eksekusi order SEBELUM waktu jadwal
+     *
+     * Kenapa butuh advance?
+     * 1. Processing time: 10-50ms untuk prepare request
+     * 2. Network latency: 50-200ms untuk kirim ke server
+     * 3. Server processing: 50-100ms untuk queue trade
+     *
+     * Nilai yang disarankan:
+     * - 1L = Eksekusi 1 detik sebelum jadwal (untuk koneksi cepat)
+     * - 2L = Eksekusi 2 detik sebelum jadwal (RECOMMENDED - paling stabil)
+     * - 3L = Eksekusi 3 detik sebelum jadwal (untuk koneksi lambat)
+     *
+     * CATATAN: Server akan menjadwalkan trade untuk dimulai TEPAT pada waktu target
+     */
+    private val EXECUTION_ADVANCE_SECONDS = 2L  // ✅ CHANGED FROM 0L TO 2L
+
+    private val PRECISION_CHECK_INTERVAL_MS = 50L  // Check setiap 50ms
+    private val MIN_PREP_TIME_SECONDS = 10L  // Minimal 10 detik persiapan
+    private val EXECUTION_WINDOW_MS = 2000L  // Window 2 detik untuk eksekusi
+
+    // Pre-warming configuration
+    private val PRE_WARM_SECONDS = 8L  // Pre-warm 8 detik sebelum eksekusi
     private val PRE_WARM_CHECK_INTERVAL_MS = 100L
     private val PRE_WARM_WEBSOCKET_DELAY_MS = 500L
 
@@ -44,6 +65,21 @@ class ScheduleManager(
     private var preWarmStartTime = 0L
     private var preWarmTargetTime = 0L
     private var preWarmOrderId: String? = null
+
+    // ========================================
+    // 🎯 TIMING METRICS
+    // ========================================
+
+    private data class ExecutionMetrics(
+        val scheduledTime: Long,
+        val executionTime: Long,
+        val advanceMs: Long,
+        val accuracyMs: Long,
+        val isOnTime: Boolean
+    )
+
+    private val executionHistory = mutableListOf<ExecutionMetrics>()
+    private val MAX_HISTORY_SIZE = 20
 
     fun addScheduledOrders(input: String): Result<String> {
         return try {
@@ -77,7 +113,6 @@ class ScheduleManager(
             onScheduledOrdersUpdate(scheduledOrders.toList())
 
             saveScheduledOrdersToStorage()
-
             scheduleNextPreWarming()
 
             val message = "Jadwal ditambahkan: ${nonDuplicateOrders.size} valid, " +
@@ -156,7 +191,17 @@ class ScheduleManager(
     fun startBot() {
         if (botState == BotState.RUNNING) return
         botState = BotState.RUNNING
-        println("ScheduleManager: Bot started with EXECUTION_ADVANCE = ${EXECUTION_ADVANCE_SECONDS}s")
+
+        println("=" .repeat(60))
+        println("🚀 SCHEDULE MANAGER STARTED")
+        println("=" .repeat(60))
+        println("⏰ Timing Configuration:")
+        println("   • Execution Advance: ${EXECUTION_ADVANCE_SECONDS}s BEFORE schedule")
+        println("   • Check Interval: ${PRECISION_CHECK_INTERVAL_MS}ms (ultra-precise)")
+        println("   • Execution Window: ${EXECUTION_WINDOW_MS}ms")
+        println("   • Pre-warm: ${PRE_WARM_SECONDS}s before execution")
+        println("=" .repeat(60))
+
         startUltraPrecisionMonitoring()
         startCompletionMonitoring()
         scheduleNextPreWarming()
@@ -168,11 +213,16 @@ class ScheduleManager(
         stopMonitoring()
         stopCompletionMonitoring()
         stopPreWarming()
+
+        println("⏸️  Schedule Manager PAUSED")
     }
 
     fun resumeBot() {
         if (botState != BotState.PAUSED) return
         botState = BotState.RUNNING
+
+        println("▶️  Schedule Manager RESUMED")
+
         startUltraPrecisionMonitoring()
         startCompletionMonitoring()
         scheduleNextPreWarming()
@@ -184,6 +234,8 @@ class ScheduleManager(
         stopMonitoring()
         stopCompletionMonitoring()
         stopPreWarming()
+
+        println("⏹️  Schedule Manager STOPPED")
     }
 
     private fun scheduleNextPreWarming() {
@@ -218,13 +270,9 @@ class ScheduleManager(
         preWarmTargetTime = executionTime
         preWarmOrderId = order.id
 
-        val advanceInfo = if (EXECUTION_ADVANCE_SECONDS > 0) {
-            " (${EXECUTION_ADVANCE_SECONDS}s advance)"
-        } else {
-            " (exact timing)"
-        }
+        val advanceInfo = "Advance: ${EXECUTION_ADVANCE_SECONDS}s before schedule"
 
-        println("PRE-WARMING: Order ${order.time} - ${PRE_WARM_SECONDS}s before execution$advanceInfo")
+        println("🔥 PRE-WARMING: Order ${order.time} - ${PRE_WARM_SECONDS}s before execution ($advanceInfo)")
 
         preWarmWebSocketConnection()
 
@@ -255,7 +303,7 @@ class ScheduleManager(
     private fun preWarmWebSocketConnection() {
         scope.launch {
             delay(PRE_WARM_WEBSOCKET_DELAY_MS)
-            println("WebSocket connection pre-warmed and ready")
+            println("   ✅ WebSocket connection pre-warmed and ready")
         }
     }
 
@@ -321,6 +369,10 @@ class ScheduleManager(
         }
     }
 
+    // ========================================
+    // 🎯 ULTRA PRECISION MONITORING
+    // ========================================
+
     private fun startUltraPrecisionMonitoring() {
         stopMonitoring()
 
@@ -332,6 +384,7 @@ class ScheduleManager(
 
                     scheduledOrders.forEachIndexed { index, order ->
                         if (!order.isExecuted && !order.isSkipped) {
+                            // ✅ CALCULATE EXECUTION TIME WITH ADVANCE
                             val executionTime = when {
                                 activeMartingaleOrderId != null -> order.timeInMillis
                                 else -> order.timeInMillis - (EXECUTION_ADVANCE_SECONDS * 1000)
@@ -339,14 +392,17 @@ class ScheduleManager(
 
                             val timeUntilExecution = executionTime - currentTime
 
+                            // 📊 DETAILED LOGGING FOR TIMING
                             if (timeUntilExecution in -2000..5000) {
-                                println("Order ${order.time} ${order.trend.uppercase()}:")
-                                println("   Time until execution: ${timeUntilExecution}ms")
-                                println("   Scheduled at: ${order.timeInMillis}")
-                                println("   Execution advance: ${EXECUTION_ADVANCE_SECONDS}s")
-                                println("   Will execute at: $executionTime")
+                                println("⏰ Order ${order.time} ${order.trend.uppercase()}:")
+                                println("   • Scheduled at: ${order.timeInMillis} (${formatTime(order.timeInMillis)})")
+                                println("   • Execution advance: ${EXECUTION_ADVANCE_SECONDS}s")
+                                println("   • Will execute at: $executionTime (${formatTime(executionTime)})")
+                                println("   • Time until execution: ${timeUntilExecution}ms")
+                                println("   • Current time: $currentTime (${formatTime(currentTime)})")
                             }
 
+                            // ✅ EXECUTE WHEN TIME COMES (with advance applied)
                             if (timeUntilExecution <= 0 && timeUntilExecution >= -EXECUTION_WINDOW_MS) {
                                 if (shouldSkipDueToMartingale(order)) {
                                     scheduledOrders[index] = order.copy(
@@ -359,24 +415,44 @@ class ScheduleManager(
                                         stopPreWarming()
                                     }
 
+                                    // 📊 EXECUTION METRICS
                                     val actualExecutionTime = System.currentTimeMillis()
                                     val scheduledTime = order.timeInMillis
+                                    val advanceMs = (EXECUTION_ADVANCE_SECONDS * 1000)
                                     val differenceMs = actualExecutionTime - scheduledTime
-                                    val differenceSign = if (differenceMs < 0) "EARLY" else "LATE"
+                                    val absoluteDiff = kotlin.math.abs(differenceMs + advanceMs)
 
-                                    println("EXECUTING ORDER: ${order.time} ${order.trend.uppercase()}")
-                                    println("   Scheduled time: $scheduledTime")
-                                    println("   Actual time: $actualExecutionTime")
-                                    println("   Difference: ${kotlin.math.abs(differenceMs)}ms $differenceSign")
-                                    println("   Advance setting: ${EXECUTION_ADVANCE_SECONDS}s")
+                                    println("=" .repeat(60))
+                                    println("🚀 EXECUTING ORDER: ${order.time} ${order.trend.uppercase()}")
+                                    println("=" .repeat(60))
+                                    println("⏰ TIMING ANALYSIS:")
+                                    println("   • Scheduled time: $scheduledTime (${formatTime(scheduledTime)})")
+                                    println("   • Actual exec time: $actualExecutionTime (${formatTime(actualExecutionTime)})")
+                                    println("   • Advance setting: ${EXECUTION_ADVANCE_SECONDS}s (${advanceMs}ms)")
+                                    println("   • Raw difference: ${differenceMs}ms")
+                                    println("   • Accuracy: ${absoluteDiff}ms from target")
+                                    println("")
 
-                                    if (kotlin.math.abs(differenceMs) <= 1000) {
-                                        println("   TIMING: Excellent (within 1 second)")
-                                    } else if (kotlin.math.abs(differenceMs) <= 3000) {
-                                        println("   TIMING: Acceptable (within 3 seconds)")
-                                    } else {
-                                        println("   TIMING: Poor (over 3 seconds difference)")
+                                    // ✅ TIMING QUALITY ASSESSMENT
+                                    val quality = when {
+                                        absoluteDiff <= 500 -> "🟢 EXCELLENT (within 500ms)"
+                                        absoluteDiff <= 1000 -> "🟡 GOOD (within 1 second)"
+                                        absoluteDiff <= 2000 -> "🟠 ACCEPTABLE (within 2 seconds)"
+                                        else -> "🔴 NEEDS IMPROVEMENT (over 2 seconds)"
                                     }
+                                    println("   📊 Quality: $quality")
+
+                                    // Store metrics
+                                    val metrics = ExecutionMetrics(
+                                        scheduledTime = scheduledTime,
+                                        executionTime = actualExecutionTime,
+                                        advanceMs = advanceMs,
+                                        accuracyMs = absoluteDiff,
+                                        isOnTime = absoluteDiff <= 1000
+                                    )
+                                    addExecutionMetrics(metrics)
+
+                                    println("=" .repeat(60))
 
                                     executeScheduledOrderPrecise(order)
                                     scheduledOrders[index] = order.copy(isExecuted = true)
@@ -387,6 +463,7 @@ class ScheduleManager(
                         }
                     }
 
+                    // Cleanup old executed orders
                     val twoHoursAgo = currentTime - (2 * 60 * 60 * 1000)
                     val sizeBefore = scheduledOrders.size
                     scheduledOrders.removeAll { order ->
@@ -405,7 +482,7 @@ class ScheduleManager(
                     delay(PRECISION_CHECK_INTERVAL_MS)
 
                 } catch (e: Exception) {
-                    println("Error in precision monitoring: ${e.message}")
+                    println("❌ Error in precision monitoring: ${e.message}")
                     delay(1000)
                 }
             }
@@ -418,6 +495,65 @@ class ScheduleManager(
 
     private fun executeScheduledOrderPrecise(order: ScheduledOrder) {
         onExecuteScheduledTrade(order.trend, order.id)
+    }
+
+    // ========================================
+    // 📊 EXECUTION METRICS
+    // ========================================
+
+    private fun addExecutionMetrics(metrics: ExecutionMetrics) {
+        executionHistory.add(metrics)
+        if (executionHistory.size > MAX_HISTORY_SIZE) {
+            executionHistory.removeAt(0)
+        }
+    }
+
+    fun getExecutionMetrics(): Map<String, Any> {
+        if (executionHistory.isEmpty()) {
+            return mapOf(
+                "total_executions" to 0,
+                "message" to "No executions yet"
+            )
+        }
+
+        val onTimeCount = executionHistory.count { it.isOnTime }
+        val averageAccuracy = executionHistory.map { it.accuracyMs }.average()
+        val bestAccuracy = executionHistory.minOf { it.accuracyMs }
+        val worstAccuracy = executionHistory.maxOf { it.accuracyMs }
+
+        return mapOf(
+            "total_executions" to executionHistory.size,
+            "on_time_executions" to onTimeCount,
+            "on_time_percentage" to String.format("%.1f%%", (onTimeCount.toDouble() / executionHistory.size) * 100),
+            "average_accuracy_ms" to String.format("%.0f", averageAccuracy),
+            "best_accuracy_ms" to bestAccuracy,
+            "worst_accuracy_ms" to worstAccuracy,
+            "execution_advance_seconds" to EXECUTION_ADVANCE_SECONDS,
+            "recent_executions" to executionHistory.takeLast(5).map { metrics ->
+                mapOf(
+                    "scheduled_time" to formatTime(metrics.scheduledTime),
+                    "execution_time" to formatTime(metrics.executionTime),
+                    "accuracy_ms" to metrics.accuracyMs,
+                    "is_on_time" to metrics.isOnTime
+                )
+            }
+        )
+    }
+
+    // ========================================
+    // 🛠️ HELPER FUNCTIONS
+    // ========================================
+
+    private fun formatTime(timeMillis: Long): String {
+        val calendar = Calendar.getInstance()
+        calendar.timeInMillis = timeMillis
+        return String.format(
+            "%02d:%02d:%02d.%03d",
+            calendar.get(Calendar.HOUR_OF_DAY),
+            calendar.get(Calendar.MINUTE),
+            calendar.get(Calendar.SECOND),
+            calendar.get(Calendar.MILLISECOND)
+        )
     }
 
     fun skipOrder(orderId: String, reason: String) {
@@ -557,9 +693,7 @@ class ScheduleManager(
             }
 
             onScheduledOrdersUpdate(scheduledOrders.toList())
-
             saveScheduledOrdersToStorage()
-
             scheduleNextPreWarming()
         }
 
@@ -577,9 +711,7 @@ class ScheduleManager(
         if (hadOrders) {
             stopBot()
             onScheduledOrdersUpdate(emptyList())
-
             sessionManager.clearScheduledOrders()
-
             onAllSchedulesCompleted()
         }
     }
@@ -645,11 +777,17 @@ class ScheduleManager(
         return mapOf(
             "precision_check_ms" to PRECISION_CHECK_INTERVAL_MS,
             "execution_advance_seconds" to EXECUTION_ADVANCE_SECONDS,
-            "execution_mode" to if (EXECUTION_ADVANCE_SECONDS == 0L) "EXACT_TIMING" else "ADVANCED_TIMING",
+            "execution_mode" to when (EXECUTION_ADVANCE_SECONDS) {
+                0L -> "EXACT_TIMING (⚠️ May be late)"
+                1L -> "EARLY_1S (Good for fast connection)"
+                2L -> "EARLY_2S (Recommended - most stable)"
+                else -> "EARLY_${EXECUTION_ADVANCE_SECONDS}S (Custom)"
+            },
             "pre_warm_seconds" to PRE_WARM_SECONDS,
             "execution_window_ms" to EXECUTION_WINDOW_MS,
             "min_prep_time_seconds" to MIN_PREP_TIME_SECONDS,
-            "timing_accuracy" to "HIGH_PRECISION"
+            "timing_accuracy" to "HIGH_PRECISION",
+            "advance_explanation" to "Orders execute ${EXECUTION_ADVANCE_SECONDS}s BEFORE scheduled time to compensate for network latency"
         )
     }
 
@@ -665,6 +803,7 @@ class ScheduleManager(
         scheduledOrders.clear()
         activeMartingaleOrderId = null
         lastCompletionCheck = 0L
+        executionHistory.clear()
     }
 
     private fun saveScheduledOrdersToStorage() {

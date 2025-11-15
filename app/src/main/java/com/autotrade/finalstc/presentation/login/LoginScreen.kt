@@ -103,17 +103,17 @@ fun LoginScreen(
                         modifier = Modifier.size(180.dp)
                     )
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(2.dp))
 
                     Text(
                         text = StringsManager.getLoginTitle(lang),
-                        fontSize = 28.sp,
+                        fontSize = 22.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = Color(0xFF202124),
                         textAlign = TextAlign.Center
                     )
 
-                    Spacer(modifier = Modifier.height(32.dp))
+                    Spacer(modifier = Modifier.height(28.dp))
 
                     OutlinedTextField(
                         value = uiState.email,
@@ -231,13 +231,14 @@ fun LoginScreen(
 
                     Spacer(modifier = Modifier.height(4.dp))
 
+                    // ✅ LOADING INFO CARD dengan corner radius 12.dp
                     if (uiState.isLoading) {
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             colors = CardDefaults.cardColors(
                                 containerColor = Color(0xFFE3F2FD)
                             ),
-                            shape = RoundedCornerShape(8.dp)
+                            shape = RoundedCornerShape(12.dp)
                         ) {
                             Row(
                                 modifier = Modifier.padding(12.dp),
@@ -267,6 +268,7 @@ fun LoginScreen(
                         Spacer(modifier = Modifier.height(20.dp))
                     }
 
+                    // ✅ ERROR INFO CARD dengan corner radius 12.dp
                     uiState.errorMessage?.let { error ->
                         Card(
                             modifier = Modifier.fillMaxWidth(),
@@ -276,7 +278,7 @@ fun LoginScreen(
                                 else
                                     Color(0xFFFCE8E6)
                             ),
-                            shape = RoundedCornerShape(8.dp)
+                            shape = RoundedCornerShape(12.dp)
                         ) {
                             Row(
                                 modifier = Modifier.padding(12.dp),
@@ -403,99 +405,116 @@ fun LoginScreen(
 
                     Spacer(modifier = Modifier.height(24.dp))
 
-                    OutlinedButton(
-                        onClick = {
-                            val waNumber = viewModel.whatsappNumber.value
-                            val waUrl = "https://wa.me/$waNumber"
-                            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
-                                data = android.net.Uri.parse(waUrl)
-                            }
-                            context.startActivity(intent)
-                        },
+                    // ✅ TOMBOL BUTUH BANTUAN (70%) DAN PILIH BAHASA (30%)
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(48.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = Color(0xFF2D8A15)
-                        ),
-                        border = androidx.compose.foundation.BorderStroke(
-                            1.dp,
-                            Color(0xFF2D8A15)
-                        ),
-                        shape = RoundedCornerShape(24.dp)
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Text(
-                            text = StringsManager.getNeedHelp(lang),
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    OutlinedButton(
-                        onClick = { viewModel.showLanguageDialog(true) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(48.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = Color(0xFF5F6368)
-                        ),
-                        border = androidx.compose.foundation.BorderStroke(
-                            1.dp,
-                            Color(0xFFDADCE0)
-                        ),
-                        shape = RoundedCornerShape(24.dp)
-                    ) {
-                        Text(
-                            text = when(currentCountry) {
-                                "ID" -> "🇮🇩"
-                                "NG" -> "🇳🇬"
-                                "PH" -> "🇵🇭"
-                                "ZA" -> "🇿🇦"
-                                "KE" -> "🇰🇪"
-                                "GB" -> "🇬🇧"
-                                "UA" -> "🇺🇦"
-                                "MX" -> "🇲🇽"
-                                "CL" -> "🇨🇱"
-                                "CO" -> "🇨🇴"
-                                "CR" -> "🇨🇷"
-                                "DO" -> "🇩🇴"
-                                "EC" -> "🇪🇨"
-                                "SV" -> "🇸🇻"
-                                "GT" -> "🇬🇹"
-                                "HN" -> "🇭🇳"
-                                "PA" -> "🇵🇦"
-                                "PY" -> "🇵🇾"
-                                "PE" -> "🇵🇪"
-                                "UY" -> "🇺🇾"
-                                "VE" -> "🇻🇪"
-                                "BR" -> "🇧🇷"
-                                "VN" -> "🇻🇳"
-                                "LA" -> "🇱🇦"
-                                "TH" -> "🇹🇭"
-                                "TR" -> "🇹🇷"
-                                "IN" -> "🇮🇳"
-                                "MY" -> "🇲🇾"
-                                else -> "🌐"
+                        // Tombol Butuh Bantuan (70%)
+                        OutlinedButton(
+                            onClick = {
+                                val waNumber = viewModel.whatsappNumber.value
+                                val waUrl = "https://wa.me/$waNumber"
+                                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                                    data = android.net.Uri.parse(waUrl)
+                                }
+                                context.startActivity(intent)
                             },
-                            fontSize = 20.sp,
-                            modifier = Modifier.padding(end = 8.dp)
-                        )
-                        Text(
-                            text = when(lang) {
-                                "id" -> "Bahasa Indonesia"
-                                "en" -> "English"
-                                "es" -> "Español"
-                                "vi" -> "Tiếng Việt"
-                                "tr" -> "Türkçe"
-                                "hi" -> "हिन्दी"
-                                "ms" -> "Bahasa Melayu"
-                                else -> "Language"
-                            },
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Medium
-                        )
+                            modifier = Modifier
+                                .weight(0.7f)
+                                .fillMaxHeight(),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = Color(0xFF2D8A15)
+                            ),
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                Color(0xFF2D8A15)
+                            ),
+                            shape = RoundedCornerShape(24.dp)
+                        ) {
+                            Text(
+                                text = StringsManager.getNeedHelp(lang),
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1
+                            )
+                        }
+
+                        // Tombol Pilih Bahasa (30%)
+                        OutlinedButton(
+                            onClick = { viewModel.showLanguageDialog(true) },
+                            modifier = Modifier
+                                .weight(0.3f)
+                                .fillMaxHeight(),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = Color(0xFF000000)
+                            ),
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                Color(0xFF000000)
+                            ),
+                            shape = RoundedCornerShape(24.dp),
+                            contentPadding = PaddingValues(horizontal = 8.dp)
+                        ) {
+                            Text(
+                                text = when(currentCountry) {
+                                    "ID" -> "🇮🇩"
+
+                                    "IN" -> "🇮🇳"
+                                    "BR" -> "🇧🇷"
+                                    "MX" -> "🇲🇽"
+                                    "CO" -> "🇨🇴"
+                                    "CL" -> "🇨🇱"
+                                    "PE" -> "🇵🇪"
+                                    "VE" -> "🇻🇪"
+                                    "EC" -> "🇪🇨"
+                                    "UY" -> "🇺🇾"
+                                    "PY" -> "🇵🇾"
+                                    "DO" -> "🇩🇴"
+                                    "SV" -> "🇸🇻"
+                                    "GT" -> "🇬🇹"
+                                    "HN" -> "🇭🇳"
+                                    "PA" -> "🇵🇦"
+                                    "CR" -> "🇨🇷"
+
+                                    // Bahasa menengah
+                                    "VN" -> "🇻🇳"
+                                    "TH" -> "🇹🇭"
+                                    "GB" -> "🇬🇧"
+                                    "NG" -> "🇳🇬"
+                                    "ZA" -> "🇿🇦"
+                                    "KE" -> "🇰🇪"
+                                    "PH" -> "🇵🇭"
+
+                                    // Bahasa pengguna lebih sedikit
+                                    "UA" -> "🇺🇦"
+                                    "LA" -> "🇱🇦"
+                                    "TR" -> "🇹🇷"
+                                    "MY" -> "🇲🇾"
+
+                                    else -> "🌐"
+                                },
+                                fontSize = 16.sp,
+                                modifier = Modifier.padding(end = 4.dp)
+                            )
+                            Text(
+                                text = when(lang) {
+                                    "id" -> "ID"
+                                    "en" -> "EN"
+                                    "es" -> "ES"
+                                    "vi" -> "VI"
+                                    "tr" -> "TR"
+                                    "hi" -> "HI"
+                                    "ms" -> "MS"
+                                    else -> "ID"
+                                },
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1
+                            )
+                        }
                     }
                 }
             }

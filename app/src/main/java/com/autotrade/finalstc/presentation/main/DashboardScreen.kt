@@ -1,5 +1,6 @@
 package com.autotrade.finalstc.presentation.main.dashboard
 
+import android.util.Log
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
@@ -29,6 +30,7 @@ import kotlinx.coroutines.delay
 import java.text.*
 import java.util.*
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -58,6 +60,7 @@ import kotlinx.coroutines.delay
 import com.autotrade.finalstc.data.local.LanguageManager
 import com.autotrade.finalstc.utils.StringsManager
 import kotlinx.coroutines.launch
+import kotlin.math.abs
 
 data class DashboardTheme(
     val isDarkMode: Boolean = true
@@ -468,6 +471,10 @@ fun DashboardScreen(
     val dashboardTheme by themeViewModel.currentTheme.collectAsStateWithLifecycle()
     val colors = dashboardTheme.colors
 
+    // ✅ TAMBAH WHITELIST CHECK STATE
+    val whitelistCheckState by dashboardViewModel.whitelistCheckState.collectAsStateWithLifecycle()
+
+    val multiMomentumOrders by dashboardViewModel.multiMomentumOrders.collectAsStateWithLifecycle()
     val uiState by dashboardViewModel.uiState.collectAsStateWithLifecycle()
     val assets by dashboardViewModel.assets.collectAsStateWithLifecycle()
     val tradeResults by dashboardViewModel.tradeResults.collectAsStateWithLifecycle()
@@ -476,14 +483,10 @@ fun DashboardScreen(
     val followOrders by dashboardViewModel.followOrders.collectAsStateWithLifecycle()
     val indicatorOrders by dashboardViewModel.indicatorOrders.collectAsStateWithLifecycle()
     val localTradingStats by dashboardViewModel.localTradingStats.collectAsStateWithLifecycle()
-
     val indicatorPredictionInfo by dashboardViewModel.indicatorPredictionInfo.collectAsStateWithLifecycle()
-
     val todayProfit by dashboardViewModel.todayProfit.collectAsStateWithLifecycle()
     val isCalculatingTodayProfit by dashboardViewModel.isCalculatingTodayProfit.collectAsStateWithLifecycle()
-
     val ctcOrders by dashboardViewModel.ctcOrders.collectAsStateWithLifecycle()
-
     val currentLanguage by dashboardViewModel.currentLanguage.collectAsStateWithLifecycle()
 
     var showAssetDialog by remember { mutableStateOf(false) }
@@ -527,242 +530,444 @@ fun DashboardScreen(
         }
     }
 
+    // ✅ GANTI BOX DENGAN WHEN STATEMENT
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(colors.darkBackground)
     ) {
+        when (val state = whitelistCheckState) {
+            is WhitelistCheckState.Checking -> {
+                WhitelistCheckingScreen(colors = colors)
+            }
+
+            is WhitelistCheckState.Failed -> {
+                WhitelistFailedScreen(
+                    reason = state.reason,
+                    message = state.message,
+                    onRetry = { dashboardViewModel.retryWhitelistCheck() },
+                    onLogout = {
+                        viewModel.logout()
+                        onLogout()
+                    },
+                    colors = colors,
+                    viewModel = dashboardViewModel // ✅ TAMBAH INI
+                )
+            }
+
+            is WhitelistCheckState.Verified -> {
+                // ✅ CONTENT LAMA PINDAH KE SINI
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(scrollState)
+                ) {
+                    HeaderSection(
+                        isConnected = uiState.isWebSocketConnected,
+                        connectionStatus = uiState.connectionStatus,
+                        isDarkMode = dashboardTheme.isDarkMode,
+                        colors = colors,
+                        onForceReconnect = dashboardViewModel::forceReconnectWebSocket
+                    )
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                    ) {
+                        EnhancedStatisticsRow(
+                            todayProfit = todayProfit,
+                            isLoading = uiState.isLoading,
+                            isCalculating = isCalculatingTodayProfit,
+                            isRefreshing = dashboardViewModel.isRefreshing.collectAsStateWithLifecycle().value,
+                            isDemoAccount = uiState.isDemoAccount,
+                            currentLanguage = currentLanguage,
+                            onRefreshTodayProfit = dashboardViewModel::refreshTodayProfit,
+                            onForceRecalculate = dashboardViewModel::forceRecalculateTodayProfit,
+                            colors = colors,
+                            currentCurrency = uiState.currencySettings.selectedCurrency
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            AssetAndClockCard(
+                                modifier = Modifier.weight(0.7f),
+                                selectedAsset = uiState.selectedAsset,
+                                canModify = uiState.canModifySettings(),
+                                onAddAsset = { showAssetDialog = true },
+                                isLoading = uiState.isLoading,
+                                isDemoAccount = uiState.isDemoAccount,
+                                localStats = localTradingStats,
+                                isStatsLoading = false,
+                                colors = colors,
+                                currentLanguage = currentLanguage,
+                                isBotRunning = (
+                                        uiState.botState == BotState.RUNNING ||
+                                                uiState.isFollowModeActive ||
+                                                uiState.isIndicatorModeActive ||
+                                                uiState.isCTCModeActive ||
+                                                uiState.isMultiMomentumModeActive
+                                        )
+                            )
+
+                            TradingModeCard(
+                                modifier = Modifier.weight(0.3f),
+                                scheduleInput = uiState.scheduleInput,
+                                scheduledOrders = scheduledOrders,
+                                canModify = uiState.canModifySettings(),
+                                botState = uiState.botState,
+                                canStartBot = uiState.canStartBot(),
+                                onScheduleInputChange = dashboardViewModel::updateScheduleInput,
+                                onAddSchedule = dashboardViewModel::addScheduledOrders,
+                                onViewSchedules = { showScheduleDialog = true },
+                                onClearAll = dashboardViewModel::clearAllScheduledOrders,
+                                onRemoveOrder = dashboardViewModel::removeScheduledOrder,
+                                onStartBot = dashboardViewModel::startBot,
+                                isFollowModeActive = uiState.isFollowModeActive,
+                                followOrders = followOrders,
+                                martingaleSettings = uiState.martingaleSettings,
+                                onStartFollow = dashboardViewModel::startFollowMode,
+                                onStopFollow = dashboardViewModel::stopFollowMode,
+                                currentMode = uiState.tradingMode,
+                                onModeChange = dashboardViewModel::setTradingMode,
+                                isIndicatorModeActive = uiState.isIndicatorModeActive,
+                                indicatorOrders = indicatorOrders,
+                                indicatorSettings = uiState.indicatorSettings,
+                                indicatorOrderStatus = uiState.indicatorOrderStatus,
+                                onStartIndicator = dashboardViewModel::startIndicatorMode,
+                                onStopIndicator = dashboardViewModel::stopIndicatorMode,
+                                onShowIndicatorSettings = { showIndicatorSettingsDialog = true },
+                                isCTCModeActive = uiState.isCTCModeActive,
+                                ctcOrders = ctcOrders,
+                                onStartCTC = dashboardViewModel::startCTCMode,
+                                onStopCTC = dashboardViewModel::stopCTCMode,
+                                colors = colors,
+                                currentLanguage = currentLanguage,
+                                isTradingModeSelected = uiState.isTradingModeSelected,
+                                onStopBot = dashboardViewModel::stopBot,
+                                isMultiMomentumModeActive = uiState.isMultiMomentumModeActive,
+                                multiMomentumOrders = multiMomentumOrders,
+                                onStartMultiMomentum = dashboardViewModel::startMultiMomentumMode,
+                                onStopMultiMomentum = dashboardViewModel::stopMultiMomentumMode,
+                            )
+                        }
+
+                        IndicatorInfoCard(
+                            indicatorSettings = uiState.indicatorSettings,
+                            isIndicatorModeActive = uiState.isIndicatorModeActive,
+                            indicatorOrders = indicatorOrders,
+                            predictionInfo = indicatorPredictionInfo
+                        )
+
+                        MultiMomentumInfoCard(
+                            multiMomentumOrders = multiMomentumOrders,
+                            isMultiMomentumModeActive = uiState.isMultiMomentumModeActive,
+                            colors = colors
+                        )
+
+                        TradingSettingsCard(
+                            isDemoAccount = uiState.isDemoAccount,
+                            martingaleSettings = uiState.martingaleSettings,
+                            currencySettings = uiState.currencySettings,
+                            canModify = uiState.canModifySettings(),
+                            onAccountTypeChange = dashboardViewModel::setAccountType,
+                            onCurrencyChange = dashboardViewModel::setSelectedCurrency,
+                            onMartingaleStepsChange = dashboardViewModel::setMartingaleMaxSteps,
+                            onBaseAmountChange = dashboardViewModel::setMartingaleBaseAmount,
+                            onMartingaleToggle = dashboardViewModel::setMartingaleEnabled,
+                            onMultiplierTypeChange = dashboardViewModel::setMartingaleMultiplierType,
+                            onMultiplierValueChange = dashboardViewModel::setMartingaleMultiplierValue,
+                            colors = colors,
+                            currentLanguage = currentLanguage
+                        )
+
+                        StopLossProfitCard(
+                            stopLossSettings = uiState.stopLossSettings,
+                            stopProfitSettings = uiState.stopProfitSettings,
+                            tradingSession = uiState.tradingSession,
+                            canModify = uiState.canModifySettings(),
+                            onStopLossEnabledChange = dashboardViewModel::setStopLossEnabled,
+                            onStopLossMaxAmountChange = dashboardViewModel::setStopLossMaxAmount,
+                            onStopProfitEnabledChange = dashboardViewModel::setStopProfitEnabled,
+                            onStopProfitTargetAmountChange = dashboardViewModel::setStopProfitTargetAmount,
+                            onResetSession = dashboardViewModel::resetTradingSession,
+                            colors = colors,
+                            currentCurrency = uiState.currencySettings.selectedCurrency,
+                            currentLanguage = currentLanguage
+                        )
+
+                        if (uiState.tradingMode == TradingMode.SCHEDULE) {
+                            BotControlCard(
+                                botState = uiState.botState,
+                                botStatus = uiState.botStatus,
+                                canPauseBot = uiState.canPauseBot(),
+                                canResumeBot = uiState.canResumeBot(),
+                                canStopBot = uiState.canStopBot(),
+                                onPauseBot = dashboardViewModel::pauseBot,
+                                onResumeBot = dashboardViewModel::resumeBot,
+                                onStopBot = dashboardViewModel::stopBot,
+                                colors = colors,
+                                currentLanguage = currentLanguage
+                            )
+                        }
+
+                        uiState.error?.let {
+                            ErrorCard(
+                                error = it,
+                                onDismiss = dashboardViewModel::clearError,
+                                colors = colors
+                            )
+                        }
+
+                        uiState.lastTradeResult?.let {
+                            LastTradeResultCard(
+                                result = it,
+                                colors = colors,
+                                currentCurrency = uiState.currencySettings.selectedCurrency
+                            )
+                        }
+
+                        ThemeToggleCard(
+                            isDarkMode = dashboardTheme.isDarkMode,
+                            onThemeToggle = { isDark ->
+                                themeViewModel.setDarkMode(isDark)
+                            },
+                            colors = colors
+                        )
+                    }
+                }
+
+                // ✅ DIALOGS TETAP DI SINI
+                if (showAssetDialog) {
+                    AssetSelectionDialog(
+                        assets = assets,
+                        isLoading = uiState.assetsLoading,
+                        onAssetSelected = {
+                            dashboardViewModel.selectAsset(it)
+                            showAssetDialog = false
+                        },
+                        onDismiss = { showAssetDialog = false },
+                        colors = colors,
+                        onRefresh = dashboardViewModel::refreshAssets,
+                        currentLanguage = currentLanguage
+                    )
+                }
+
+                if (showScheduleDialog) {
+                    ScheduleListDialog(
+                        scheduledOrders = scheduledOrders,
+                        onRemoveOrder = dashboardViewModel::removeScheduledOrder,
+                        onClearAll = dashboardViewModel::clearAllScheduledOrders,
+                        onDismiss = { showScheduleDialog = false },
+                        onShowInputSignal = {
+                            showScheduleDialog = false
+                            showMultilineScheduleDialog = true
+                        },
+                        colors = colors
+                    )
+                }
+
+                if (showMultilineScheduleDialog) {
+                    MultilineScheduleDialog(
+                        currentInput = "",
+                        scheduledOrders = scheduledOrders,
+                        onInputChange = { input ->
+                            dashboardViewModel.updateScheduleInput(input)
+                        },
+                        onAdd = {
+                            dashboardViewModel.addScheduledOrders()
+                            showMultilineScheduleDialog = false
+                        },
+                        onDismiss = { showMultilineScheduleDialog = false },
+                        colors = colors
+                    )
+                }
+
+                if (showIndicatorSettingsDialog) {
+                    IndicatorSettingsDialog(
+                        indicatorSettings = uiState.indicatorSettings,
+                        consecutiveLossSettings = uiState.consecutiveLossSettings,
+                        canModify = uiState.canModifySettings(),
+                        onIndicatorTypeChange = dashboardViewModel::setIndicatorType,
+                        onIndicatorPeriodChange = dashboardViewModel::setIndicatorPeriod,
+                        onRSILevelsChange = dashboardViewModel::setIndicatorRSILevels,
+                        onSensitivityChange = dashboardViewModel::setIndicatorSensitivity,
+                        onConsecutiveLossChange = dashboardViewModel::setConsecutiveLossLimit,
+                        onDismiss = { showIndicatorSettingsDialog = false },
+                        colors = colors
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ✅ TAMBAH 2 COMPOSABLE BARU DI SINI
+
+@Composable
+private fun WhitelistCheckingScreen(colors: DashboardColors) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(colors.darkBackground),
+        contentAlignment = Alignment.Center
+    ) {
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(scrollState)
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            HeaderSection(
-                isConnected = uiState.isWebSocketConnected,
-                connectionStatus = uiState.connectionStatus,
-                isDarkMode = dashboardTheme.isDarkMode,
-                colors = colors,
-                onForceReconnect = dashboardViewModel::forceReconnectWebSocket
+            CircularProgressIndicator(
+                modifier = Modifier.size(48.dp),
+                color = colors.accentPrimary2main,
+                strokeWidth = 4.dp
             )
 
+            Text(
+                text = "Memverifikasi akses...",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium,
+                color = colors.textPrimary
+            )
+
+            Text(
+                text = "Mohon tunggu sebentar",
+                fontSize = 14.sp,
+                color = colors.textSecondary
+            )
+        }
+    }
+}
+
+@Composable
+private fun WhitelistFailedScreen(
+    reason: String,
+    message: String,
+    onRetry: () -> Unit,
+    onLogout: () -> Unit,
+    colors: DashboardColors,
+    viewModel: DashboardViewModel = hiltViewModel() // ✅ TAMBAH PARAMETER
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current // ✅ TAMBAH
+    val whatsappNumber by viewModel.whatsappNumber.collectAsStateWithLifecycle() // ✅ TAMBAH
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(colors.darkBackground),
+        contentAlignment = Alignment.Center
+    ) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(24.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = colors.cardBackground
+            ),
+            shape = RoundedCornerShape(24.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+        ) {
             Column(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
+                    .fillMaxWidth()
+                    .padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-
-                EnhancedStatisticsRow(
-                    todayProfit = todayProfit,
-                    isLoading = uiState.isLoading,
-                    isCalculating = isCalculatingTodayProfit,
-                    isRefreshing = dashboardViewModel.isRefreshing.collectAsStateWithLifecycle().value,
-                    isDemoAccount = uiState.isDemoAccount,
-                    currentLanguage = currentLanguage,
-                    onRefreshTodayProfit = dashboardViewModel::refreshTodayProfit,
-                    onForceRecalculate = dashboardViewModel::forceRecalculateTodayProfit,
-                    colors = colors,
-                    currentCurrency = uiState.currencySettings.selectedCurrency
+                Icon(
+                    imageVector = when (reason) {
+                        "INACTIVE" -> Icons.Default.Block
+                        "NOT_REGISTERED" -> Icons.Default.PersonOff
+                        "NO_SESSION" -> Icons.Default.ExitToApp
+                        "FIRESTORE_CONNECTION" -> Icons.Default.CloudOff
+                        else -> Icons.Default.Warning
+                    },
+                    contentDescription = null,
+                    modifier = Modifier.size(64.dp),
+                    tint = colors.accentSecondary
                 )
+
+                Text(
+                    text = when (reason) {
+                        "INACTIVE" -> "Akun Tidak Aktif"
+                        "NOT_REGISTERED" -> "Akun Belum Terdaftar"
+                        "NO_SESSION" -> "Sesi Tidak Valid"
+                        "FIRESTORE_CONNECTION" -> "Koneksi Gagal"
+                        else -> "Akses Ditolak"
+                    },
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = colors.textPrimary,
+                    textAlign = TextAlign.Center
+                )
+
+                Text(
+                    text = message,
+                    fontSize = 14.sp,
+                    color = colors.textSecondary,
+                    textAlign = TextAlign.Center,
+                    lineHeight = 20.sp
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    AssetAndClockCard(
-                        modifier = Modifier.weight(0.7f),
-                        selectedAsset = uiState.selectedAsset,
-                        canModify = uiState.canModifySettings(),
-                        onAddAsset = { showAssetDialog = true },
-                        isLoading = uiState.isLoading,
-                        isDemoAccount = uiState.isDemoAccount,
-                        localStats = localTradingStats,
-                        isStatsLoading = false,
-                        colors = colors,
-                        currentLanguage = currentLanguage,
-                        isBotRunning = (
-                                uiState.botState == BotState.RUNNING ||
-                                        uiState.isFollowModeActive ||
-                                        uiState.isIndicatorModeActive ||
-                                        uiState.isCTCModeActive
-                                )
-                    )
+                    // ✅ UBAH: Tombol "Coba Lagi" menjadi "Hubungi Admin"
+                    if (reason != "NO_SESSION") {
+                        OutlinedButton(
+                            onClick = {
+                                // ✅ BUKA WHATSAPP
+                                val waUrl = "https://wa.me/$whatsappNumber"
+                                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                                    data = android.net.Uri.parse(waUrl)
+                                }
+                                context.startActivity(intent)
+                            },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = colors.accentPrimary2main
+                            ),
+                            border = BorderStroke(1.dp, colors.accentPrimary2main),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text("Hubungi") // ✅ UBAH TEXT
+                        }
+                    }
 
-                    TradingModeCard(
-                        modifier = Modifier.weight(0.3f),
-                        scheduleInput = uiState.scheduleInput,
-                        scheduledOrders = scheduledOrders,
-                        canModify = uiState.canModifySettings(),
-                        botState = uiState.botState,
-                        canStartBot = uiState.canStartBot(),
-                        onScheduleInputChange = dashboardViewModel::updateScheduleInput,
-                        onAddSchedule = dashboardViewModel::addScheduledOrders,
-                        onViewSchedules = { showScheduleDialog = true },
-                        onClearAll = dashboardViewModel::clearAllScheduledOrders,
-                        onRemoveOrder = dashboardViewModel::removeScheduledOrder,  // ✅ TAMBAHKAN INI
-                        onStartBot = dashboardViewModel::startBot,
-                        isFollowModeActive = uiState.isFollowModeActive,
-                        followOrders = followOrders,
-                        martingaleSettings = uiState.martingaleSettings,
-                        onStartFollow = dashboardViewModel::startFollowMode,
-                        onStopFollow = dashboardViewModel::stopFollowMode,
-                        currentMode = uiState.tradingMode,
-                        onModeChange = dashboardViewModel::setTradingMode,
-                        isIndicatorModeActive = uiState.isIndicatorModeActive,
-                        indicatorOrders = indicatorOrders,
-                        indicatorSettings = uiState.indicatorSettings,
-                        indicatorOrderStatus = uiState.indicatorOrderStatus,
-                        onStartIndicator = dashboardViewModel::startIndicatorMode,
-                        onStopIndicator = dashboardViewModel::stopIndicatorMode,
-                        onShowIndicatorSettings = { showIndicatorSettingsDialog = true },
-                        isCTCModeActive = uiState.isCTCModeActive,
-                        ctcOrders = ctcOrders,
-                        onStartCTC = dashboardViewModel::startCTCMode,
-                        onStopCTC = dashboardViewModel::stopCTCMode,
-                        colors = colors,
-                        currentLanguage = currentLanguage,
-                        isTradingModeSelected = uiState.isTradingModeSelected,
-                        onStopBot = dashboardViewModel::stopBot,
-                    )
+                    Button(
+                        onClick = onLogout,
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = colors.accentPrimary
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ExitToApp,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Logout")
+                    }
                 }
 
+                if (reason in listOf("INACTIVE", "NOT_REGISTERED")) {
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                IndicatorInfoCard(
-                    indicatorSettings = uiState.indicatorSettings,
-                    isIndicatorModeActive = uiState.isIndicatorModeActive,
-                    indicatorOrders = indicatorOrders,
-                    predictionInfo = indicatorPredictionInfo
-                )
-
-                TradingSettingsCard(
-                    isDemoAccount = uiState.isDemoAccount,
-                    martingaleSettings = uiState.martingaleSettings,
-                    currencySettings = uiState.currencySettings,
-                    canModify = uiState.canModifySettings(),
-                    onAccountTypeChange = dashboardViewModel::setAccountType,
-                    onCurrencyChange = dashboardViewModel::setSelectedCurrency,
-                    onMartingaleStepsChange = dashboardViewModel::setMartingaleMaxSteps,
-                    onBaseAmountChange = dashboardViewModel::setMartingaleBaseAmount,
-                    onMartingaleToggle = dashboardViewModel::setMartingaleEnabled,
-                    onMultiplierTypeChange = dashboardViewModel::setMartingaleMultiplierType,
-                    onMultiplierValueChange = dashboardViewModel::setMartingaleMultiplierValue,
-                    colors = colors,
-                    currentLanguage = currentLanguage
-                )
-
-                StopLossProfitCard(
-                    stopLossSettings = uiState.stopLossSettings,
-                    stopProfitSettings = uiState.stopProfitSettings,
-                    tradingSession = uiState.tradingSession,
-                    canModify = uiState.canModifySettings(),
-                    onStopLossEnabledChange = dashboardViewModel::setStopLossEnabled,
-                    onStopLossMaxAmountChange = dashboardViewModel::setStopLossMaxAmount,
-                    onStopProfitEnabledChange = dashboardViewModel::setStopProfitEnabled,
-                    onStopProfitTargetAmountChange = dashboardViewModel::setStopProfitTargetAmount,
-                    onResetSession = dashboardViewModel::resetTradingSession,
-                    colors = colors,
-                    currentCurrency = uiState.currencySettings.selectedCurrency,
-                    currentLanguage = currentLanguage
-                )
-
-                if (uiState.tradingMode == TradingMode.SCHEDULE) {
-                    BotControlCard(
-                        botState = uiState.botState,
-                        botStatus = uiState.botStatus,
-                        canPauseBot = uiState.canPauseBot(),
-                        canResumeBot = uiState.canResumeBot(),
-                        canStopBot = uiState.canStopBot(),
-                        onPauseBot = dashboardViewModel::pauseBot,
-                        onResumeBot = dashboardViewModel::resumeBot,
-                        onStopBot = dashboardViewModel::stopBot,
-                        colors = colors,
-                        currentLanguage = currentLanguage  // ✅ PASS LANGUAGE
+                    Text(
+                        text = "💡 Tip: Hubungi administrator melalui WhatsApp atau email untuk mengaktifkan akses Anda",
+                        fontSize = 12.sp,
+                        color = colors.textMuted,
+                        textAlign = TextAlign.Center,
+                        lineHeight = 16.sp
                     )
                 }
-
-                uiState.error?.let {
-                    ErrorCard(
-                        error = it,
-                        onDismiss = dashboardViewModel::clearError,
-                        colors = colors
-                    )
-                }
-
-                uiState.lastTradeResult?.let {
-                    LastTradeResultCard(
-                        result = it,
-                        colors = colors,
-                        currentCurrency = uiState.currencySettings.selectedCurrency  // ✅ ADD THIS
-                    )
-                }
-
-                ThemeToggleCard(
-                    isDarkMode = dashboardTheme.isDarkMode,
-                    onThemeToggle = { isDark ->
-                        themeViewModel.setDarkMode(isDark)
-                    },
-                    colors = colors
-                )
-            }
-
-            if (showAssetDialog) {
-                AssetSelectionDialog(
-                    assets = assets,
-                    isLoading = uiState.assetsLoading,
-                    onAssetSelected = {
-                        dashboardViewModel.selectAsset(it)
-                        showAssetDialog = false
-                    },
-                    onDismiss = { showAssetDialog = false },
-                    colors = colors,
-                    onRefresh = dashboardViewModel::refreshAssets,
-                    currentLanguage = currentLanguage  // ✅ PASS LANGUAGE
-                )
-            }
-
-            if (showScheduleDialog) {
-                ScheduleListDialog(
-                    scheduledOrders = scheduledOrders,
-                    onRemoveOrder = dashboardViewModel::removeScheduledOrder,
-                    onClearAll = dashboardViewModel::clearAllScheduledOrders,
-                    onDismiss = { showScheduleDialog = false },
-                    onShowInputSignal = {  // ✅ UPDATED
-                        showScheduleDialog = false
-                        showMultilineScheduleDialog = true
-                    },
-                    colors = colors
-                )
-            }
-
-            if (showMultilineScheduleDialog) {
-                MultilineScheduleDialog(
-                    currentInput = "",
-                    scheduledOrders = scheduledOrders,
-                    onInputChange = { input ->
-                        dashboardViewModel.updateScheduleInput(input)
-                    },
-                    onAdd = {
-                        dashboardViewModel.addScheduledOrders()
-                        showMultilineScheduleDialog = false
-                    },
-                    onDismiss = { showMultilineScheduleDialog = false },
-                    colors = colors
-                )
-            }
-
-            if (showIndicatorSettingsDialog) {
-                IndicatorSettingsDialog(
-                    indicatorSettings = uiState.indicatorSettings,
-                    consecutiveLossSettings = uiState.consecutiveLossSettings,
-                    canModify = uiState.canModifySettings(),
-                    onIndicatorTypeChange = dashboardViewModel::setIndicatorType,
-                    onIndicatorPeriodChange = dashboardViewModel::setIndicatorPeriod,
-                    onRSILevelsChange = dashboardViewModel::setIndicatorRSILevels,
-                    onSensitivityChange = dashboardViewModel::setIndicatorSensitivity,
-                    onConsecutiveLossChange = dashboardViewModel::setConsecutiveLossLimit,
-                    onDismiss = { showIndicatorSettingsDialog = false },
-                    colors = colors
-                )
             }
         }
     }
@@ -1398,6 +1603,7 @@ fun RealtimeTodayProfitCard(
                             Text(
                                 text = formatTodayProfitDisplay(todayProfit),
                                 fontSize = 28.sp,
+                                maxLines = 1,
                                 fontWeight = FontWeight.ExtraBold,
                                 fontFamily = FontFamily.Monospace,
                                 color = profitColor.copy(alpha = 0.4f),
@@ -1413,6 +1619,7 @@ fun RealtimeTodayProfitCard(
                             Text(
                                 text = formatTodayProfitDisplay(todayProfit),
                                 fontSize = 28.sp,
+                                maxLines = 1,
                                 fontWeight = FontWeight.ExtraBold,
                                 fontFamily = FontFamily.Monospace,
                                 color = profitColor
@@ -1612,7 +1819,9 @@ fun ToggleableStatsClockCard(
 
             TradingLineChart(
                 selectedAsset = selectedAsset,
-                colors = colors
+                colors = colors,
+                onAssetClick = onAddAsset,
+                isBotRunning = isBotRunning
             )
         }
     }
@@ -1913,6 +2122,7 @@ fun DigitalClockRow(
                 Text(
                     text = formattedTime,
                     fontSize = 32.sp,
+                    maxLines = 1,
                     fontWeight = FontWeight.Bold,
                     fontFamily = digitalClockFontFamily,
                     color = colors.textPrimary,
@@ -2301,7 +2511,7 @@ fun IndicatorInfoCard(
     predictionInfo: Map<String, Any> = emptyMap(),
     modifier: Modifier = Modifier
 ) {
-    // Only show when indicator mode is active or there are recent orders
+    // ✅ Hanya tampil jika mode aktif DAN ada orders
     if (!isIndicatorModeActive && indicatorOrders.isEmpty()) return
 
     Card(
@@ -2379,190 +2589,9 @@ fun IndicatorInfoCard(
                 }
             }
 
-            // Indicator Settings Info
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = Color(0xFF1E1E1E)
-                ),
-                shape = RoundedCornerShape(16.dp),
-                elevation = CardDefaults.cardElevation(1.dp)
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Text(
-                        text = "Current Configuration",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = Color(0xFF9C27B0)
-                    )
-
-                    // Configuration Table
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        IndicatorInfoRow(
-                            label = "Indicator Type",
-                            value = indicatorSettings.getDisplayName(),
-                            icon = Icons.Default.TrendingUp
-                        )
-
-                        Divider(color = Color(0xFF374151), thickness = 0.5.dp)
-
-                        IndicatorInfoRow(
-                            label = "Period",
-                            value = "${indicatorSettings.period}",
-                            icon = Icons.Default.Timeline
-                        )
-
-                        Divider(color = Color(0xFF374151), thickness = 0.5.dp)
-
-                        IndicatorInfoRow(
-                            label = "Sensitivity",
-                            value = String.format("%.1f", indicatorSettings.sensitivity),
-                            icon = Icons.Default.Tune
-                        )
-
-                        if (indicatorSettings.type == IndicatorType.RSI) {
-                            Divider(color = Color(0xFF374151), thickness = 0.5.dp)
-
-                            IndicatorInfoRow(
-                                label = "RSI Levels",
-                                value = "${indicatorSettings.rsiOverbought.toInt()}/${indicatorSettings.rsiOversold.toInt()}",
-                                icon = Icons.Default.Speed
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Price Predictions Section
-            if (isIndicatorModeActive && predictionInfo.isNotEmpty()) {
-                val predictions = predictionInfo["predictions"] as? List<Map<String, Any>> ?: emptyList()
-
-                if (predictions.isNotEmpty()) {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(
-                            containerColor = Color(0xFF1E1E1E)
-                        ),
-                        shape = RoundedCornerShape(16.dp),
-                        elevation = CardDefaults.cardElevation(1.dp)
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.TrendingUp,
-                                    contentDescription = null,
-                                    tint = Color(0xFF60A5FA),
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Text(
-                                    text = "Price Predictions",
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = Color(0xFF60A5FA)
-                                )
-                            }
-
-                            // Show active predictions
-                            val activePredictions = predictions.filter { !(it["is_triggered"] as? Boolean ?: true) }
-
-                            if (activePredictions.isNotEmpty()) {
-                                LazyColumn(
-                                    modifier = Modifier.heightIn(max = 200.dp),
-                                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    items(activePredictions.take(5)) { prediction ->
-                                        PredictionTargetCard(prediction = prediction)
-                                    }
-                                }
-
-                                // Summary info
-                                Divider(color = Color(0xFF374151), thickness = 0.5.dp)
-
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = "Active Targets",
-                                        fontSize = 12.sp,
-                                        color = Color(0xFF9CA3AF)
-                                    )
-                                    Text(
-                                        text = "${activePredictions.size} / ${predictions.size}",
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = Color(0xFF60A5FA)
-                                    )
-                                }
-
-                                val highConfidenceCount = activePredictions.count {
-                                    val confidence = it["confidence"] as? String ?: "0%"
-                                    val confValue = confidence.replace("%", "").toFloatOrNull() ?: 0f
-                                    confValue >= 70f
-                                }
-
-                                if (highConfidenceCount > 0) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text(
-                                            text = "High Confidence",
-                                            fontSize = 12.sp,
-                                            color = Color(0xFF9CA3AF)
-                                        )
-                                        Text(
-                                            text = "$highConfidenceCount targets (â‰¥70%)",
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.Medium,
-                                            color = Color(0xFF10B981)
-                                        )
-                                    }
-                                }
-                            } else {
-                                // No active predictions
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 8.dp),
-                                    horizontalArrangement = Arrangement.Center,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.CheckCircle,
-                                        contentDescription = null,
-                                        tint = Color(0xFF10B981),
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = "All predictions triggered",
-                                        fontSize = 12.sp,
-                                        color = Color(0xFF10B981),
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Orders Statistics (if there are orders)
-            if (indicatorOrders.isNotEmpty()) {
+            // ✅ PERBAIKAN: Konten detail hanya tampil saat active
+            if (isIndicatorModeActive) {
+                // Indicator Settings Info
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
@@ -2576,75 +2605,257 @@ fun IndicatorInfoCard(
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         Text(
-                            text = "Signal Statistics",
+                            text = "Current Configuration",
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Medium,
-                            color = Color(0xFF60A5FA)
+                            color = Color(0xFF9C27B0)
                         )
 
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        // Configuration Table
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            // Total Orders
-                            Column(
-                                modifier = Modifier.weight(1f),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Text(
-                                    text = "${indicatorOrders.size}",
-                                    fontSize = 18.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF60A5FA)
-                                )
-                                Text(
-                                    text = "Total Signals",
-                                    fontSize = 10.sp,
-                                    color = Color(0xFF9CA3AF)
-                                )
-                            }
+                            IndicatorInfoRow(
+                                label = "Indicator Type",
+                                value = indicatorSettings.getDisplayName(),
+                                icon = Icons.Default.TrendingUp
+                            )
 
-                            // Executed Orders
-                            Column(
-                                modifier = Modifier.weight(1f),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                val executed = indicatorOrders.count { it.isExecuted }
-                                Text(
-                                    text = "$executed",
-                                    fontSize = 18.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF10B981)
-                                )
-                                Text(
-                                    text = "Executed",
-                                    fontSize = 10.sp,
-                                    color = Color(0xFF9CA3AF)
-                                )
-                            }
+                            Divider(color = Color(0xFF374151), thickness = 0.5.dp)
 
-                            // Pending Orders
-                            Column(
-                                modifier = Modifier.weight(1f),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                val pending = indicatorOrders.count { !it.isExecuted && !it.isSkipped }
-                                Text(
-                                    text = "$pending",
-                                    fontSize = 18.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFFFBBF24)
-                                )
-                                Text(
-                                    text = "Pending",
-                                    fontSize = 10.sp,
-                                    color = Color(0xFF9CA3AF)
+                            IndicatorInfoRow(
+                                label = "Period",
+                                value = "${indicatorSettings.period}",
+                                icon = Icons.Default.Timeline
+                            )
+
+                            Divider(color = Color(0xFF374151), thickness = 0.5.dp)
+
+                            IndicatorInfoRow(
+                                label = "Sensitivity",
+                                value = String.format("%.1f", indicatorSettings.sensitivity),
+                                icon = Icons.Default.Tune
+                            )
+
+                            if (indicatorSettings.type == IndicatorType.RSI) {
+                                Divider(color = Color(0xFF374151), thickness = 0.5.dp)
+
+                                IndicatorInfoRow(
+                                    label = "RSI Levels",
+                                    value = "${indicatorSettings.rsiOverbought.toInt()}/${indicatorSettings.rsiOversold.toInt()}",
+                                    icon = Icons.Default.Speed
                                 )
                             }
                         }
+                    }
+                }
 
-                        // Signal Distribution
-                        if (indicatorOrders.isNotEmpty()) {
+                // Price Predictions Section
+                if (predictionInfo.isNotEmpty()) {
+                    val predictions = predictionInfo["predictions"] as? List<Map<String, Any>> ?: emptyList()
+
+                    if (predictions.isNotEmpty()) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(
+                                containerColor = Color(0xFF1E1E1E)
+                            ),
+                            shape = RoundedCornerShape(16.dp),
+                            elevation = CardDefaults.cardElevation(1.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.TrendingUp,
+                                        contentDescription = null,
+                                        tint = Color(0xFF60A5FA),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Text(
+                                        text = "Price Predictions",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = Color(0xFF60A5FA)
+                                    )
+                                }
+
+                                // Show active predictions
+                                val activePredictions = predictions.filter { !(it["is_triggered"] as? Boolean ?: true) }
+
+                                if (activePredictions.isNotEmpty()) {
+                                    LazyColumn(
+                                        modifier = Modifier.heightIn(max = 200.dp),
+                                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        items(activePredictions.take(5)) { prediction ->
+                                            PredictionTargetCard(prediction = prediction)
+                                        }
+                                    }
+
+                                    // Summary info
+                                    Divider(color = Color(0xFF374151), thickness = 0.5.dp)
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "Active Targets",
+                                            fontSize = 12.sp,
+                                            color = Color(0xFF9CA3AF)
+                                        )
+                                        Text(
+                                            text = "${activePredictions.size} / ${predictions.size}",
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = Color(0xFF60A5FA)
+                                        )
+                                    }
+
+                                    val highConfidenceCount = activePredictions.count {
+                                        val confidence = it["confidence"] as? String ?: "0%"
+                                        val confValue = confidence.replace("%", "").toFloatOrNull() ?: 0f
+                                        confValue >= 70f
+                                    }
+
+                                    if (highConfidenceCount > 0) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = "High Confidence",
+                                                fontSize = 12.sp,
+                                                color = Color(0xFF9CA3AF)
+                                            )
+                                            Text(
+                                                text = "$highConfidenceCount targets (≥70%)",
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Medium,
+                                                color = Color(0xFF10B981)
+                                            )
+                                        }
+                                    }
+                                } else {
+                                    // No active predictions
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 8.dp),
+                                        horizontalArrangement = Arrangement.Center,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.CheckCircle,
+                                            contentDescription = null,
+                                            tint = Color(0xFF10B981),
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = "All predictions triggered",
+                                            fontSize = 12.sp,
+                                            color = Color(0xFF10B981),
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Orders Statistics (if there are orders)
+                if (indicatorOrders.isNotEmpty()) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = Color(0xFF1E1E1E)
+                        ),
+                        shape = RoundedCornerShape(16.dp),
+                        elevation = CardDefaults.cardElevation(1.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Text(
+                                text = "Signal Statistics",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = Color(0xFF60A5FA)
+                            )
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
+                                // Total Orders
+                                Column(
+                                    modifier = Modifier.weight(1f),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Text(
+                                        text = "${indicatorOrders.size}",
+                                        fontSize = 18.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF60A5FA)
+                                    )
+                                    Text(
+                                        text = "Total Signals",
+                                        fontSize = 10.sp,
+                                        color = Color(0xFF9CA3AF)
+                                    )
+                                }
+
+                                // Executed Orders
+                                Column(
+                                    modifier = Modifier.weight(1f),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    val executed = indicatorOrders.count { it.isExecuted }
+                                    Text(
+                                        text = "$executed",
+                                        fontSize = 18.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF10B981)
+                                    )
+                                    Text(
+                                        text = "Executed",
+                                        fontSize = 10.sp,
+                                        color = Color(0xFF9CA3AF)
+                                    )
+                                }
+
+                                // Pending Orders
+                                Column(
+                                    modifier = Modifier.weight(1f),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    val pending = indicatorOrders.count { !it.isExecuted && !it.isSkipped }
+                                    Text(
+                                        text = "$pending",
+                                        fontSize = 18.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFFFBBF24)
+                                    )
+                                    Text(
+                                        text = "Pending",
+                                        fontSize = 10.sp,
+                                        color = Color(0xFF9CA3AF)
+                                    )
+                                }
+                            }
+
+                            // Signal Distribution
                             Divider(color = Color(0xFF374151), thickness = 0.5.dp)
 
                             val callSignals = indicatorOrders.count { it.trend.lowercase() == "buy" }
@@ -2713,10 +2924,8 @@ fun IndicatorInfoCard(
                         }
                     }
                 }
-            }
 
-            // Current Status
-            if (isIndicatorModeActive) {
+                // Current Status
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     color = Color(0xFF1A0D2E),
@@ -2748,6 +2957,47 @@ fun IndicatorInfoCard(
                                 fontSize = 10.sp,
                                 color = Color(0xFFD1D5DB),
                                 lineHeight = 14.sp
+                            )
+                        }
+                    }
+                }
+            } else {
+                // ✅ PLACEHOLDER saat mode inactive (disembunyikan detail)
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color(0xFF1E1E1E)
+                    ),
+                    shape = RoundedCornerShape(16.dp),
+                    elevation = CardDefaults.cardElevation(1.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(32.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Analytics,
+                                contentDescription = null,
+                                tint = Color(0xFF666666),
+                                modifier = Modifier.size(32.dp)
+                            )
+                            Text(
+                                text = "Indicator Analysis Stopped",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = Color(0xFF9CA3AF)
+                            )
+                            Text(
+                                text = "Start the indicator mode to view analysis",
+                                fontSize = 11.sp,
+                                color = Color(0xFF6B7280),
+                                textAlign = TextAlign.Center
                             )
                         }
                     }
@@ -4412,10 +4662,10 @@ fun TradingSettingsCard(
                                     imageVector = Icons.Default.AttachMoney,
                                     contentDescription = null,
                                     modifier = Modifier.size(16.dp),
-                                    tint = colors.accentPrimary
+                                    tint = colors.successColor
                                 )
                                 Text(
-                                    text = "${currentCurrency.code} (${currentCurrency.flag})",
+                                    text = "${currentCurrency.code} ${currentCurrency.flag}",
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = colors.textPrimary
@@ -6050,189 +6300,307 @@ fun MultilineScheduleDialog(
     Dialog(onDismissRequest = onDismiss) {
         Card(
             modifier = Modifier
-                .fillMaxWidth()
-                .height(600.dp),
-            colors = CardDefaults.cardColors(containerColor = colors.cardBackground),
-            shape = RoundedCornerShape(16.dp)
+                .fillMaxWidth(0.95f)
+                .heightIn(max = 720.dp)
+                .shadow(
+                    elevation = 32.dp,
+                    shape = RoundedCornerShape(28.dp),
+                    ambientColor = Color.Black.copy(alpha = 0.1f),
+                    spotColor = Color.Black.copy(alpha = 0.15f)
+                ),
+            colors = CardDefaults.cardColors(containerColor = colors.dialogBackground),
+            shape = RoundedCornerShape(28.dp),
+            border = BorderStroke(
+                width = 1.dp,
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        colors.dialogBorder.copy(alpha = 0.5f),
+                        colors.dialogBorder.copy(alpha = 0.2f)
+                    )
+                )
+            )
         ) {
             Column(
-                modifier = Modifier.padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                modifier = Modifier.fillMaxSize()
             ) {
-                // Header
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Bulk Schedule Input",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = colors.textPrimary
-                    )
-
-                    IconButton(
-                        onClick = onDismiss,
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Close",
-                            tint = colors.textSecondary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                }
-
-                // Format Info Card
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = colors.accentPrimary.copy(alpha = 0.1f)
-                    ),
-                    border = BorderStroke(1.dp, colors.accentPrimary.copy(alpha = 0.3f)),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            text = "Supported Formats:",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = colors.textPrimary
-                        )
-
-                        Text(
-                            text = "• Single line: 10:30 B 11:00 S 12:15 B\n" +
-                                    "• Multiple lines:\n" +
-                                    "  10:30 B\n" +
-                                    "  11:00 S\n" +
-                                    "  12:15 B\n" +
-                                    "• Mixed format: Copy-paste any combination",
-                            fontSize = 10.sp,
-                            color = colors.textSecondary,
-                            lineHeight = 14.sp
-                        )
-                    }
-                }
-
-                // TextField
-                OutlinedTextField(
-                    value = multilineInput,
-                    onValueChange = { multilineInput = it },
-                    placeholder = {
-                        Text(
-                            text = placeholderText,
-                            fontSize = 11.sp,
-                            color = colors.placeholderText,
-                            lineHeight = 16.sp
-                        )
-                    },
+                // 🎨 Enhanced Header with Gradient
+                Surface(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(1f),
-                    textStyle = LocalTextStyle.current.copy(
-                        fontSize = 12.sp,
-                        color = colors.textPrimary,
-                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                        lineHeight = 16.sp
-                    ),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = colors.accentPrimary,
-                        unfocusedBorderColor = colors.borderColor,
-                        focusedContainerColor = colors.surface,
-                        unfocusedContainerColor = colors.surface
-                    ),
-                    shape = RoundedCornerShape(8.dp),
-                    maxLines = 20
-                )
-
-                // ✅ Action Buttons - DIPINDAH KE ATAS PREVIEW
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        .background(
+                            brush = Brush.verticalGradient(
+                                colors = listOf(
+                                    colors.dialogHeaderGradientStart,
+                                    colors.dialogHeaderGradientMid,
+                                    colors.dialogHeaderGradientEnd
+                                )
+                            )
+                        ),
+                    color = Color.Transparent,
+                    shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
                 ) {
-                    Button(
-                        onClick = { multilineInput = "" },
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = colors.accentSecondary,
-                            contentColor = colors.TextPrimary1
-                        ),
-                        shape = RoundedCornerShape(8.dp)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(24.dp)
                     ) {
-                        Text("Clear", fontSize = 12.sp)
-                    }
+                        // Left: Title & Description
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier
+                                .align(Alignment.CenterStart)
+                                .fillMaxWidth(0.75f)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Surface(
+                                    modifier = Modifier.size(42.dp),
+                                    shape = CircleShape,
+                                    color = colors.successColor.copy(alpha = 0.15f),
+                                    border = BorderStroke(1.dp, colors.successColor.copy(alpha = 0.3f))
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = Icons.Default.Schedule,
+                                            contentDescription = null,
+                                            tint = colors.successColor,
+                                            modifier = Modifier.size(22.dp)
+                                        )
+                                    }
+                                }
 
-                    Button(
-                        onClick = {
-                            onInputChange(multilineInput)
-                            onAdd()
-                        },
-                        enabled = multilineInput.isNotBlank(),
-                        modifier = Modifier.weight(2f),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = colors.accentSecondary,
-                            contentColor = colors.TextPrimary1,
-                            disabledContainerColor = colors.controls
-                        ),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text("Add Schedules", fontSize = 12.sp)
+                                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Text(
+                                        text = "Schedule Input",
+                                        fontSize = 20.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = colors.textPrimary,
+                                        letterSpacing = (-0.01).sp,
+                                        maxLines = 2
+                                    )
+                                }
+                            }
+                        }
+
+                        // Right: Close Button
+                        Surface(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .size(40.dp)
+                                .clip(CircleShape),
+                            shape = CircleShape,
+                            color = colors.dialogCloseButtonBg,
+                            onClick = onDismiss,
+                            border = BorderStroke(1.dp, colors.dialogCloseButtonBorder)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Close",
+                                    tint = colors.textSecondary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
                     }
                 }
 
-                // ✅ Preview - SEKARANG DI BAWAH TOMBOL
-                if (multilineInput.isNotBlank()) {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(
-                            containerColor = colors.surface
-                        ),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
+                // 📝 Content Area
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(colors.dialogBackground)
+                        .padding(horizontal = 24.dp, vertical = 20.dp),
+                    verticalArrangement = Arrangement.spacedBy(20.dp)
+                ) {
+                    // 📋 Text Input Area
+                    item {
                         Column(
-                            modifier = Modifier.padding(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             Text(
-                                text = "Preview (${getPreviewCount(multilineInput)} orders):",
-                                fontSize = 12.sp,
+                                text = "Enter Your Schedules",
+                                fontSize = 13.sp,
                                 fontWeight = FontWeight.Medium,
-                                color = colors.textPrimary
+                                color = colors.textSecondary
                             )
 
-                            LazyColumn(
-                                modifier = Modifier.height(80.dp),
-                                verticalArrangement = Arrangement.spacedBy(2.dp)
+                            OutlinedTextField(
+                                value = multilineInput,
+                                onValueChange = { multilineInput = it },
+                                placeholder = {
+                                    Text(
+                                        text = placeholderText,
+                                        fontSize = 11.sp,
+                                        color = colors.dialogInputPlaceholder,
+                                        lineHeight = 16.sp
+                                    )
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(220.dp),
+                                textStyle = LocalTextStyle.current.copy(
+                                    fontSize = 12.sp,
+                                    color = colors.dialogInputText,
+                                    fontFamily = FontFamily.Monospace,
+                                    lineHeight = 18.sp
+                                ),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = colors.dialogInputBorderFocused,
+                                    unfocusedBorderColor = colors.dialogInputBorder,
+                                    focusedContainerColor = colors.dialogInputBgFocused,
+                                    unfocusedContainerColor = colors.dialogInputBg,
+                                    cursorColor = colors.dialogInputBorderFocused,
+                                    focusedTextColor = colors.dialogInputText,
+                                    unfocusedTextColor = colors.dialogInputText
+                                ),
+                                shape = RoundedCornerShape(12.dp),
+                                maxLines = 15
+                            )
+                        }
+                    }
+
+                    item {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            // Clear Button
+                            OutlinedButton(
+                                onClick = { multilineInput = "" },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(48.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(
+                                    containerColor = Color.Transparent,
+                                    contentColor = colors.errorColor
+                                ),
+                                border = BorderStroke(1.dp, colors.errorColor.copy(alpha = 0.5f)),
+                                shape = RoundedCornerShape(12.dp)
                             ) {
-                                items(getPreviewOrders(multilineInput)) { preview ->
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Delete,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Text(
+                                        text = "Clear",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+                            }
+
+                            // Add Button
+                            Button(
+                                onClick = {
+                                    onInputChange(multilineInput)
+                                    onAdd()
+                                },
+                                enabled = multilineInput.isNotBlank(),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(48.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = colors.successColor,
+                                    contentColor = Color.White,
+                                    disabledContainerColor = colors.controls,
+                                    disabledContentColor = colors.textMuted
+                                ),
+                                shape = RoundedCornerShape(12.dp),
+                                elevation = ButtonDefaults.buttonElevation(
+                                    defaultElevation = 4.dp,
+                                    pressedElevation = 8.dp
+                                )
+                            ) {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Add,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Text(
+                                        text = "Add",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // 🎯 Preview Section
+                    if (multilineInput.isNotBlank()) {
+                        item {
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = colors.dialogPreviewBg
+                                ),
+                                shape = RoundedCornerShape(16.dp),
+                                border = BorderStroke(1.dp, colors.dialogPreviewBorder.copy(alpha = 0.3f))
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(16.dp),
+                                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
                                     Row(
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Text(
-                                            text = preview.first,
-                                            fontSize = 10.sp,
-                                            color = colors.textSecondary,
-                                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
-                                        )
-                                        Box(
-                                            modifier = Modifier
-                                                .background(
-                                                    color = if (preview.second == "B") colors.accentPrimary.copy(alpha = 0.2f) else colors.accentSecondary.copy(alpha = 0.2f),
-                                                    shape = RoundedCornerShape(3.dp)
-                                                )
-                                                .padding(horizontal = 6.dp, vertical = 1.dp)
+                                        Row(
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Visibility,
+                                                contentDescription = null,
+                                                tint = colors.dialogPreviewAccent,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                            Text(
+                                                text = "Preview",
+                                                fontSize = 14.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = colors.textPrimary
+                                            )
+                                        }
+
+                                        Surface(
+                                            color = colors.dialogPreviewAccent.copy(alpha = 0.15f),
+                                            shape = RoundedCornerShape(20.dp)
                                         ) {
                                             Text(
-                                                text = preview.second,
-                                                fontSize = 9.sp,
+                                                text = "${getPreviewCount(multilineInput)} orders",
+                                                fontSize = 11.sp,
                                                 fontWeight = FontWeight.Bold,
-                                                color = if (preview.second == "B") colors.accentPrimary else colors.accentSecondary
+                                                color = colors.dialogPreviewAccent,
+                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                            )
+                                        }
+                                    }
+
+                                    Divider(color = colors.dialogDivider, thickness = 0.5.dp)
+
+                                    LazyColumn(
+                                        modifier = Modifier.heightIn(max = 120.dp),
+                                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        items(getPreviewOrders(multilineInput)) { preview ->
+                                            PreviewOrderRow(
+                                                time = preview.first,
+                                                trend = preview.second,
+                                                colors = colors
                                             )
                                         }
                                     }
@@ -6240,6 +6608,200 @@ fun MultilineScheduleDialog(
                             }
                         }
                     }
+
+                    // 💡 Format Guide Card
+                    item {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(
+                                containerColor = colors.dialogInfoBg
+                            ),
+                            border = BorderStroke(1.dp, colors.dialogInfoBorder),
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Surface(
+                                        modifier = Modifier.size(28.dp),
+                                        shape = CircleShape,
+                                        color = colors.dialogInfoIconBg
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(
+                                                imageVector = Icons.Default.Info,
+                                                contentDescription = null,
+                                                tint = colors.accentPrimary,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                    }
+
+                                    Text(
+                                        text = "Supported Formats",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = colors.textPrimary
+                                    )
+                                }
+
+                                Divider(color = colors.dialogDivider, thickness = 0.5.dp)
+
+                                Column(
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    FormatExampleRow(
+                                        icon = Icons.Default.TrendingUp,
+                                        title = "Single Line",
+                                        example = "10:30 B 11:00 S 12:15 B",
+                                        colors = colors
+                                    )
+
+                                    FormatExampleRow(
+                                        icon = Icons.Default.List,
+                                        title = "Multiple Lines",
+                                        example = "10:30 B\n11:00 S\n12:15 B",
+                                        colors = colors
+                                    )
+
+                                    FormatExampleRow(
+                                        icon = Icons.Default.ContentPaste,
+                                        title = "Mixed Format",
+                                        example = "Copy-paste any combination",
+                                        colors = colors
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    item {
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FormatExampleRow(
+    icon: ImageVector,
+    title: String,
+    example: String,
+    colors: DashboardColors
+) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        Surface(
+            modifier = Modifier.size(20.dp),
+            shape = CircleShape,
+            color = colors.dialogInfoIconBg
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = colors.textSecondary,
+                    modifier = Modifier.size(12.dp)
+                )
+            }
+        }
+
+        Column(
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            Text(
+                text = title,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium,
+                color = colors.textPrimary
+            )
+            Text(
+                text = example,
+                fontSize = 10.sp,
+                color = colors.textSecondary,
+                lineHeight = 14.sp,
+                fontFamily = if (example.contains("\n")) FontFamily.Monospace else FontFamily.Default
+            )
+        }
+    }
+}
+
+@Composable
+private fun PreviewOrderRow(
+    time: String,
+    trend: String,
+    colors: DashboardColors
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = colors.dialogPreviewAmountBg,
+        shape = RoundedCornerShape(8.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Time
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.AccessTime,
+                    contentDescription = null,
+                    tint = colors.textSecondary,
+                    modifier = Modifier.size(14.dp)
+                )
+                Text(
+                    text = time,
+                    fontSize = 11.sp,
+                    color = colors.textPrimary,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+
+            Spacer(modifier = Modifier.weight(1f))
+
+            // Trend Badge
+            Surface(
+                color = if (trend == "B")
+                    colors.successColor.copy(alpha = 0.2f)
+                else
+                    colors.errorColor.copy(alpha = 0.2f),
+                shape = RoundedCornerShape(6.dp),
+                border = BorderStroke(
+                    0.5.dp,
+                    if (trend == "B") colors.successColor else colors.errorColor
+                )
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = if (trend == "B") Icons.Default.TrendingUp else Icons.Default.TrendingDown,
+                        contentDescription = null,
+                        tint = if (trend == "B") colors.successColor else colors.errorColor,
+                        modifier = Modifier.size(12.dp)
+                    )
+                    Text(
+                        text = if (trend == "B") "BUY" else "SELL",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (trend == "B") colors.successColor else colors.errorColor
+                    )
                 }
             }
         }
@@ -6301,7 +6863,7 @@ fun AssetSelectionDialog(
     onDismiss: () -> Unit,
     onRefresh: () -> Unit,
     colors: DashboardColors,
-    currentLanguage: String = "id"  // ✅ ADD PARAMETER
+    currentLanguage: String = "id"
 ) {
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -6319,8 +6881,8 @@ fun AssetSelectionDialog(
             ),
             shape = RoundedCornerShape(24.dp),
             border = BorderStroke(
-                width = 1.dp,
-                color = colors.borderColor
+                width = 0.4.dp,
+                color = colors.chartLine2.copy(alpha = 0.4f)
             )
         ) {
             Column(
@@ -6347,21 +6909,23 @@ fun AssetSelectionDialog(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 24.dp, vertical = 20.dp),
+                            .padding(horizontal = 20.dp, vertical = 18.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column {
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
                             Text(
-                                text = StringsManager.getSelectAsset(currentLanguage), // ✅ MULTILANGUAGE
-                                fontSize = 20.sp,
+                                text = StringsManager.getSelectAsset(currentLanguage),
+                                fontSize = 19.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = colors.textPrimary,
                                 letterSpacing = (-0.02).sp
                             )
                             Text(
-                                text = StringsManager.getChooseFromAvailable(currentLanguage), // ✅ MULTILANGUAGE
-                                fontSize = 13.sp,
+                                text = StringsManager.getChooseFromAvailable(currentLanguage),
+                                fontSize = 12.sp,
                                 color = colors.textSecondary,
                                 fontWeight = FontWeight.Normal,
                                 letterSpacing = 0.sp
@@ -6370,14 +6934,14 @@ fun AssetSelectionDialog(
 
                         Surface(
                             modifier = Modifier
-                                .size(44.dp)
+                                .size(42.dp)
                                 .clip(CircleShape),
                             shape = CircleShape,
                             color = colors.surface,
                             onClick = onRefresh,
                             border = BorderStroke(
-                                width = 1.dp,
-                                color = colors.borderColor
+                                width = 0.4.dp,
+                                color = colors.chartLine2.copy(alpha = 0.4f)
                             )
                         ) {
                             Box(
@@ -6385,9 +6949,9 @@ fun AssetSelectionDialog(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Refresh,
-                                    contentDescription = StringsManager.getRefresh(currentLanguage), // ✅ MULTILANGUAGE
+                                    contentDescription = StringsManager.getRefresh(currentLanguage),
                                     tint = colors.accentPrimary,
-                                    modifier = Modifier.size(20.dp)
+                                    modifier = Modifier.size(19.dp)
                                 )
                             }
                         }
@@ -6399,7 +6963,7 @@ fun AssetSelectionDialog(
                     modifier = Modifier
                         .fillMaxSize()
                         .background(colors.background)
-                        .padding(horizontal = 24.dp, vertical = 8.dp)
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
                 ) {
                     when {
                         isLoading -> {
@@ -6409,33 +6973,33 @@ fun AssetSelectionDialog(
                             ) {
                                 Column(
                                     horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.spacedBy(24.dp)
+                                    verticalArrangement = Arrangement.spacedBy(20.dp)
                                 ) {
                                     Box(
-                                        modifier = Modifier.size(56.dp),
+                                        modifier = Modifier.size(52.dp),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         CircularProgressIndicator(
                                             color = colors.accentPrimary,
-                                            strokeWidth = 3.dp,
-                                            modifier = Modifier.size(48.dp)
+                                            strokeWidth = 2.8.dp,
+                                            modifier = Modifier.size(46.dp)
                                         )
                                     }
 
                                     Column(
                                         horizontalAlignment = Alignment.CenterHorizontally,
-                                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                                        verticalArrangement = Arrangement.spacedBy(6.dp)
                                     ) {
                                         Text(
-                                            text = StringsManager.getLoadingAssets(currentLanguage), // ✅ MULTILANGUAGE
-                                            fontSize = 18.sp,
+                                            text = StringsManager.getLoadingAssets(currentLanguage),
+                                            fontSize = 17.sp,
                                             color = colors.textPrimary,
                                             fontWeight = FontWeight.Medium,
                                             letterSpacing = (-0.01).sp
                                         )
                                         Text(
-                                            text = StringsManager.getPleaseWaitFetchingAssets(currentLanguage), // ✅ MULTILANGUAGE
-                                            fontSize = 14.sp,
+                                            text = StringsManager.getPleaseWaitFetchingAssets(currentLanguage),
+                                            fontSize = 13.sp,
                                             color = colors.textSecondary,
                                             textAlign = TextAlign.Center,
                                             letterSpacing = 0.sp
@@ -6452,15 +7016,15 @@ fun AssetSelectionDialog(
                             ) {
                                 Column(
                                     horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.spacedBy(24.dp)
+                                    verticalArrangement = Arrangement.spacedBy(20.dp)
                                 ) {
                                     Surface(
-                                        modifier = Modifier.size(88.dp),
+                                        modifier = Modifier.size(80.dp),
                                         shape = CircleShape,
                                         color = colors.surface,
                                         border = BorderStroke(
-                                            width = 1.dp,
-                                            color = colors.borderColor
+                                            width = 0.4.dp,
+                                            color = colors.chartLine2.copy(alpha = 0.4f)
                                         )
                                     ) {
                                         Box(
@@ -6470,67 +7034,71 @@ fun AssetSelectionDialog(
                                                 imageVector = Icons.Default.Warning,
                                                 contentDescription = null,
                                                 tint = colors.warningColor,
-                                                modifier = Modifier.size(36.dp)
+                                                modifier = Modifier.size(34.dp)
                                             )
                                         }
                                     }
 
                                     Column(
                                         horizontalAlignment = Alignment.CenterHorizontally,
-                                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                                        verticalArrangement = Arrangement.spacedBy(10.dp)
                                     ) {
                                         Text(
-                                            text = StringsManager.getNoAssetsAvailable(currentLanguage), // ✅ MULTILANGUAGE
-                                            fontSize = 20.sp,
+                                            text = StringsManager.getNoAssetsAvailable(currentLanguage),
+                                            fontSize = 19.sp,
                                             color = colors.textPrimary,
                                             fontWeight = FontWeight.SemiBold,
                                             letterSpacing = (-0.01).sp
                                         )
 
                                         Text(
-                                            text = StringsManager.getNoAssetsToDisplay(currentLanguage), // ✅ MULTILANGUAGE
-                                            fontSize = 15.sp,
+                                            text = StringsManager.getNoAssetsToDisplay(currentLanguage),
+                                            fontSize = 14.sp,
                                             color = colors.textSecondary,
                                             textAlign = TextAlign.Center,
-                                            lineHeight = 22.sp,
+                                            lineHeight = 20.sp,
                                             letterSpacing = 0.sp
                                         )
                                     }
 
-                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Spacer(modifier = Modifier.height(4.dp))
 
                                     Button(
                                         onClick = onRefresh,
                                         colors = ButtonDefaults.buttonColors(
                                             containerColor = colors.accentPrimary
                                         ),
-                                        shape = RoundedCornerShape(16.dp),
+                                        shape = RoundedCornerShape(14.dp),
                                         contentPadding = PaddingValues(
-                                            horizontal = 32.dp,
-                                            vertical = 16.dp
+                                            horizontal = 28.dp,
+                                            vertical = 14.dp
                                         ),
                                         elevation = ButtonDefaults.buttonElevation(
-                                            defaultElevation = 4.dp,
-                                            pressedElevation = 8.dp,
-                                            hoveredElevation = 6.dp
+                                            defaultElevation = 3.dp,
+                                            pressedElevation = 6.dp,
+                                            hoveredElevation = 5.dp
                                         ),
-                                        modifier = Modifier.height(52.dp)
+                                        modifier = Modifier.height(48.dp),
+                                        border = BorderStroke(
+                                            width = 0.4.dp,
+                                            color = colors.chartLine2.copy(alpha = 0.4f)
+                                        )
                                     ) {
                                         Row(
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            horizontalArrangement = Arrangement.spacedBy(7.dp),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             Icon(
                                                 imageVector = Icons.Default.Refresh,
                                                 contentDescription = null,
                                                 tint = colors.accentPrimary2,
-                                                modifier = Modifier.size(18.dp)
+                                                modifier = Modifier.size(17.dp)
                                             )
                                             Text(
-                                                text = StringsManager.getRefreshAssets(currentLanguage), // ✅ MULTILANGUAGE
+                                                text = StringsManager.getRefreshAssets(currentLanguage),
                                                 color = colors.accentPrimary2,
                                                 fontWeight = FontWeight.Medium,
-                                                fontSize = 16.sp,
+                                                fontSize = 15.sp,
                                                 letterSpacing = 0.sp
                                             )
                                         }
@@ -6541,7 +7109,7 @@ fun AssetSelectionDialog(
 
                         else -> {
                             LazyColumn(
-                                verticalArrangement = Arrangement.spacedBy(14.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp),
                                 contentPadding = PaddingValues(vertical = 8.dp),
                                 modifier = Modifier.fillMaxSize()
                             ) {
@@ -6553,7 +7121,7 @@ fun AssetSelectionDialog(
                                         asset = asset,
                                         onClick = { onAssetSelected(asset) },
                                         colors = colors,
-                                        currentLanguage = currentLanguage  // ✅ PASS LANGUAGE
+                                        currentLanguage = currentLanguage
                                     )
                                 }
                             }
@@ -6570,111 +7138,112 @@ fun AssetListItem(
     asset: Asset,
     onClick: () -> Unit,
     colors: DashboardColors,
-    currentLanguage: String = "id"  // ✅ ADD PARAMETER
+    currentLanguage: String = "id"
 ) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp)),
+            .clip(RoundedCornerShape(14.dp)),
         color = colors.surface,
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(14.dp),
         onClick = onClick,
-        border = BorderStroke(1.dp, colors.borderColor)
+        border = BorderStroke(0.4.dp, colors.chartLine2.copy(alpha = 0.4f))
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+            // Baris pertama: name | ric | profit
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
+                // Name
                 Text(
                     text = asset.name,
-                    fontSize = 16.sp,
+                    fontSize = 15.sp,
                     fontWeight = FontWeight.Medium,
                     color = colors.textPrimary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    letterSpacing = 0.15.sp
+                    modifier = Modifier.weight(1f)
                 )
 
+                Spacer(modifier = Modifier.width(8.dp))
+
+                // RIC
                 Text(
                     text = asset.ric,
-                    fontSize = 12.sp,
+                    fontSize = 11.sp,
                     color = colors.textSecondary,
                     fontWeight = FontWeight.Normal,
-                    letterSpacing = 0.4.sp
+                    letterSpacing = 0.3.sp,
+                    modifier = Modifier.weight(0.8f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
 
-                Surface(
-                    color = colors.controls,
-                    shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier.wrapContentWidth()
+                Spacer(modifier = Modifier.width(12.dp))
+
+                // Profit value
+                Column(
+                    horizontalAlignment = Alignment.End,
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
-                    Text(
-                        text = asset.typeName,
-                        fontSize = 11.sp,
-                        color = colors.textSecondary,
-                        modifier = Modifier.padding(
-                            horizontal = 8.dp,
-                            vertical = 2.dp
-                        ),
-                        fontWeight = FontWeight.Normal,
-                        letterSpacing = 0.5.sp
-                    )
+                    val profitColor = when {
+                        asset.profitRate > 0 -> colors.successColor
+                        asset.profitRate < 0 -> colors.errorColor
+                        else -> colors.textMuted
+                    }
+
+                    val profitIcon = when {
+                        asset.profitRate > 0 -> "↑"
+                        asset.profitRate < 0 -> "↓"
+                        else -> ""
+                    }
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        if (profitIcon.isNotEmpty()) {
+                            Text(
+                                text = profitIcon,
+                                fontSize = 11.sp,
+                                color = profitColor,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Text(
+                            text = "${asset.profitRate.toInt()}%",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = profitColor,
+                            letterSpacing = 0.1.sp
+                        )
+                    }
                 }
             }
 
-            Spacer(modifier = Modifier.width(16.dp))
-
-            Column(
-                horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.spacedBy(2.dp)
+            // Baris kedua: typeName
+            Surface(
+                color = colors.controls,
+                shape = RoundedCornerShape(7.dp),
+                modifier = Modifier.wrapContentWidth()
             ) {
-                val profitColor = when {
-                    asset.profitRate > 0 -> colors.successColor
-                    asset.profitRate < 0 -> colors.errorColor
-                    else -> colors.textMuted
-                }
-
-                val profitIcon = when {
-                    asset.profitRate > 0 -> "↑"
-                    asset.profitRate < 0 -> "↓"
-                    else -> ""
-                }
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(2.dp)
-                ) {
-                    if (profitIcon.isNotEmpty()) {
-                        Text(
-                            text = profitIcon,
-                            fontSize = 12.sp,
-                            color = profitColor,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                    Text(
-                        text = "${asset.profitRate.toInt()}%",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = profitColor,
-                        letterSpacing = 0.1.sp
-                    )
-                }
-
                 Text(
-                    text = StringsManager.getProfit(currentLanguage), // ✅ MULTILANGUAGE
+                    text = asset.typeName,
                     fontSize = 10.sp,
-                    color = colors.textMuted,
+                    color = colors.textSecondary,
+                    modifier = Modifier.padding(
+                        horizontal = 7.dp,
+                        vertical = 2.dp
+                    ),
                     fontWeight = FontWeight.Normal,
-                    letterSpacing = 0.5.sp,
-                    textAlign = TextAlign.End
+                    letterSpacing = 0.4.sp
                 )
             }
         }
@@ -6702,7 +7271,7 @@ fun ScheduleListDialog(
                     spotColor = Color.Black.copy(alpha = 0.12f)
                 ),
             shape = RoundedCornerShape(24.dp),
-            border = BorderStroke(1.dp, colors.borderColor),
+            border = BorderStroke(0.4.dp, colors.chartLine2.copy(alpha = 0.4f)),
             colors = CardDefaults.cardColors(containerColor = colors.background)
         ) {
             Column(Modifier.fillMaxSize()) {
@@ -7176,6 +7745,7 @@ private fun buildStatusText(order: ScheduledOrder): String {
     }
 }
 
+// ✅ TRADING MODE SELECTOR - COMPACT VERSION
 @Composable
 private fun TradingModeSelector(
     currentMode: TradingMode,
@@ -7192,220 +7762,374 @@ private fun TradingModeSelector(
 ) {
     var showModeDropdown by remember { mutableStateOf(false) }
 
-    Box(modifier = modifier.fillMaxWidth()) {
-        OutlinedCard(
-            onClick = { if (canModify) showModeDropdown = true },
-            enabled = canModify,
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        if (isModeSelected) {
+            Text(
+                text = StringsManager.getSignalMode(currentLanguage),
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = colors.textPrimary,
+                modifier = Modifier.padding(start = 2.dp)
+            )
+        }
+
+        Box(modifier = Modifier.fillMaxWidth()) {
+            OutlinedCard(
+                onClick = { if (canModify) showModeDropdown = true },
+                enabled = canModify,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(44.dp),
+                colors = CardDefaults.outlinedCardColors(
+                    containerColor = colors.surface,
+                    contentColor = colors.textPrimary,
+                    disabledContainerColor = colors.surface.copy(alpha = 0.5f),
+                    disabledContentColor = colors.textMuted
+                ),
+                border = BorderStroke(
+                    0.8.dp,
+                    colors.chartLine.copy(alpha = 0.4f)
+                ),
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 8.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = if (isModeSelected) getModeDisplayName(currentMode)
+                        else StringsManager.getSelectTradingMode(currentLanguage),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = if (canModify) colors.textPrimary else colors.textMuted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            // ✅ COMPACT DROPDOWN
+            DropdownMenu(
+                expanded = showModeDropdown,
+                onDismissRequest = { showModeDropdown = false },
+                modifier = Modifier
+                    .widthIn(min = 240.dp, max = 260.dp)
+                    .heightIn(max = 340.dp)
+                    .shadow(
+                        elevation = 16.dp,
+                        shape = RoundedCornerShape(12.dp),
+                        ambientColor = Color.Black.copy(alpha = 0.15f),
+                        spotColor = Color.Black.copy(alpha = 0.2f)
+                    )
+                    .background(
+                        color = colors.cardBackground,
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    .border(
+                        width = 0.8.dp,
+                        brush = Brush.verticalGradient(
+                            colors = listOf(
+                                colors.chartLine2.copy(alpha = 0.5f),
+                                colors.chartLine2.copy(alpha = 0.2f)
+                            )
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 6.dp)
+                ) {
+                    // ✅ COMPACT HEADER
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Hub,
+                            contentDescription = null,
+                            tint = colors.accentPrimary2main,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Text(
+                            text = StringsManager.getSelectTradingMode(currentLanguage),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = colors.textPrimary,
+                            letterSpacing = 0.2.sp
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(2.dp))
+
+                    // ✅ Signal Mode
+                    EnhancedModeMenuItem(
+                        icon = Icons.Default.Schedule,
+                        title = "Signal Mode",
+                        description = "Manual signal input",
+                        isSelected = isModeSelected && currentMode == TradingMode.SCHEDULE,
+                        isEnabled = !isFollowModeActive && !isIndicatorModeActive && !isCTCModeActive,
+                        accentColor = Color(0xFF3B82F6),
+                        colors = colors,
+                        onClick = {
+                            if (!isFollowModeActive && !isIndicatorModeActive && !isCTCModeActive) {
+                                onModeChange(TradingMode.SCHEDULE)
+                            }
+                            showModeDropdown = false
+                        }
+                    )
+
+                    EnhancedDivider(colors = colors)
+
+                    // ✅ Fastrade FTT Mode
+                    EnhancedModeMenuItem(
+                        icon = Icons.Default.Speed,
+                        title = "Fastrade FTT Mode",
+                        description = "Fast trade execution",
+                        isSelected = isModeSelected && currentMode == TradingMode.FOLLOW_ORDER,
+                        isEnabled = botState == BotState.STOPPED && !isIndicatorModeActive && !isCTCModeActive,
+                        accentColor = Color(0xFF10B981),
+                        colors = colors,
+                        onClick = {
+                            val canSelect = botState == BotState.STOPPED && !isIndicatorModeActive && !isCTCModeActive
+                            if (canSelect) {
+                                onModeChange(TradingMode.FOLLOW_ORDER)
+                            }
+                            showModeDropdown = false
+                        }
+                    )
+
+                    EnhancedDivider(colors = colors)
+
+                    // ✅ Analysis Strategy Mode
+                    EnhancedModeMenuItem(
+                        icon = Icons.Default.Analytics,
+                        title = "Analysis Strategy Mode",
+                        description = "Technical analysis based",
+                        isSelected = isModeSelected && currentMode == TradingMode.INDICATOR_ORDER,
+                        isEnabled = botState == BotState.STOPPED && !isFollowModeActive && !isCTCModeActive,
+                        accentColor = Color(0xFF9C27B0),
+                        colors = colors,
+                        onClick = {
+                            val canSelect = botState == BotState.STOPPED && !isFollowModeActive && !isCTCModeActive
+                            if (canSelect) {
+                                onModeChange(TradingMode.INDICATOR_ORDER)
+                            }
+                            showModeDropdown = false
+                        }
+                    )
+
+                    EnhancedDivider(colors = colors)
+
+                    // ✅ Fastrade CTC Mode
+                    EnhancedModeMenuItem(
+                        icon = Icons.Default.FlashOn,
+                        title = "Fastrade CTC Mode",
+                        description = "Ultra-fast execution",
+                        isSelected = isModeSelected && currentMode == TradingMode.CTC_ORDER,
+                        isEnabled = botState == BotState.STOPPED && !isFollowModeActive && !isIndicatorModeActive,
+                        accentColor = Color(0xFFFF6B35),
+                        colors = colors,
+                        onClick = {
+                            val canSelect = botState == BotState.STOPPED && !isFollowModeActive && !isIndicatorModeActive
+                            if (canSelect) {
+                                onModeChange(TradingMode.CTC_ORDER)
+                            }
+                            showModeDropdown = false
+                        }
+                    )
+
+                    EnhancedDivider(colors = colors)
+
+                    // ✅ Multi-Momentum Mode
+                    EnhancedModeMenuItem(
+                        icon = Icons.Default.Lightbulb,
+                        title = "Momentum Mode",
+                        description = "Parallel momentum analysis",
+                        isSelected = isModeSelected && currentMode == TradingMode.MULTI_MOMENTUM,
+                        isEnabled = botState == BotState.STOPPED &&
+                                !isFollowModeActive &&
+                                !isIndicatorModeActive &&
+                                !isCTCModeActive,
+                        accentColor = Color(0xFF00BCD4),
+                        colors = colors,
+                        onClick = {
+                            val canSelect = botState == BotState.STOPPED &&
+                                    !isFollowModeActive &&
+                                    !isIndicatorModeActive &&
+                                    !isCTCModeActive
+                            if (canSelect) {
+                                onModeChange(TradingMode.MULTI_MOMENTUM)
+                            }
+                            showModeDropdown = false
+                        }
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ✅ COMPACT MENU ITEM
+@Composable
+private fun EnhancedModeMenuItem(
+    icon: ImageVector,
+    title: String,
+    description: String,
+    isSelected: Boolean,
+    isEnabled: Boolean,
+    accentColor: Color,
+    colors: DashboardColors,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        enabled = isEnabled,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp, vertical = 2.dp),
+        shape = RoundedCornerShape(8.dp),
+        color = when {
+            isSelected -> accentColor.copy(alpha = 0.12f)
+            isEnabled -> Color.Transparent
+            else -> colors.surface.copy(alpha = 0.2f)
+        },
+        border = BorderStroke(
+            width = if (isSelected) 0.8.dp else 0.4.dp,
+            color = when {
+                isSelected -> accentColor.copy(alpha = 0.4f)
+                isEnabled -> colors.borderColor.copy(alpha = 0.15f)
+                else -> colors.borderColor.copy(alpha = 0.08f)
+            }
+        )
+    ) {
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(44.dp),
-            colors = CardDefaults.outlinedCardColors(
-                containerColor = colors.surface,
-                contentColor = colors.textPrimary,
-                disabledContainerColor = colors.surface.copy(alpha = 0.5f),
-                disabledContentColor = colors.textMuted
-            ),
-            border = BorderStroke(
-                0.8.dp,
-                colors.chartLine.copy(alpha = 0.4f)
-            ),
+                .padding(horizontal = 10.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Row(
+            // ✅ COMPACT ICON (28dp)
+            Box(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 8.dp),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
+                    .size(28.dp)
+                    .background(
+                        color = if (isSelected) {
+                            accentColor.copy(alpha = 0.15f)
+                        } else if (isEnabled) {
+                            colors.surface.copy(alpha = 0.4f)
+                        } else {
+                            colors.surface.copy(alpha = 0.15f)
+                        },
+                        shape = RoundedCornerShape(7.dp)
+                    )
+                    .border(
+                        width = 0.4.dp,
+                        color = if (isSelected) {
+                            accentColor.copy(alpha = 0.3f)
+                        } else {
+                            colors.borderColor.copy(alpha = 0.15f)
+                        },
+                        shape = RoundedCornerShape(7.dp)
+                    ),
+                contentAlignment = Alignment.Center
             ) {
-                // Tampilkan "Pilih Mode" jika belum dipilih
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = if (isSelected) {
+                        accentColor
+                    } else if (isEnabled) {
+                        colors.textPrimary
+                    } else {
+                        colors.textMuted
+                    },
+                    modifier = Modifier.size(14.dp)
+                )
+            }
+
+            // ✅ COMPACT TEXT
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(1.dp)
+            ) {
                 Text(
-                    text = if (isModeSelected) getModeDisplayName(currentMode)
-                    else StringsManager.getSelectTradingMode(currentLanguage),
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = if (canModify) colors.textPrimary else colors.textMuted,
+                    text = title,
+                    fontSize = 11.sp,
+                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                    color = if (isEnabled) colors.textPrimary else colors.textMuted,
+                    letterSpacing = 0.1.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = description,
+                    fontSize = 8.sp,
+                    color = if (isEnabled) colors.textSecondary else colors.textMuted.copy(alpha = 0.5f),
+                    letterSpacing = 0.05.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
             }
-        }
 
-        DropdownMenu(
-            expanded = showModeDropdown,
-            onDismissRequest = { showModeDropdown = false },
-            modifier = Modifier
-                .background(colors.cardBackground, shape = RoundedCornerShape(8.dp))
-                .border(1.dp, colors.borderColor, RoundedCornerShape(8.dp))
-                .wrapContentWidth()
-        ) {
-            // ✅ Header "Pilih Mode" di dalam dropdown
-            DropdownMenuItem(
-                text = {
-                    Text(
-                        text = StringsManager.getSignalMode(currentLanguage),
-                        color = colors.textSecondary,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(vertical = 4.dp)
+            // ✅ COMPACT CHECKMARK (16dp)
+            if (isSelected) {
+                Box(
+                    modifier = Modifier
+                        .size(16.dp)
+                        .background(
+                            color = accentColor.copy(alpha = 0.15f),
+                            shape = CircleShape
+                        )
+                        .border(
+                            width = 0.8.dp,
+                            color = accentColor,
+                            shape = CircleShape
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Check,
+                        contentDescription = null,
+                        tint = accentColor,
+                        modifier = Modifier.size(10.dp)
                     )
-                },
-                onClick = { }, // Tidak bisa diklik
-                enabled = false,
-                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-            )
-
-            // ✅ Divider setelah header
-            Divider(
-                color = colors.borderColor,
-                thickness = 1.dp,
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-            )
-
-            // Signal Mode
-            val canSelectSignal = !isFollowModeActive && !isIndicatorModeActive && !isCTCModeActive
-            DropdownMenuItem(
-                text = {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            "Signal Mode",
-                            color = if (canSelectSignal) colors.textPrimary else colors.textMuted,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        if (currentMode == TradingMode.SCHEDULE) {
-                            Spacer(modifier = Modifier.weight(1f))
-                            Icon(
-                                Icons.Default.CheckCircle,
-                                contentDescription = null,
-                                tint = colors.accentProfit,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                    }
-                },
-                onClick = {
-                    if (canSelectSignal) onModeChange(TradingMode.SCHEDULE)
-                    showModeDropdown = false
-                },
-                enabled = canSelectSignal,
-                modifier = Modifier.padding(horizontal = 6.dp, vertical = 6.dp)
-            )
-
-            // Fastrade FTT Mode
-            val canSelectFTT = botState == BotState.STOPPED && !isIndicatorModeActive && !isCTCModeActive
-            DropdownMenuItem(
-                text = {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            "Fastrade FTT Mode",
-                            color = if (canSelectFTT) colors.textPrimary else colors.textMuted,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        if (currentMode == TradingMode.FOLLOW_ORDER) {
-                            Spacer(modifier = Modifier.weight(1f))
-                            Icon(
-                                Icons.Default.CheckCircle,
-                                contentDescription = null,
-                                tint = colors.accentPrimary,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                    }
-                },
-                onClick = {
-                    if (canSelectFTT) onModeChange(TradingMode.FOLLOW_ORDER)
-                    showModeDropdown = false
-                },
-                enabled = canSelectFTT,
-                modifier = Modifier.padding(horizontal = 6.dp, vertical = 6.dp)
-            )
-
-            // Momentum Mode (Indicator)
-            val canSelectMomentum = botState == BotState.STOPPED && !isFollowModeActive && !isCTCModeActive
-            DropdownMenuItem(
-                text = {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            "Analysis Strategy Mode",
-                            color = if (canSelectMomentum) colors.textPrimary else colors.textMuted,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        if (currentMode == TradingMode.INDICATOR_ORDER) {
-                            Spacer(modifier = Modifier.weight(1f))
-                            Icon(
-                                Icons.Default.CheckCircle,
-                                contentDescription = null,
-                                tint = colors.accentWarning,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                    }
-                },
-                onClick = {
-                    if (canSelectMomentum) onModeChange(TradingMode.INDICATOR_ORDER)
-                    showModeDropdown = false
-                },
-                enabled = canSelectMomentum,
-                modifier = Modifier.padding(horizontal = 6.dp, vertical = 6.dp)
-            )
-
-            // Fastrade CTC Mode
-            val canSelectCTC = botState == BotState.STOPPED && !isFollowModeActive && !isIndicatorModeActive
-            DropdownMenuItem(
-                text = {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            "Fastrade CTC Mode",
-                            color = if (canSelectCTC) colors.textPrimary else colors.textMuted,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        if (currentMode == TradingMode.CTC_ORDER) {
-                            Spacer(modifier = Modifier.weight(1f))
-                            Icon(
-                                Icons.Default.CheckCircle,
-                                contentDescription = null,
-                                tint = Color(0xFFFF6B35),
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                    }
-                },
-                onClick = {
-                    if (canSelectCTC) onModeChange(TradingMode.CTC_ORDER)
-                    showModeDropdown = false
-                },
-                enabled = canSelectCTC,
-                modifier = Modifier.padding(horizontal = 6.dp, vertical = 6.dp)
-            )
+                }
+            }
         }
     }
+}
+
+// ✅ COMPACT DIVIDER (0.5dp)
+@Composable
+private fun EnhancedDivider(colors: DashboardColors) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(0.5.dp)
+            .padding(horizontal = 16.dp)
+            .background(
+                brush = Brush.horizontalGradient(
+                    colors = listOf(
+                        Color.Transparent,
+                        colors.chartLine2.copy(alpha = 0.25f),
+                        colors.chartLine2.copy(alpha = 0.35f),
+                        colors.chartLine2.copy(alpha = 0.25f),
+                        Color.Transparent
+                    )
+                )
+            )
+    )
 }
 
 private fun getModeDisplayName(mode: TradingMode): String {
@@ -7414,6 +8138,7 @@ private fun getModeDisplayName(mode: TradingMode): String {
         TradingMode.FOLLOW_ORDER -> "Fastrade FTT Mode"
         TradingMode.INDICATOR_ORDER -> "Analysis Strategy Mode"
         TradingMode.CTC_ORDER -> "Fastrade CTC Mode"
+        TradingMode.MULTI_MOMENTUM -> "Momentum Mode"
     }
 }
 
@@ -7430,113 +8155,190 @@ private fun CTCContent(
         verticalArrangement = Arrangement.spacedBy(8.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
+
+        // Status Card
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(
-                containerColor = if (isActive) colors.successColor.copy(alpha = 0.15f) else colors.surface
+                containerColor = if (isActive)
+                    colors.successColor.copy(alpha = 0.15f)
+                else colors.surface
             ),
             shape = RoundedCornerShape(8.dp),
-            border = BorderStroke(0.5.dp, if (isActive) colors.successColor.copy(alpha = 0.4f) else colors.borderColor)
+            border = BorderStroke(
+                0.5.dp,
+                if (isActive) colors.successColor.copy(alpha = 0.5f)
+                else colors.borderColor
+            )
         ) {
+
             Column(
-                modifier = Modifier.padding(6.dp),
+                modifier = Modifier.padding(8.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(6.dp)
-                                .background(
-                                    if (isActive) colors.wifiGreen else Color(0xFFFF6B35),
-                                    CircleShape
-                                )
-                        )
-                        Text(
-                            text = "CTC Ultra-Fast",
-                            fontSize = 9.sp,
-                            color = colors.textSecondary,
-                            fontWeight = FontWeight.Medium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
 
-                    Surface(
-                        color = if (isActive) colors.successColor.copy(alpha = 0.18f)
-                        else colors.errorColor.copy(alpha = 0.12f),
-                        shape = RoundedCornerShape(4.dp)
-                    ) {
-                        Text(
-                            text = if (isActive) "ACTIVE" else "INACTIVE",
-                            fontSize = 8.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (isActive) colors.accentProfit else colors.accentSecondary.copy(alpha = 0.8f),
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-
+                // ======================================================================
+                // MODE AKTIF + ADA ORDER — Last Signals Premium UI
+                // ======================================================================
                 if (isActive && ctcOrders.isNotEmpty()) {
-                    Divider(color = colors.borderColor.copy(alpha = 0.6f), thickness = 0.5.dp)
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                    Spacer(modifier = Modifier.height(2.dp))
+
+                    val recentOrders = ctcOrders.takeLast(6).reversed()
+                    val lastTrend = recentOrders.firstOrNull()?.trend?.uppercase() ?: "-"
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        Text(
-                            text = "Orders: ${ctcOrders.size}",
-                            fontSize = 8.sp,
-                            color = colors.textSecondary
-                        )
-                    }
 
-                    val pending = ctcOrders.count { !it.isExecuted }
-                    if (pending > 0) {
-                        Text(
-                            text = "Pending: $pending",
-                            fontSize = 8.sp,
-                            color = colors.warningColor,
-                            fontWeight = FontWeight.Medium
+                        val infiniteTransition = rememberInfiniteTransition(label = "")
+                        val pulseAlpha by infiniteTransition.animateFloat(
+                            initialValue = 0.5f,
+                            targetValue = 1f,
+                            animationSpec = infiniteRepeatable(
+                                animation = tween(1200, easing = LinearEasing),
+                                repeatMode = RepeatMode.Reverse
+                            ),
+                            label = "pulseAlpha"
                         )
+
+                        Icon(
+                            imageVector = Icons.Default.FlashOn,
+                            contentDescription = null,
+                            tint = colors.wifiGreen.copy(alpha = pulseAlpha),
+                            modifier = Modifier.size(24.dp)
+                        )
+
+                        Text(
+                            text = "Last Signals Active",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = colors.textPrimary,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 14.sp
+                        )
+
+                        Text(
+                            text = "Detected ${recentOrders.size} signals",
+                            fontSize = 8.sp,
+                            color = colors.textSecondary,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 14.sp
+                        )
+
+                        Text(
+                            text = "Latest trend: $lastTrend",
+                            fontSize = 8.sp,
+                            color = colors.textSecondary,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 14.sp
+                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
                     }
                 }
 
-                if (!isActive) {
-                    Text(
-                        text = "Ready for ultra-fast execution",
-                        fontSize = 8.sp,
-                        color = colors.textSecondary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                // ======================================================================
+                // MODE AKTIF + KOSONG
+                // ======================================================================
+                else if (isActive && ctcOrders.isEmpty()) {
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Spacer(modifier = Modifier.height(15.dp))
+
+                        Text(
+                            text = "CTC Mode Active",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = colors.textPrimary,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 14.sp
+                        )
+
+                        Text(
+                            text = "Waiting CTC execution",
+                            fontSize = 8.sp,
+                            color = colors.textSecondary,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 14.sp
+                        )
+
+                        Spacer(modifier = Modifier.height(15.dp))
+                    }
+                }
+
+                // ======================================================================
+                // MODE NON-AKTIF
+                // ======================================================================
+                else {
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        Text(
+                            text = "Ultra-Fast Execution",
+                            fontSize = 10.sp,
+                            color = colors.textPrimary,
+                            fontWeight = FontWeight.Medium,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 14.sp
+                        )
+
+                        Text(
+                            text = "CTC instant order execution",
+                            fontSize = 8.sp,
+                            color = colors.textSecondary,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 14.sp
+                        )
+
+                        Spacer(modifier = Modifier.height(14.dp))
+                    }
                 }
             }
         }
 
+        // ======================================================================
+        // CONTROL BUTTONS
+        // ======================================================================
+
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+
             Button(
                 onClick = onStartCTC,
                 enabled = !isActive && canModify,
                 modifier = Modifier.fillMaxWidth().height(36.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFFFF6B35),  // Orange untuk CTC
+                    containerColor = Color(0xFFFF6B35),
                     contentColor = colors.TextPrimary1,
                     disabledContainerColor = colors.controls,
                     disabledContentColor = colors.textMuted
                 ),
                 shape = RoundedCornerShape(6.dp)
             ) {
-                Text("Start", fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Start", fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                }
             }
 
             Button(
@@ -7546,12 +8348,16 @@ private fun CTCContent(
                 colors = ButtonDefaults.buttonColors(
                     containerColor = colors.errorColor,
                     contentColor = colors.TextPrimary1,
-                    disabledContainerColor = colors.controls,
                     disabledContentColor = colors.textMuted
                 ),
                 shape = RoundedCornerShape(6.dp)
             ) {
-                Text("Stop", fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Stop", fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                }
             }
         }
     }
@@ -7573,128 +8379,149 @@ private fun IndicatorContent(
         verticalArrangement = Arrangement.spacedBy(8.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
+
+        // Status Card
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(
-                containerColor = if (isActive) colors.successColor.copy(alpha = 0.15f) else colors.surface
+                containerColor = if (isActive)
+                    colors.successColor.copy(alpha = 0.15f)
+                else
+                    colors.surface
             ),
             shape = RoundedCornerShape(8.dp),
-            border = BorderStroke(0.5.dp, if (isActive) colors.successColor.copy(alpha = 0.4f) else colors.borderColor)
+            border = BorderStroke(
+                0.5.dp,
+                if (isActive) colors.successColor.copy(alpha = 0.4f)
+                else colors.borderColor
+            )
         ) {
+
             Column(
                 modifier = Modifier.padding(6.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(6.dp)
-                                .background(
-                                    if (isActive) colors.wifiGreen else colors.accentWarning,
-                                    CircleShape
-                                )
-                        )
-                        Text(
-                            text = "Indicator Setup",
-                            fontSize = 9.sp,
-                            color = colors.textSecondary,
-                            fontWeight = FontWeight.Medium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
 
-                    Surface(
-                        color = if (isActive) colors.successColor.copy(alpha = 0.18f)
-                        else colors.errorColor.copy(alpha = 0.12f),
-                        shape = RoundedCornerShape(4.dp)
-                    ) {
-                        Text(
-                            text = if (isActive) "ACTIVE" else "INACTIVE",
-                            fontSize = 8.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (isActive) colors.accentProfit else colors.accentSecondary.copy(alpha = 0.8f),
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = indicatorSettings.getDisplayName(),
-                        fontSize = 8.sp,
-                        color = colors.textSecondary,
-                        fontWeight = FontWeight.Medium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-
+                // ============================================================
+                // MODE AKTIF + ADA ORDER (Last Signals UI)
+                // ============================================================
                 if (isActive && indicatorOrders.isNotEmpty()) {
-                    Divider(color = colors.borderColor.copy(alpha = 0.6f), thickness = 0.5.dp)
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                    Spacer(modifier = Modifier.height(2.dp))
+
+                    val recentOrders = indicatorOrders.takeLast(6).reversed()
+                    val lastTrend = recentOrders.firstOrNull()?.trend?.uppercase() ?: "-"
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Text(
-                            text = "Orders: ${indicatorOrders.size}",
-                            fontSize = 8.sp,
-                            color = colors.textSecondary
+                            text = "Last Signals Active",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = colors.textPrimary,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 14.sp
                         )
-                    }
 
-                    val pending = indicatorOrders.count { !it.isExecuted && !it.isSkipped }
-                    if (pending > 0) {
                         Text(
-                            text = "Pending: $pending",
+                            text = "Latest trend: $lastTrend",
                             fontSize = 8.sp,
-                            color = colors.warningColor,
-                            fontWeight = FontWeight.Medium
+                            color = colors.textSecondary,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 14.sp
                         )
+
+                        Spacer(modifier = Modifier.height(2.dp))
                     }
                 }
 
-                if (!isActive) {
-                    Text(
-                        text = "Ready for analysis",
-                        fontSize = 8.sp,
-                        color = colors.textSecondary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                } else {
-                    Text(
-                        text = indicatorOrderStatus.take(40) + if (indicatorOrderStatus.length > 40) "..." else "",
-                        fontSize = 7.sp,
-                        color = colors.accentProfit,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        lineHeight = 9.sp
-                    )
+                // ============================================================
+                // MODE AKTIF + BELUM ADA ORDER
+                // ============================================================
+                else if (isActive && indicatorOrders.isEmpty()) {
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+
+                        Text(
+                            text = "Analysis Running",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = colors.textPrimary,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 14.sp
+                        )
+
+                        Text(
+                            text = "Monitoring ${indicatorSettings.getDisplayName()}",
+                            fontSize = 8.sp,
+                            color = colors.textSecondary,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 14.sp
+                        )
+
+                        Spacer(modifier = Modifier.height(2.dp))
+                    }
+                }
+
+                // ============================================================
+                // MODE NON-AKTIF
+                // ============================================================
+                else {
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+
+                        Text(
+                            text = "Technical Analysis",
+                            fontSize = 10.sp,
+                            color = colors.textPrimary,
+                            fontWeight = FontWeight.Medium,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 14.sp
+                        )
+
+                        Text(
+                            text = "${indicatorSettings.getDisplayName()} indicator",
+                            fontSize = 8.sp,
+                            color = colors.textSecondary,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 14.sp
+                        )
+
+                        Spacer(modifier = Modifier.height(2.dp))
+                    }
                 }
             }
         }
 
+        // ============================================================
+        // CONTROL BUTTONS
+        // ============================================================
+
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+
             Button(
                 onClick = onStartIndicator,
                 enabled = !isActive && canModify,
-                modifier = Modifier.fillMaxWidth().height(36.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(36.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = colors.successColor,
                     contentColor = colors.TextPrimary1,
@@ -7703,41 +8530,59 @@ private fun IndicatorContent(
                 ),
                 shape = RoundedCornerShape(6.dp)
             ) {
-                Text("Start", fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Start", fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                }
             }
 
             Button(
                 onClick = onStopIndicator,
                 enabled = isActive,
-                modifier = Modifier.fillMaxWidth().height(36.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(36.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = colors.errorColor,
                     contentColor = colors.TextPrimary1,
-                    disabledContainerColor = colors.controls,
                     disabledContentColor = colors.textMuted
                 ),
                 shape = RoundedCornerShape(6.dp)
             ) {
-                Text("Stop", fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Stop", fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                }
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            OutlinedButton(
+                onClick = onShowSettings,
+                enabled = canModify,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(40.dp),
+                shape = RoundedCornerShape(6.dp),
+                border = BorderStroke(
+                    1.dp,
+                    if (canModify) colors.successColor else colors.borderColor
+                ),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = if (canModify) colors.successColor else colors.textMuted,
+                    disabledContentColor = colors.textMuted
+                ),
+                contentPadding = PaddingValues(vertical = 8.dp)
             ) {
-                OutlinedButton(
-                    onClick = onShowSettings,
-                    enabled = canModify,
-                    modifier = Modifier.weight(1f).height(36.dp),
-                    shape = RoundedCornerShape(6.dp),
-                    border = BorderStroke(1.dp, if (canModify) colors.successColor else colors.borderColor),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = if (canModify) colors.accentProfit else colors.textMuted,
-                        disabledContentColor = colors.textMuted
-                    )
-                ) {
-                    Text("Settings", fontSize = 10.sp, fontWeight = FontWeight.Medium)
-                }
+                Text(
+                    text = "Settings",
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Visible
+                )
             }
         }
     }
@@ -7756,6 +8601,8 @@ private fun FollowContent(
         verticalArrangement = Arrangement.spacedBy(8.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
+
+        // Status Card dengan Analisis Real-time
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(
@@ -7764,93 +8611,145 @@ private fun FollowContent(
             shape = RoundedCornerShape(8.dp),
             border = BorderStroke(0.5.dp, if (isActive) colors.successColor.copy(alpha = 0.5f) else colors.borderColor)
         ) {
+
             Column(
-                modifier = Modifier.padding(6.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+                modifier = Modifier.padding(8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(6.dp)
-                                .background(
-                                    if (isActive) colors.wifiGreen else colors.accentProfit,
-                                    CircleShape
-                                )
-                        )
-                        Text(
-                            text = "Follow Candle",
-                            fontSize = 9.sp,
-                            color = colors.textSecondary,
-                            fontWeight = FontWeight.Medium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
 
-                    Surface(
-                        color = if (isActive) colors.successColor.copy(alpha = 0.18f)
-                        else colors.errorColor.copy(alpha = 0.12f),
-                        shape = RoundedCornerShape(4.dp)
-                    ) {
-                        Text(
-                            text = if (isActive) "ACTIVE" else "INACTIVE",
-                            fontSize = 8.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (isActive) colors.accentProfit else colors.accentSecondary.copy(alpha = 0.8f),
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-
+                // ======================================================================
+                // MODE AKTIF + ADA ORDER → LAST SIGNALS (MIRIP WAITING UI)
+                // ======================================================================
                 if (isActive && followOrders.isNotEmpty()) {
-                    Divider(color = colors.borderColor.copy(alpha = 0.6f), thickness = 0.5.dp)
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                    Spacer(modifier = Modifier.height(2.dp))
+
+                    val recentOrders = followOrders.takeLast(6).reversed()
+                    val lastTrend = recentOrders.firstOrNull()?.trend?.uppercase() ?: "-"
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        Text(
-                            text = "Orders: ${followOrders.size}",
-                            fontSize = 8.sp,
-                            maxLines = 1,
-                            color = colors.textSecondary
-                        )
-                    }
 
-                    val pending = followOrders.count { !it.isExecuted }
-                    if (pending > 0) {
                         Text(
-                            text = "Pending: $pending",
-                            fontSize = 8.sp,
-                            color = colors.warningColor,
-                            fontWeight = FontWeight.Medium
+                            text = "Last Signals Active",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = colors.textPrimary,
+                            lineHeight = 14.sp,
+                            textAlign = TextAlign.Center
                         )
+
+                        Text(
+                            text = "Latest trend: $lastTrend",
+                            fontSize = 8.sp,
+                            color = colors.textSecondary,
+                            lineHeight = 14.sp,
+                            textAlign = TextAlign.Center
+                        )
+
+                        Spacer(modifier = Modifier.height(15.dp))
                     }
                 }
 
-                if (!isActive) {
-                    Text(
-                        text = "Ready for signals",
-                        fontSize = 8.sp,
-                        color = colors.textSecondary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                // ======================================================================
+                // MODE AKTIF + BELUM ADA ORDER
+                // ======================================================================
+                else if (isActive && followOrders.isEmpty()) {
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+
+                        val infiniteTransition = rememberInfiniteTransition(label = "")
+                        val pulseAlpha by infiniteTransition.animateFloat(
+                            initialValue = 0.5f,
+                            targetValue = 1f,
+                            animationSpec = infiniteRepeatable(
+                                animation = tween(1200, easing = LinearEasing),
+                                repeatMode = RepeatMode.Reverse
+                            ),
+                            label = "pulseAlpha"
+                        )
+
+                        Icon(
+                            imageVector = Icons.Default.TrendingUp,
+                            contentDescription = null,
+                            tint = colors.successColor.copy(alpha = pulseAlpha),
+                            modifier = Modifier.size(24.dp)
+                        )
+
+                        Text(
+                            text = "Analysis Running",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = colors.textPrimary,
+                            lineHeight = 14.sp,
+                            textAlign = TextAlign.Center
+                        )
+
+                        Text(
+                            text = "Waiting candle data",
+                            fontSize = 8.sp,
+                            color = colors.textSecondary,
+                            lineHeight = 14.sp,
+                            textAlign = TextAlign.Center
+                        )
+
+                        Spacer(modifier = Modifier.height(15.dp))
+                    }
+                }
+
+                // ======================================================================
+                // MODE NON-AKTIF
+                // ======================================================================
+                else {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        Text(
+                            text = "Candle Analysis",
+                            fontSize = 10.sp,
+                            color = colors.textPrimary,
+                            fontWeight = FontWeight.Medium,
+                            lineHeight = 14.sp,
+                            textAlign = TextAlign.Center
+                        )
+
+                        Text(
+                            text = "comparison analysis",
+                            fontSize = 8.sp,
+                            color = colors.textSecondary,
+                            lineHeight = 14.sp,
+                            textAlign = TextAlign.Center
+                        )
+
+                        Spacer(modifier = Modifier.height(15.dp))
+                    }
                 }
             }
         }
 
+        // ======================================================================
+        // BUTTON CONTROL
+        // ======================================================================
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+
             Button(
                 onClick = onStartFollow,
                 enabled = !isActive && canModify,
@@ -7863,7 +8762,12 @@ private fun FollowContent(
                 ),
                 shape = RoundedCornerShape(6.dp)
             ) {
-                Text("Start", fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Start", fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                }
             }
 
             Button(
@@ -7873,16 +8777,21 @@ private fun FollowContent(
                 colors = ButtonDefaults.buttonColors(
                     containerColor = colors.errorColor,
                     contentColor = colors.TextPrimary1,
-                    disabledContainerColor = colors.controls,
                     disabledContentColor = colors.textMuted
                 ),
                 shape = RoundedCornerShape(6.dp)
             ) {
-                Text("Stop", fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Stop", fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                }
             }
         }
     }
 }
+
 
 @Composable
 private fun ScheduleContent(
@@ -7902,7 +8811,6 @@ private fun ScheduleContent(
 ) {
     val isBotRunning = botState == BotState.RUNNING
 
-    // âœ… State untuk menyimpan ID order yang sudah dihide
     var hiddenOrderIds by remember { mutableStateOf(setOf<String>()) }
 
     val sortedOrders = remember(scheduledOrders) {
@@ -7946,7 +8854,6 @@ private fun ScheduleContent(
         }
     }
 
-    // âœ… Filter untuk DISPLAY - exclude hidden orders
     val displayedOrders = remember(sortedOrders, hiddenOrderIds) {
         sortedOrders.filter { order ->
             !order.isSkipped && !hiddenOrderIds.contains(order.id)
@@ -7976,7 +8883,7 @@ private fun ScheduleContent(
     }
 
     Column(
-        verticalArrangement = Arrangement.spacedBy(15.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
         if (isBotRunning && sortedOrders.isNotEmpty()) {
@@ -7985,11 +8892,10 @@ private fun ScheduleContent(
             }
 
             if (allCompleted && displayedOrders.isEmpty()) {
-                // Placeholder - semua selesai
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(119.dp),
+                        .height(125.dp),
                     colors = CardDefaults.cardColors(
                         containerColor = colors.surface.copy(alpha = 0.5f)
                     ),
@@ -8034,7 +8940,7 @@ private fun ScheduleContent(
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(116.dp),
+                        .height(124.dp),
                     colors = CardDefaults.cardColors(
                         containerColor = colors.surface.copy(alpha = 0.08f)
                     ),
@@ -8057,7 +8963,6 @@ private fun ScheduleContent(
                                 isCurrentlyRunning = order.id == currentRunningOrderId && !isCurrentOrderInMonitoring,
                                 isCurrentOrderInMonitoring = isCurrentOrderInMonitoring,
                                 onHideCompleted = { orderId ->
-                                    // âœ… Callback untuk hide order
                                     hiddenOrderIds = hiddenOrderIds + orderId
                                 }
                             )
@@ -8066,37 +8971,32 @@ private fun ScheduleContent(
                 }
             }
         } else {
-            // TextField
+            // ✅ TextField SEKARANG DISABLED - tidak bisa diklik, hanya pajangan
             OutlinedTextField(
                 value = scheduleInput,
-                onValueChange = onScheduleInputChange,
-                enabled = canModify && !isBotRunning,
+                onValueChange = { /* Do nothing - disabled */ },
+                enabled = false, // ✅ DISABLED
+                readOnly = true, // ✅ READ ONLY
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(114.dp),
+                    .height(123.dp),
                 textStyle = LocalTextStyle.current.copy(
                     fontSize = 10.sp,
-                    color = colors.textPrimary
+                    color = colors.textMuted // ✅ Warna text muted untuk disabled
                 ),
                 placeholder = {
                     Text(
                         text = "12:30 B\n12:40 S\n13:00 s\n13:45 b",
                         fontSize = 9.sp,
-                        color = colors.textMuted,
+                        color = colors.textMuted.copy(alpha = 0.5f), // ✅ Placeholder lebih redup
                         lineHeight = 20.sp
                     )
                 },
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = colors.chartLine.copy(alpha = 0.4f),
-                    unfocusedBorderColor = colors.borderColor.copy(alpha = 0.6f),
-                    unfocusedContainerColor = colors.darkBackgroundClock,
-                    focusedContainerColor = colors.surface,
-                    focusedTextColor = colors.textPrimary,
-                    unfocusedTextColor = colors.textPrimary,
-                    cursorColor = colors.chartLine.copy(alpha = 0.2f),
-                    disabledTextColor = colors.textMuted,
-                    disabledBorderColor = colors.borderColor.copy(alpha = 0.6f),
-                    disabledContainerColor = colors.darkBackgroundClock
+                    disabledBorderColor = colors.borderColor.copy(alpha = 0.3f), // ✅ Border redup
+                    disabledTextColor = colors.textMuted, // ✅ Text redup
+                    disabledContainerColor = colors.darkBackgroundClock.copy(alpha = 0.5f), // ✅ Background redup
+                    disabledPlaceholderColor = colors.textMuted.copy(alpha = 0.3f) // ✅ Placeholder redup
                 ),
                 shape = RoundedCornerShape(8.dp),
                 maxLines = 4,
@@ -8149,14 +9049,15 @@ private fun ScheduleContent(
         if (scheduledOrders.isNotEmpty()) {
             val pendingOrders = sortedOrders.filter { !it.isExecuted && !it.isSkipped }
 
+            Spacer(modifier = Modifier.height(1.dp))
+
             OutlinedButton(
                 onClick = onViewSchedules,
-                modifier = Modifier.fillMaxWidth().height(36.dp),
+                modifier = Modifier.fillMaxWidth().height(35.dp),
                 shape = RoundedCornerShape(10.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = colors.accentPrimary3,
                     contentColor = colors.TextPrimary1,
-                    disabledContainerColor = colors.botButtonDisabledBg,
                     disabledContentColor = colors.TextPrimary1,
                 ),
             ) {
@@ -8165,51 +9066,18 @@ private fun ScheduleContent(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "View (${scheduledOrders.size})",
+                        text = "View",
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Medium
                     )
-
-                    if (isBotRunning && pendingOrders.isNotEmpty()) {
-                        Surface(
-                            color = colors.successColor.copy(alpha = 0.2f),
-                            shape = RoundedCornerShape(4.dp)
-                        ) {
-                            Text(
-                                text = "${pendingOrders.size} active",
-                                fontSize = 8.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = colors.successColor,
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
-                            )
-                        }
-                    }
                 }
             }
         }
 
-        // Tombol Add
-        Button(
-            onClick = onAddSchedule,
-            enabled = canModify && scheduleInput.isNotBlank() && !isBotRunning,
-            modifier = Modifier.fillMaxWidth().height(36.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = colors.successColor,
-                contentColor = colors.TextPrimary1,
-                disabledContainerColor = colors.botButtonDisabledBg,
-                disabledContentColor = colors.textMuted
-            ),
-            shape = RoundedCornerShape(10.dp),
-            border = BorderStroke(
-                0.8.dp,
-                colors.borderColor.copy(alpha = 0.6f)
-            )
-        ) {
-            Text("Add", fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
-        }
-
         // Tombol Start/Stop
         if (!isBotRunning) {
+            Spacer(modifier = Modifier.height(3.dp))
+
             Button(
                 onClick = onStartBot,
                 enabled = canStartBot,
@@ -8225,6 +9093,8 @@ private fun ScheduleContent(
                 Text("Start", fontSize = 10.sp, fontWeight = FontWeight.Bold)
             }
         } else {
+            Spacer(modifier = Modifier.height(3.dp))
+
             Button(
                 onClick = onStopBot,
                 enabled = true,
@@ -9350,7 +10220,7 @@ fun TradingModeCard(
     onAddSchedule: () -> Unit,
     onViewSchedules: () -> Unit,
     onClearAll: () -> Unit,
-    onRemoveOrder: (String) -> Unit,  // ✅ TAMBAHKAN PARAMETER INI
+    onRemoveOrder: (String) -> Unit,
     onStartBot: () -> Unit,
     isFollowModeActive: Boolean,
     followOrders: List<FollowOrder>,
@@ -9374,10 +10244,27 @@ fun TradingModeCard(
     currentLanguage: String = "id",
     isTradingModeSelected: Boolean = false,
     onStopBot: () -> Unit,
+    isMultiMomentumModeActive: Boolean,
+    multiMomentumOrders: List<MultiMomentumOrder>,
+    onStartMultiMomentum: () -> Unit,
+    onStopMultiMomentum: () -> Unit,
 ) {
-    // State untuk mengatur dialog mana yang terbuka
+    // ✅ State untuk mengatur dialog mana yang terbuka
     var showMultilineDialog by remember { mutableStateOf(false) }
     var showViewDialog by remember { mutableStateOf(false) }
+
+    // ✅ HAPUS semua LaunchedEffect auto-open
+    // TIDAK PERLU LAGI kode seperti ini:
+    /*
+    LaunchedEffect(currentMode, isTradingModeSelected, hasAutoOpenedScheduleDialog) {
+        if (isTradingModeSelected &&
+            currentMode == TradingMode.SCHEDULE &&
+            !hasAutoOpenedScheduleDialog) {
+            showMultilineDialog = true
+            hasAutoOpenedScheduleDialog = true
+        }
+    }
+    */
 
     Card(
         modifier = modifier
@@ -9406,7 +10293,25 @@ fun TradingModeCard(
             TradingModeSelector(
                 currentMode = currentMode,
                 onModeChange = { mode ->
+                    // ✅ PINDAHKAN LOGIKA AUTO-OPEN KE SINI
                     onModeChange(mode)
+
+                    // ✅ Auto-open dialog HANYA saat user klik dropdown dan pilih mode
+                    when (mode) {
+                        TradingMode.SCHEDULE -> {
+                            // Auto-open multiline dialog untuk input schedule
+                            showMultilineDialog = true
+                        }
+                        TradingMode.INDICATOR_ORDER -> {
+                            // Auto-open settings jika indicator belum active
+                            if (!isIndicatorModeActive) {
+                                onShowIndicatorSettings()
+                            }
+                        }
+                        else -> {
+                            // Mode lain tidak perlu auto-open dialog
+                        }
+                    }
                 },
                 canModify = canModify,
                 isFollowModeActive = isFollowModeActive,
@@ -9433,7 +10338,7 @@ fun TradingModeCard(
                             onStartBot = onStartBot,
                             onStopBot = onStopBot,
                             onShowMultilineDialog = { showMultilineDialog = true },
-                            onRemoveOrder = onRemoveOrder,  // ✅ PASS CALLBACK
+                            onRemoveOrder = onRemoveOrder,
                             colors = colors
                         )
                     }
@@ -9470,13 +10375,23 @@ fun TradingModeCard(
                             colors = colors
                         )
                     }
+                    TradingMode.MULTI_MOMENTUM -> {
+                        MultiMomentumContent(
+                            isActive = isMultiMomentumModeActive,
+                            multiMomentumOrders = multiMomentumOrders,
+                            canModify = canModify,
+                            onStartMultiMomentum = onStartMultiMomentum,
+                            onStopMultiMomentum = onStopMultiMomentum,
+                            colors = colors
+                        )
+                    }
                 }
             } else {
                 // Placeholder ketika mode belum dipilih
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(200.dp),
+                        .height(260.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Column(
@@ -9489,6 +10404,8 @@ fun TradingModeCard(
                             tint = colors.textMuted,
                             modifier = Modifier.size(48.dp)
                         )
+                        Spacer(modifier = Modifier.height(20.dp))
+
                         Text(
                             text = StringsManager.getSelectTradingMode(currentLanguage),
                             fontSize = 11.sp,
@@ -9512,7 +10429,7 @@ fun TradingModeCard(
     if (showViewDialog && currentMode == TradingMode.SCHEDULE) {
         ScheduleListDialog(
             scheduledOrders = scheduledOrders,
-            onRemoveOrder = onRemoveOrder,  // ✅ GUNAKAN CALLBACK
+            onRemoveOrder = onRemoveOrder,
             onClearAll = {
                 onClearAll()
                 showViewDialog = false
@@ -9527,7 +10444,7 @@ fun TradingModeCard(
         )
     }
 
-    // Dialog Bulk Input dengan callback ke View setelah Add
+    // ✅ Dialog Bulk Input dengan callback ke View setelah Add
     if (showMultilineDialog && currentMode == TradingMode.SCHEDULE) {
         MultilineScheduleDialog(
             currentInput = scheduleInput,
@@ -9563,6 +10480,1284 @@ private fun InfoRow(
             fontSize = 12.sp,
             fontWeight = FontWeight.Medium,
             color = Color.White
+        )
+    }
+}
+
+@Composable
+private fun MultiMomentumContent(
+    isActive: Boolean,
+    multiMomentumOrders: List<MultiMomentumOrder>,
+    canModify: Boolean,
+    onStartMultiMomentum: () -> Unit,
+    onStopMultiMomentum: () -> Unit,
+    colors: DashboardColors
+) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+
+        // Status Card
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = if (isActive) colors.successColor.copy(alpha = 0.15f)
+                else colors.surface
+            ),
+            shape = RoundedCornerShape(8.dp),
+            border = BorderStroke(
+                0.5.dp,
+                if (isActive) colors.successColor.copy(alpha = 0.5f) else colors.borderColor
+            )
+        ) {
+
+            Column(
+                modifier = Modifier.padding(8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+
+                // ======================================================================
+                // MODE AKTIF + ADA ORDER → LAST SIGNALS PREMIUM UI
+                // ======================================================================
+                if (isActive && multiMomentumOrders.isNotEmpty()) {
+
+                    Spacer(modifier = Modifier.height(2.dp))
+
+                    val recentOrders = multiMomentumOrders.takeLast(6).reversed()
+                    val lastTrend = recentOrders.firstOrNull()?.trend?.uppercase() ?: "-"
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = "Last Signals Active",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = colors.textPrimary,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 14.sp
+                        )
+
+                        Text(
+                            text = "Latest trend: $lastTrend",
+                            fontSize = 8.sp,
+                            color = colors.textSecondary,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 14.sp
+                        )
+
+                        Spacer(modifier = Modifier.height(13.dp))
+                    }
+                }
+
+                // ======================================================================
+                // MODE AKTIF + BELUM ADA ORDER
+                // ======================================================================
+                else if (isActive && multiMomentumOrders.isEmpty()) {
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+
+                        val infiniteTransition = rememberInfiniteTransition(label = "")
+                        val pulseAlpha by infiniteTransition.animateFloat(
+                            initialValue = 0.5f,
+                            targetValue = 1f,
+                            animationSpec = infiniteRepeatable(
+                                animation = tween(1200, easing = LinearEasing),
+                                repeatMode = RepeatMode.Reverse
+                            )
+                        )
+
+                        Icon(
+                            imageVector = Icons.Default.Analytics,
+                            contentDescription = null,
+                            tint = Color(0xFF00BCD4).copy(alpha = pulseAlpha),
+                            modifier = Modifier.size(24.dp)
+                        )
+
+                        Text(
+                            text = "Moment Active",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = colors.textPrimary,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 14.sp
+                        )
+
+                        Text(
+                            text = "Waiting execution",
+                            fontSize = 8.sp,
+                            color = colors.textSecondary,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 14.sp
+                        )
+
+                        Spacer(modifier = Modifier.height(15.dp))
+                    }
+                }
+
+                // ======================================================================
+                // MODE NON-AKTIF
+                // ======================================================================
+                else {
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+
+                        Spacer(modifier = Modifier.height(13.dp))
+
+                        Text(
+                            text = "Modular Moment Strategy",
+                            fontSize = 10.sp,
+                            color = colors.textPrimary,
+                            fontWeight = FontWeight.Medium,
+                            lineHeight = 14.sp,
+                            textAlign = TextAlign.Center
+                        )
+
+                        Text(
+                            text = "Parallel analysis",
+                            fontSize = 8.sp,
+                            color = colors.textSecondary,
+                            lineHeight = 14.sp,
+                            textAlign = TextAlign.Center
+                        )
+
+                        Spacer(modifier = Modifier.height(14.dp))
+                    }
+                }
+            }
+        }
+
+        // ======================================================================
+        // CONTROL BUTTONS
+        // ======================================================================
+
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+
+            Button(
+                onClick = onStartMultiMomentum,
+                enabled = !isActive && canModify,
+                modifier = Modifier.fillMaxWidth().height(36.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF00BCD4),
+                    contentColor = colors.TextPrimary1,
+                    disabledContainerColor = colors.controls,
+                    disabledContentColor = colors.textMuted
+                ),
+                shape = RoundedCornerShape(6.dp)
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Start", fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                }
+            }
+
+            Button(
+                onClick = onStopMultiMomentum,
+                enabled = isActive,
+                modifier = Modifier.fillMaxWidth().height(36.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = colors.errorColor,
+                    contentColor = colors.TextPrimary1,
+                    disabledContentColor = colors.textMuted
+                ),
+                shape = RoundedCornerShape(6.dp)
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Stop", fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun MultiMomentumInfoCard(
+    multiMomentumOrders: List<MultiMomentumOrder>,
+    isMultiMomentumModeActive: Boolean,
+    colors: DashboardColors,
+    modifier: Modifier = Modifier,
+    viewModel: DashboardViewModel = hiltViewModel()
+) {
+    if (!isMultiMomentumModeActive && multiMomentumOrders.isEmpty()) return
+
+    var performanceStats by remember { mutableStateOf<Map<String, Any>>(emptyMap()) }
+    var loadingCandles by remember { mutableStateOf(false) }
+    var candleLoadError by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(isMultiMomentumModeActive) {
+        while (isMultiMomentumModeActive) {
+            try {
+                loadingCandles = true
+                candleLoadError = null
+
+                performanceStats = viewModel.getMultiMomentumPerformanceInfo()
+
+                loadingCandles = false
+                delay(1000L)
+            } catch (e: Exception) {
+                loadingCandles = false
+                candleLoadError = e.message
+                Log.e("MultiMomentumInfoCard", "Error getting stats: ${e.message}")
+                delay(5000L)
+            }
+        }
+    }
+
+    val candleHistory = remember(performanceStats) {
+        try {
+            val candles = performanceStats["recent_candles"]
+            when (candles) {
+                is List<*> -> candles.mapNotNull { candle ->
+                    (candle as? Map<*, *>)?.let { map ->
+                        if (map.containsKey("open") &&
+                            map.containsKey("close") &&
+                            map.containsKey("high") &&
+                            map.containsKey("low")) {
+                            @Suppress("UNCHECKED_CAST")
+                            map as Map<String, Any>
+                        } else null
+                    }
+                }
+                else -> emptyList()
+            }
+        } catch (e: Exception) {
+            Log.e("MultiMomentumInfoCard", "Error parsing candles: ${e.message}")
+            emptyList()
+        }
+    }
+
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 2.dp, vertical = 8.dp),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = Color(0xFF2D2D2D)
+        ),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = 2.dp,
+            pressedElevation = 4.dp,
+            focusedElevation = 4.dp,
+            hoveredElevation = 3.dp
+        ),
+        border = BorderStroke(0.5.dp, Color(0xFF4A4A4A))
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Momentum Analysis",
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 18.sp
+                    ),
+                    color = Color.White
+                )
+
+                OutlinedCard(
+                    modifier = Modifier.wrapContentSize(),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.outlinedCardColors(
+                        containerColor = if (isMultiMomentumModeActive)
+                            Color(0xFF0D1A2E) else Color(0xFF2A2A2A),
+                        contentColor = Color.White
+                    ),
+                    border = BorderStroke(
+                        1.dp,
+                        if (isMultiMomentumModeActive)
+                            Color(0x8000BCD4) else Color(0xFF666666)
+                    ),
+                    elevation = CardDefaults.cardElevation(0.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Analytics,
+                            contentDescription = null,
+                            tint = if (isMultiMomentumModeActive) Color(0xFF00BCD4) else Color(0xFF666666),
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Text(
+                            text = if (isMultiMomentumModeActive) "Active" else "Inactive",
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                fontWeight = FontWeight.Medium,
+                                fontSize = 12.sp
+                            ),
+                            color = Color.White,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+
+            when {
+                candleLoadError != null -> {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = Color(0xFF1E1E1E)
+                        ),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(32.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Warning,
+                                    contentDescription = null,
+                                    tint = Color(0xFFEF4444),
+                                    modifier = Modifier.size(32.dp)
+                                )
+                                Text(
+                                    text = "Error loading candle data",
+                                    fontSize = 12.sp,
+                                    color = Color(0xFFEF4444)
+                                )
+                                Text(
+                                    text = candleLoadError ?: "Unknown error",
+                                    fontSize = 10.sp,
+                                    color = Color(0xFF9CA3AF),
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
+                    }
+                }
+
+                loadingCandles && candleHistory.isEmpty() -> {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = Color(0xFF1E1E1E)
+                        ),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(32.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(32.dp),
+                                    color = Color(0xFF60A5FA),
+                                    strokeWidth = 3.dp
+                                )
+                                Text(
+                                    text = "Collecting candle data...",
+                                    fontSize = 12.sp,
+                                    color = Color(0xFF9CA3AF)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                isMultiMomentumModeActive && candleHistory.isNotEmpty() -> {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = Color(0xFF1E1E1E)
+                        ),
+                        shape = RoundedCornerShape(16.dp),
+                        elevation = CardDefaults.cardElevation(1.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.BarChart,
+                                    contentDescription = null,
+                                    tint = Color(0xFF60A5FA),
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Text(
+                                    text = "Live OHLC Data",
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color(0xFF60A5FA)
+                                )
+
+                                Spacer(modifier = Modifier.weight(1f))
+
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    val infiniteTransition = rememberInfiniteTransition(label = "")
+                                    val pulseAlpha by infiniteTransition.animateFloat(
+                                        initialValue = 0.5f,
+                                        targetValue = 1f,
+                                        animationSpec = infiniteRepeatable(
+                                            animation = tween(1000, easing = LinearEasing),
+                                            repeatMode = RepeatMode.Reverse
+                                        ),
+                                        label = "pulseAlpha"
+                                    )
+
+                                    Box(
+                                        modifier = Modifier
+                                            .size(8.dp)
+                                            .background(
+                                                color = Color(0xFF10B981).copy(alpha = pulseAlpha),
+                                                shape = CircleShape
+                                            )
+                                    )
+
+                                    Text(
+                                        text = "LIVE",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF10B981)
+                                    )
+                                }
+                            }
+
+                            Text(
+                                text = "Latest ${candleHistory.size} candles • Updates every minute",
+                                fontSize = 11.sp,
+                                color = Color(0xFF9CA3AF)
+                            )
+
+                            Divider(color = Color(0xFF374151), thickness = 0.5.dp)
+
+                            LazyColumn(
+                                modifier = Modifier.heightIn(max = 400.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                items(
+                                    items = candleHistory.takeLast(10).reversed(),
+                                    key = { it["timestamp"] as? String ?: UUID.randomUUID().toString() }
+                                ) { candle ->
+                                    SafeCandleDataRow(
+                                        candle = candle,
+                                        colors = colors
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                !isMultiMomentumModeActive -> {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = Color(0xFF1E1E1E)
+                        ),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(32.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Info,
+                                    contentDescription = null,
+                                    tint = Color(0xFF9CA3AF),
+                                    modifier = Modifier.size(32.dp)
+                                )
+                                Text(
+                                    text = "Multi-Momentum mode inactive",
+                                    fontSize = 12.sp,
+                                    color = Color(0xFF9CA3AF)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = Color(0xFF1E1E1E)
+                ),
+                shape = RoundedCornerShape(16.dp),
+                elevation = CardDefaults.cardElevation(1.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "Active Momentum Types",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color(0xFF00BCD4)
+                    )
+
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            MomentumTypeCard(
+                                modifier = Modifier.weight(1f),
+                                name = "Candle\nSabit",
+                                count = multiMomentumOrders.count { it.momentumType == "CANDLE_SABIT" },
+                                color = Color(0xFF10B981)
+                            )
+                            MomentumTypeCard(
+                                modifier = Modifier.weight(1f),
+                                name = "Doji\nTerjepit",
+                                count = multiMomentumOrders.count { it.momentumType == "DOJI_TERJEPIT" },
+                                color = Color(0xFFFBBF24)
+                            )
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            MomentumTypeCard(
+                                modifier = Modifier.weight(1f),
+                                name = "Doji\nPembatalan",
+                                count = multiMomentumOrders.count { it.momentumType == "DOJI_PEMBATALAN" },
+                                color = Color(0xFFEF4444)
+                            )
+                            MomentumTypeCard(
+                                modifier = Modifier.weight(1f),
+                                name = "BB/SAR\nBreak",
+                                count = multiMomentumOrders.count { it.momentumType == "BB_SAR_BREAK" },
+                                color = Color(0xFF8B5CF6)
+                            )
+                        }
+                    }
+                }
+            }
+
+            if (multiMomentumOrders.isNotEmpty()) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color(0xFF1E1E1E)
+                    ),
+                    shape = RoundedCornerShape(16.dp),
+                    elevation = CardDefaults.cardElevation(1.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text(
+                            text = "Execution Statistics",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color(0xFF60A5FA)
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    text = "${multiMomentumOrders.size}",
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF60A5FA)
+                                )
+                                Text(
+                                    text = "Total Orders",
+                                    fontSize = 10.sp,
+                                    color = Color(0xFF9CA3AF)
+                                )
+                            }
+
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                val executed = multiMomentumOrders.count { it.isExecuted }
+                                Text(
+                                    text = "$executed",
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF10B981)
+                                )
+                                Text(
+                                    text = "Executed",
+                                    fontSize = 10.sp,
+                                    color = Color(0xFF9CA3AF)
+                                )
+                            }
+
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                val pending = multiMomentumOrders.count { !it.isExecuted }
+                                Text(
+                                    text = "$pending",
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFFBBF24)
+                                )
+                                Text(
+                                    text = "Pending",
+                                    fontSize = 10.sp,
+                                    color = Color(0xFF9CA3AF)
+                                )
+                            }
+                        }
+
+                        Divider(color = Color(0xFF374151), thickness = 0.5.dp)
+
+                        val buyOrders = multiMomentumOrders.count {
+                            it.trend.lowercase() in listOf("call", "buy")
+                        }
+                        val sellOrders = multiMomentumOrders.count {
+                            it.trend.lowercase() in listOf("put", "sell")
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.TrendingUp,
+                                        contentDescription = null,
+                                        tint = Color(0xFF10B981),
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Text(
+                                        text = "$buyOrders",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF10B981)
+                                    )
+                                }
+                                Text(
+                                    text = "Buy Orders",
+                                    fontSize = 9.sp,
+                                    color = Color(0xFF9CA3AF)
+                                )
+                            }
+
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.TrendingDown,
+                                        contentDescription = null,
+                                        tint = Color(0xFFEF4444),
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Text(
+                                        text = "$sellOrders",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFFEF4444)
+                                    )
+                                }
+                                Text(
+                                    text = "Sell Orders",
+                                    fontSize = 9.sp,
+                                    color = Color(0xFF9CA3AF)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (isMultiMomentumModeActive) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = Color(0xFF0D1A2E),
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, Color(0xFF00BCD4).copy(alpha = 0.3f))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Visibility,
+                            contentDescription = null,
+                            tint = Color(0xFF00BCD4),
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Column(
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(
+                                text = "Analyzing Market Data",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = Color(0xFF00BCD4)
+                            )
+                            Text(
+                                text = "Monitoring 4 parallel momentum strategies for trading opportunities",
+                                fontSize = 10.sp,
+                                color = Color(0xFFD1D5DB),
+                                lineHeight = 14.sp
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+@Composable
+private fun SafeCandleDataRow(
+    candle: Map<String, Any>,
+    colors: DashboardColors
+) {
+    // ✅ Parse data with remember to avoid recomposition issues
+    val candleData = remember(candle) {
+        try {
+            CandleDisplayData(
+                trend = candle["trend"] as? String ?: "neutral",
+                time = candle["formatted_time"] as? String ?: "N/A",
+                open = candle["open"] as? String ?: "0",
+                high = candle["high"] as? String ?: "0",
+                low = candle["low"] as? String ?: "0",
+                close = candle["close"] as? String ?: "0",
+                bodySize = candle["body_size"] as? String ?: "0",
+                range = candle["range"] as? String ?: "0",
+                hasError = false
+            )
+        } catch (e: Exception) {
+            Log.e("SafeCandleDataRow", "Error parsing candle: ${e.message}")
+            CandleDisplayData(hasError = true, errorMessage = e.message)
+        }
+    }
+
+    // ✅ Now safely render without try-catch around composables
+    if (candleData.hasError) {
+        ErrorCandleRow(
+            errorMessage = candleData.errorMessage ?: "Unknown error",
+            colors = colors
+        )
+    } else {
+        CandleDataRow(
+            trend = candleData.trend,
+            time = candleData.time,
+            open = candleData.open,
+            high = candleData.high,
+            low = candleData.low,
+            close = candleData.close,
+            bodySize = candleData.bodySize,
+            range = candleData.range,
+            colors = colors
+        )
+    }
+}
+
+// ✅ Data class for parsed candle data
+private data class CandleDisplayData(
+    val trend: String = "neutral",
+    val time: String = "N/A",
+    val open: String = "0",
+    val high: String = "0",
+    val low: String = "0",
+    val close: String = "0",
+    val bodySize: String = "0",
+    val range: String = "0",
+    val hasError: Boolean = false,
+    val errorMessage: String? = null
+)
+
+// ✅ Error display composable
+@Composable
+private fun ErrorCandleRow(
+    errorMessage: String,
+    colors: DashboardColors
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = colors.surface,
+        shape = RoundedCornerShape(8.dp),
+        border = BorderStroke(1.dp, colors.errorColor.copy(alpha = 0.3f))
+    ) {
+        Box(
+            modifier = Modifier.padding(12.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Warning,
+                    contentDescription = null,
+                    tint = colors.errorColor,
+                    modifier = Modifier.size(16.dp)
+                )
+                Text(
+                    text = "Error loading candle data",
+                    fontSize = 10.sp,
+                    color = colors.errorColor
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CandleDataRow(
+    trend: String,
+    time: String,
+    open: String,
+    high: String,
+    low: String,
+    close: String,
+    bodySize: String,
+    range: String,
+    colors: DashboardColors
+) {
+    val trendColor = when(trend) {
+        "buy" -> Color(0xFF10B981)
+        "sell" -> Color(0xFFEF4444)
+        else -> Color(0xFF9CA3AF)
+    }
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = Color(0xFF2D2E30),
+        shape = RoundedCornerShape(8.dp),
+        border = BorderStroke(1.dp, trendColor.copy(alpha = 0.3f))
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.AccessTime,
+                        contentDescription = null,
+                        tint = Color(0xFF9CA3AF),
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Text(
+                        text = time,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color(0xFFE2E8F0),
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
+
+                Surface(
+                    color = trendColor.copy(alpha = 0.2f),
+                    shape = RoundedCornerShape(6.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (trend == "buy") Icons.Default.TrendingUp else Icons.Default.TrendingDown,
+                            contentDescription = null,
+                            tint = trendColor,
+                            modifier = Modifier.size(12.dp)
+                        )
+                        Text(
+                            text = trend.uppercase(),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = trendColor
+                        )
+                    }
+                }
+            }
+
+            Divider(color = Color(0xFF374151), thickness = 0.5.dp)
+
+            Column(
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OHLCValueCompact(
+                        modifier = Modifier.weight(1f),
+                        label = "O",
+                        value = open,
+                        color = Color(0xFF60A5FA)
+                    )
+                    OHLCValueCompact(
+                        modifier = Modifier.weight(1f),
+                        label = "H",
+                        value = high,
+                        color = Color(0xFF10B981)
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OHLCValueCompact(
+                        modifier = Modifier.weight(1f),
+                        label = "L",
+                        value = low,
+                        color = Color(0xFFEF4444)
+                    )
+                    OHLCValueCompact(
+                        modifier = Modifier.weight(1f),
+                        label = "C",
+                        value = close,
+                        color = Color(0xFFFBBF24)
+                    )
+                }
+            }
+
+            Divider(color = Color(0xFF374151), thickness = 0.5.dp)
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                MetricValue(
+                    label = "Body Size",
+                    value = bodySize,
+                    color = trendColor
+                )
+                MetricValue(
+                    label = "Range",
+                    value = range,
+                    color = Color(0xFF9CA3AF)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun OHLCValueCompact(
+    modifier: Modifier = Modifier,
+    label: String,
+    value: String,
+    color: Color
+) {
+    Surface(
+        modifier = modifier,
+        color = color.copy(alpha = 0.1f),
+        shape = RoundedCornerShape(6.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = label,
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Bold,
+                color = color
+            )
+            Text(
+                text = value,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color(0xFFE2E8F0),
+                fontFamily = FontFamily.Monospace,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@Composable
+private fun MetricValue(
+    label: String,
+    value: String,
+    color: Color
+) {
+    Column {
+        Text(
+            text = label,
+            fontSize = 9.sp,
+            color = Color(0xFF9CA3AF)
+        )
+        Text(
+            text = value,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium,
+            color = color,
+            fontFamily = FontFamily.Monospace
+        )
+    }
+}
+
+@Composable
+private fun MomentumTypeCard(
+    modifier: Modifier = Modifier,
+    name: String,
+    count: Int,
+    color: Color
+) {
+    Surface(
+        modifier = modifier,
+        color = color.copy(alpha = 0.1f),
+        shape = RoundedCornerShape(8.dp),
+        border = BorderStroke(1.dp, color.copy(alpha = 0.3f))
+    ) {
+        Column(
+            modifier = Modifier.padding(8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                text = "$count",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                color = color
+            )
+            Text(
+                text = name,
+                fontSize = 9.sp,
+                color = Color(0xFF9CA3AF),
+                textAlign = TextAlign.Center,
+                lineHeight = 11.sp,
+                maxLines = 2
+            )
+        }
+    }
+}
+
+@Composable
+private fun OHLCDataCard(
+    order: MultiMomentumOrder,
+    candle: Candle,
+    colors: DashboardColors
+) {
+    val trend = candle.getTrend()
+    val trendColor = if (trend == "buy") Color(0xFF10B981) else Color(0xFFEF4444)
+    val bodySize = (candle.close - candle.open).abs().toDouble()
+    val range = (candle.high - candle.low).toDouble()
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = Color(0xFF2D2E30),
+        shape = RoundedCornerShape(8.dp),
+        border = BorderStroke(1.dp, trendColor.copy(alpha = 0.3f))
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            // Header with momentum type and time
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = order.momentumType.replace("_", " "),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color(0xFFE2E8F0),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+
+                Surface(
+                    color = trendColor.copy(alpha = 0.2f),
+                    shape = RoundedCornerShape(4.dp)
+                ) {
+                    Text(
+                        text = trend.uppercase(),
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = trendColor,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
+            }
+
+            // OHLC Values in grid
+            Column(
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    OHLCValue("Open", candle.open.toPlainString())
+                    OHLCValue("High", candle.high.toPlainString())
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    OHLCValue("Low", candle.low.toPlainString())
+                    OHLCValue("Close", candle.close.toPlainString())
+                }
+            }
+
+            Divider(color = Color(0xFF374151), thickness = 0.5.dp)
+
+            // Additional metrics
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
+                    Text(
+                        text = "Body Size",
+                        fontSize = 9.sp,
+                        color = Color(0xFF9CA3AF)
+                    )
+                    Text(
+                        text = String.format("%.5f", bodySize),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = trendColor,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
+                Column(
+                    horizontalAlignment = Alignment.End
+                ) {
+                    Text(
+                        text = "Range",
+                        fontSize = 9.sp,
+                        color = Color(0xFF9CA3AF)
+                    )
+                    Text(
+                        text = String.format("%.5f", range),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color(0xFF60A5FA),
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
+            }
+
+            // Execution status
+            if (order.isExecuted) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CheckCircle,
+                        contentDescription = null,
+                        tint = Color(0xFF10B981),
+                        modifier = Modifier.size(12.dp)
+                    )
+                    Text(
+                        text = "Executed",
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color(0xFF10B981)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun OHLCValue(
+    label: String,
+    value: String
+) {
+    Column(
+        modifier = Modifier.padding(vertical = 2.dp)
+    ) {
+        Text(
+            text = label,
+            fontSize = 9.sp,
+            color = Color(0xFF9CA3AF)
+        )
+        Text(
+            text = value,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Medium,
+            color = Color(0xFFE2E8F0),
+            fontFamily = FontFamily.Monospace,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }
