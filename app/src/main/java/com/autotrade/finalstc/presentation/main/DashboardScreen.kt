@@ -6895,6 +6895,20 @@ fun AssetSelectionDialog(
     colors: DashboardColors,
     currentLanguage: String = "id"
 ) {
+    var searchQuery by remember { mutableStateOf("") }
+
+    val filteredAssets = remember(assets, searchQuery) {
+        if (searchQuery.isBlank()) {
+            assets
+        } else {
+            assets.filter { asset ->
+                asset.name.contains(searchQuery, ignoreCase = true) ||
+                        asset.ric.contains(searchQuery, ignoreCase = true) ||
+                        asset.typeName.contains(searchQuery, ignoreCase = true)
+            }
+        }
+    }
+
     Dialog(onDismissRequest = onDismiss) {
         Card(
             modifier = Modifier
@@ -6936,55 +6950,125 @@ fun AssetSelectionDialog(
                         topEnd = 24.dp
                     )
                 ) {
-                    Row(
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 20.dp, vertical = 18.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Column(
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                text = StringsManager.getSelectAsset(currentLanguage),
-                                fontSize = 19.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = colors.textPrimary,
-                                letterSpacing = (-0.02).sp
-                            )
-                            Text(
-                                text = StringsManager.getChooseFromAvailable(currentLanguage),
-                                fontSize = 12.sp,
-                                color = colors.textSecondary,
-                                fontWeight = FontWeight.Normal,
-                                letterSpacing = 0.sp
-                            )
-                        }
-
-                        Surface(
-                            modifier = Modifier
-                                .size(42.dp)
-                                .clip(CircleShape),
-                            shape = CircleShape,
-                            color = colors.surface,
-                            onClick = onRefresh,
-                            border = BorderStroke(
-                                width = 0.4.dp,
-                                color = colors.chartLine2.copy(alpha = 0.4f)
-                            )
-                        ) {
-                            Box(
-                                contentAlignment = Alignment.Center
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Refresh,
-                                    contentDescription = StringsManager.getRefresh(currentLanguage),
-                                    tint = colors.accentPrimary,
-                                    modifier = Modifier.size(19.dp)
+                                Text(
+                                    text = StringsManager.getSelectAsset(currentLanguage),
+                                    fontSize = 19.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = colors.textPrimary,
+                                    letterSpacing = (-0.02).sp
+                                )
+                                Text(
+                                    text = StringsManager.getChooseFromAvailable(currentLanguage),
+                                    fontSize = 12.sp,
+                                    color = colors.textSecondary,
+                                    fontWeight = FontWeight.Normal,
+                                    letterSpacing = 0.sp
                                 )
                             }
+
+                            Surface(
+                                modifier = Modifier
+                                    .size(42.dp)
+                                    .clip(CircleShape),
+                                shape = CircleShape,
+                                color = colors.surface,
+                                onClick = onRefresh,
+                                border = BorderStroke(
+                                    width = 0.4.dp,
+                                    color = colors.chartLine2.copy(alpha = 0.4f)
+                                )
+                            ) {
+                                Box(
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Refresh,
+                                        contentDescription = StringsManager.getRefresh(currentLanguage),
+                                        tint = colors.accentPrimary,
+                                        modifier = Modifier.size(19.dp)
+                                    )
+                                }
+                            }
                         }
+
+                        // Search Field
+                        OutlinedTextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(50.dp),
+                            placeholder = {
+                                Text(
+                                    text = when (currentLanguage) {
+                                        "id" -> "Cari aset..."
+                                        "en" -> "Search assets..."
+                                        "es" -> "Buscar activos..."
+                                        "vi" -> "Tìm kiếm tài sản..."
+                                        "tr" -> "Varlık ara..."
+                                        "hi" -> "संपत्ति खोजें..."
+                                        "ms" -> "Cari aset..."
+                                        else -> "Search assets..."
+                                    },
+                                    color = colors.placeholderText,
+                                    fontSize = 14.sp
+                                )
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Search,
+                                    contentDescription = null,
+                                    tint = colors.textSecondary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            },
+                            trailingIcon = {
+                                if (searchQuery.isNotEmpty()) {
+                                    IconButton(
+                                        onClick = { searchQuery = "" },
+                                        modifier = Modifier.size(20.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Close,
+                                            contentDescription = "Clear",
+                                            tint = colors.textSecondary,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                }
+                            },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedContainerColor = colors.dialogInputBgFocused,
+                                unfocusedContainerColor = colors.dialogInputBg,
+                                focusedBorderColor = colors.dialogInputBorderFocused,
+                                unfocusedBorderColor = colors.dialogInputBorder,
+                                focusedTextColor = colors.dialogInputText,
+                                unfocusedTextColor = colors.dialogInputText,
+                                cursorColor = colors.accentPrimary
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(
+                                imeAction = ImeAction.Search
+                            ),
+                            textStyle = LocalTextStyle.current.copy(
+                                fontSize = 14.sp
+                            )
+                        )
                     }
                 }
 
@@ -7138,21 +7222,92 @@ fun AssetSelectionDialog(
                         }
 
                         else -> {
-                            LazyColumn(
-                                verticalArrangement = Arrangement.spacedBy(10.dp),
-                                contentPadding = PaddingValues(vertical = 8.dp),
-                                modifier = Modifier.fillMaxSize()
-                            ) {
-                                items(
-                                    items = assets,
-                                    key = { asset -> asset.hashCode() }
-                                ) { asset ->
-                                    AssetListItem(
-                                        asset = asset,
-                                        onClick = { onAssetSelected(asset) },
-                                        colors = colors,
-                                        currentLanguage = currentLanguage
-                                    )
+                            if (filteredAssets.isEmpty() && searchQuery.isNotEmpty()) {
+                                // No search results
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                                    ) {
+                                        Surface(
+                                            modifier = Modifier.size(70.dp),
+                                            shape = CircleShape,
+                                            color = colors.surface,
+                                            border = BorderStroke(
+                                                width = 0.4.dp,
+                                                color = colors.chartLine2.copy(alpha = 0.4f)
+                                            )
+                                        ) {
+                                            Box(
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.SearchOff,
+                                                    contentDescription = null,
+                                                    tint = colors.textMuted,
+                                                    modifier = Modifier.size(28.dp)
+                                                )
+                                            }
+                                        }
+
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Text(
+                                                text = when (currentLanguage) {
+                                                    "id" -> "Tidak ada hasil"
+                                                    "en" -> "No results found"
+                                                    "es" -> "No se encontraron resultados"
+                                                    "vi" -> "Không tìm thấy kết quả"
+                                                    "tr" -> "Sonuç bulunamadı"
+                                                    "hi" -> "कोई परिणाम नहीं मिला"
+                                                    "ms" -> "Tiada keputusan ditemui"
+                                                    else -> "No results found"
+                                                },
+                                                fontSize = 17.sp,
+                                                color = colors.textPrimary,
+                                                fontWeight = FontWeight.SemiBold,
+                                                letterSpacing = (-0.01).sp
+                                            )
+                                            Text(
+                                                text = when (currentLanguage) {
+                                                    "id" -> "Coba kata kunci lain"
+                                                    "en" -> "Try different keywords"
+                                                    "es" -> "Prueba con otras palabras"
+                                                    "vi" -> "Thử từ khóa khác"
+                                                    "tr" -> "Farklı anahtar kelimeler deneyin"
+                                                    "hi" -> "अन्य कीवर्ड आज़माएं"
+                                                    "ms" -> "Cuba kata kunci lain"
+                                                    else -> "Try different keywords"
+                                                },
+                                                fontSize = 13.sp,
+                                                color = colors.textSecondary,
+                                                textAlign = TextAlign.Center
+                                            )
+                                        }
+                                    }
+                                }
+                            } else {
+                                LazyColumn(
+                                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                                    contentPadding = PaddingValues(vertical = 8.dp),
+                                    modifier = Modifier.fillMaxSize()
+                                ) {
+                                    items(
+                                        items = filteredAssets,
+                                        key = { asset -> asset.hashCode() }
+                                    ) { asset ->
+                                        AssetListItem(
+                                            asset = asset,
+                                            onClick = { onAssetSelected(asset) },
+                                            colors = colors,
+                                            currentLanguage = currentLanguage
+                                        )
+                                    }
                                 }
                             }
                         }

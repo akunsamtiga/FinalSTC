@@ -1,7 +1,6 @@
 package com.autotrade.finalstc.presentation.main.webview
 
-import android.webkit.WebSettings
-import android.webkit.WebView
+import android.util.Log
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -16,8 +15,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.autotrade.finalstc.R
 import com.google.accompanist.web.*
+import com.autotrade.finalstc.utils.WebViewConfigManager
 
 private val DarkBackground = Color(0xFF1B1B1B)
 private val CardBackground = Color(0xFF2B2B2B)
@@ -123,33 +122,24 @@ fun WebViewScreen(
             state = webViewState,
             navigator = navigator,
             onCreated = { webView ->
-                webView.settings.apply {
-                    javaScriptEnabled = true
-                    domStorageEnabled = true
-                    databaseEnabled = true
-                    useWideViewPort = true
-                    loadWithOverviewMode = true
-                    setSupportZoom(true)
-                    builtInZoomControls = true
-                    displayZoomControls = false
-                    minimumFontSize = 8
-                    defaultFontSize = 16
-                    textZoom = 100
-                    cacheMode = WebSettings.LOAD_DEFAULT
-                    allowFileAccess = true
-                    allowContentAccess = true
-                    mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                    mediaPlaybackRequiresUserGesture = false
-                    setSupportMultipleWindows(true)
-                    userAgentString = "Mozilla/5.0 (Linux; Android 13; SM-G991B) " +
-                            "AppleWebKit/537.36 (KHTML, like Gecko) " +
-                            "Chrome/120.0.0.0 Mobile Safari/537.36"
+                // ✅ PENTING: Gunakan shared configuration dari WebViewConfigManager
+                WebViewConfigManager.configureWebView(webView)
+
+                // ✅ Log cookies untuk debugging
+                Log.d("WebViewScreen", "=== WebView Initialized ===")
+                val existingCookies = WebViewConfigManager.getAllCookies("https://stockity.id")
+                Log.d("WebViewScreen", "Existing cookies: $existingCookies")
+
+                if (WebViewConfigManager.isUserLoggedIn()) {
+                    Log.d("WebViewScreen", "✅ User already logged in (cookies found)")
+                } else {
+                    Log.d("WebViewScreen", "⚠️ No login cookies found")
                 }
 
                 webView.webChromeClient = object : android.webkit.WebChromeClient() {
                     override fun onConsoleMessage(consoleMessage: android.webkit.ConsoleMessage?): Boolean {
                         consoleMessage?.let {
-                            println("ðŸŒ JS Console: ${it.message()} (${it.sourceId()}:${it.lineNumber()})")
+                            Log.d("WebViewScreen", "JS Console: ${it.message()} (${it.sourceId()}:${it.lineNumber()})")
                         }
                         return true
                     }

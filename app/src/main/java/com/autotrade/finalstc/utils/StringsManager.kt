@@ -237,14 +237,14 @@ object StringsManager {
     }
 
     fun getTradingHistory(lang: String) = when(lang) {
-        "id" -> "Riwayat Trading"
-        "en" -> "Trading History"
+        "id" -> "Riwayat"
+        "en" -> "Trading"
         "es" -> "Historial de Trading"
         "vi" -> "Lịch Sử Giao Dịch"
         "tr" -> "İşlem Geçmişi"
         "hi" -> "ट्रेडिंग इतिहास"
         "ms" -> "Sejarah Dagangan"
-        else -> "Riwayat Trading"
+        else -> "Riwayat"
     }
 
     fun getDemoAccount(lang: String) = when(lang) {

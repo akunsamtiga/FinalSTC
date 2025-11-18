@@ -210,115 +210,89 @@ private fun ImprovedHeader(
             modifier = Modifier.padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // ROW 1: JUDUL + TOMBOL AKUN + FILTER + REFRESH
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(
+                // LEFT SIDE: JUDUL
+                Text(
+                    text = StringsManager.getTradingHistory(lang),
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 18.sp
+                    ),
+                    color = Color.White,
                     modifier = Modifier.weight(1f)
+                )
+
+                // RIGHT SIDE: TOMBOL AKUN + REFRESH + FILTER
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = StringsManager.getTradingHistory(lang),
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 18.sp
+                    // TOMBOL ACCOUNT TYPE YANG BISA DIKLIK UNTUK TOGGLE
+                    OutlinedCard(
+                        onClick = onToggleAccount,
+                        modifier = Modifier
+                            .height(36.dp)
+                            .wrapContentWidth(),
+                        shape = RoundedCornerShape(18.dp),
+                        colors = CardDefaults.outlinedCardColors(
+                            containerColor = if (uiState.showDemoAccount) Color(0xFF3A2F00) else Color(0xFF1A3A1A),
+                            contentColor = Color.White
                         ),
-                        color = Color.White
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        border = BorderStroke(
+                            1.dp,
+                            if (uiState.showDemoAccount) Color(0x80FFCC80) else Color(0x804CAF50)
+                        ),
+                        elevation = CardDefaults.cardElevation(0.dp)
                     ) {
-                        OutlinedCard(
-                            modifier = Modifier.wrapContentSize(),
-                            shape = RoundedCornerShape(20.dp),
-                            colors = CardDefaults.outlinedCardColors(
-                                containerColor = if (uiState.showDemoAccount) Color(0xFF3A2F00) else Color(0xFF1A3A1A),
-                                contentColor = Color.White
-                            ),
-                            border = BorderStroke(
-                                1.dp,
-                                if (uiState.showDemoAccount) Color(0x80FFCC80) else Color(0x804CAF50)
-                            ),
-                            elevation = CardDefaults.cardElevation(0.dp)
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Icon(
-                                    imageVector = if (uiState.showDemoAccount) Icons.Default.School else Icons.Default.AccountBalance,
-                                    contentDescription = null,
-                                    tint = if (uiState.showDemoAccount) Color(0xFFFFCC80) else Color(0xFF4CAF50),
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Text(
-                                    text = if (uiState.showDemoAccount)
-                                        StringsManager.getDemoAccount(lang)
-                                    else
-                                        StringsManager.getRealAccount(lang),
-                                    style = MaterialTheme.typography.bodySmall.copy(
-                                        fontWeight = FontWeight.Medium,
-                                        fontSize = 12.sp
-                                    ),
-                                    color = Color.White,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                        }
-
-                        if (selectedFilter == "week") {
-                            OutlinedCard(
-                                modifier = Modifier.wrapContentSize(),
-                                shape = RoundedCornerShape(20.dp),
-                                colors = CardDefaults.outlinedCardColors(
-                                    containerColor = Color(0xFF1A2B3D),
-                                    contentColor = Color.White
+                            Icon(
+                                imageVector = if (uiState.showDemoAccount) Icons.Default.School else Icons.Default.AccountBalance,
+                                contentDescription = null,
+                                tint = if (uiState.showDemoAccount) Color(0xFFFFCC80) else Color(0xFF4CAF50),
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Text(
+                                text = if (uiState.showDemoAccount)
+                                    StringsManager.getDemoAccount(lang)
+                                else
+                                    StringsManager.getRealAccount(lang),
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    fontWeight = FontWeight.Medium,
+                                    fontSize = 11.sp
                                 ),
-                                border = BorderStroke(1.dp, Color(0x802196F3)),
-                                elevation = CardDefaults.cardElevation(0.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.DateRange,
-                                        contentDescription = null,
-                                        tint = Color(0xFF2196F3),
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Text(
-                                        text = StringsManager.getThisWeek(lang),
-                                        style = MaterialTheme.typography.bodySmall.copy(
-                                            fontWeight = FontWeight.Medium,
-                                            fontSize = 12.sp
-                                        ),
-                                        color = Color.White,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-                            }
+                                color = Color.White,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
                         }
                     }
-                }
 
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
+                    // TOMBOL REFRESH
+                    IconButton(
+                        onClick = onRefresh,
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Refresh,
+                            contentDescription = StringsManager.getRefresh(lang),
+                            tint = StatusBlue,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
+                    // TOMBOL FILTER (TANPA BACKGROUND)
                     IconButton(
                         onClick = onFilterClick,
-                        modifier = Modifier
-                            .size(44.dp)
-                            .background(DarkSurface, CircleShape)
+                        modifier = Modifier.size(36.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Outlined.FilterList,
@@ -327,22 +301,100 @@ private fun ImprovedHeader(
                             modifier = Modifier.size(20.dp)
                         )
                     }
+                }
+            }
 
-                    IconButton(
-                        onClick = onToggleAccount,
-                        modifier = Modifier
-                            .size(44.dp)
-                            .background(DarkSurface, CircleShape)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.SwapHoriz,
-                            contentDescription = StringsManager.getToggleAccount(lang),
-                            tint = StatusBlue,
-                            modifier = Modifier.size(20.dp)
-                        )
+            // ROW 2: BADGE FILTER AKTIF (JIKA ADA)
+            if (selectedFilter != "all") {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // BADGE UNTUK FILTER YANG AKTIF
+                    when (selectedFilter) {
+                        "week" -> {
+                            FilterBadge(
+                                icon = Icons.Default.DateRange,
+                                text = StringsManager.getThisWeek(lang),
+                                iconColor = Color(0xFF2196F3),
+                                backgroundColor = Color(0xFF1A2B3D),
+                                borderColor = Color(0x802196F3)
+                            )
+                        }
+                        "won" -> {
+                            FilterBadge(
+                                icon = Icons.Outlined.TrendingUp,
+                                text = StringsManager.getWonTrades(lang),
+                                iconColor = WifiGreen,
+                                backgroundColor = WifiGreen.copy(alpha = 0.1f),
+                                borderColor = WifiGreen.copy(alpha = 0.3f)
+                            )
+                        }
+                        "lost" -> {
+                            FilterBadge(
+                                icon = Icons.Outlined.TrendingDown,
+                                text = StringsManager.getLostTrades(lang),
+                                iconColor = AccentSecondary,
+                                backgroundColor = AccentSecondary.copy(alpha = 0.1f),
+                                borderColor = AccentSecondary.copy(alpha = 0.3f)
+                            )
+                        }
+                        "opened" -> {
+                            FilterBadge(
+                                icon = Icons.Outlined.Schedule,
+                                text = StringsManager.getOpenTrades(lang),
+                                iconColor = AccentWarning,
+                                backgroundColor = AccentWarning.copy(alpha = 0.1f),
+                                borderColor = AccentWarning.copy(alpha = 0.3f)
+                            )
+                        }
                     }
                 }
             }
+        }
+    }
+}
+
+// ✅ COMPOSABLE BARU: Badge untuk menampilkan filter aktif
+@Composable
+private fun FilterBadge(
+    icon: ImageVector,
+    text: String,
+    iconColor: Color,
+    backgroundColor: Color,
+    borderColor: Color
+) {
+    OutlinedCard(
+        modifier = Modifier.wrapContentSize(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.outlinedCardColors(
+            containerColor = backgroundColor,
+            contentColor = Color.White
+        ),
+        border = BorderStroke(1.dp, borderColor),
+        elevation = CardDefaults.cardElevation(0.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = iconColor,
+                modifier = Modifier.size(14.dp)
+            )
+            Text(
+                text = text,
+                style = MaterialTheme.typography.bodySmall.copy(
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 11.sp
+                ),
+                color = Color.White,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }
@@ -1202,19 +1254,56 @@ private fun getWeekDateRange(): String {
     return "${outputFormat.format(weekAgo)} - ${outputFormat.format(currentDate)}"
 }
 
-// Di HistoryScreen.kt, update fungsi formatCurrencyByISO
+private fun formatPrice(price: Double): String {
+    return String.format("%.5f", price)
+}
 
+private fun formatDateTime(dateTime: String): String {
+    return try {
+        val deviceTimeZone = TimeZone.getDefault()
+        val deviceLocale = Locale.getDefault()
+
+        val inputFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", deviceLocale).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }
+
+        val outputFormat = SimpleDateFormat("dd MMM, HH:mm", deviceLocale).apply {
+            timeZone = deviceTimeZone
+        }
+
+        val date = inputFormat.parse(dateTime)
+        outputFormat.format(date ?: Date())
+    } catch (e: Exception) {
+        try {
+            val deviceTimeZone = TimeZone.getDefault()
+            val deviceLocale = Locale.getDefault()
+
+            val inputFormat2 = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", deviceLocale).apply {
+                timeZone = TimeZone.getTimeZone("UTC")
+            }
+
+            val outputFormat = SimpleDateFormat("dd MMM, HH:mm", deviceLocale).apply {
+                timeZone = deviceTimeZone
+            }
+
+            val cleanDateTime = dateTime.replace("T", " ").take(19)
+            val date = inputFormat2.parse(cleanDateTime)
+            outputFormat.format(date ?: Date())
+        } catch (e2: Exception) {
+            dateTime.take(16).replace("T", " ")
+        }
+    }
+}
+
+
+// ✅ FUNGSI UTAMA: Format currency dengan ISO code (untuk tampilan detail)
 private fun formatCurrencyByISO(amount: Long, currencyISO: String): String {
     val amountValue = amount / 100.0
 
     return when (currencyISO.uppercase()) {
         "IDR" -> {
-            val symbols = java.text.DecimalFormatSymbols(java.util.Locale("id", "ID")).apply {
-                groupingSeparator = '.'
-                decimalSeparator = ','
-            }
-            val formatter = java.text.DecimalFormat("#,##0", symbols)
-            "Rp ${formatter.format(amountValue.toLong())}"
+            // Format khusus untuk Indonesia dengan singkatan
+            formatRupiahCompact(amountValue, includeSymbol = true)
         }
         "USD" -> {
             val symbols = java.text.DecimalFormatSymbols(java.util.Locale.US).apply {
@@ -1295,11 +1384,8 @@ private fun formatCurrencyByISO(amount: Long, currencyISO: String): String {
             "₱${formatter.format(amountValue)}"
         }
         "VND" -> {
-            val symbols = java.text.DecimalFormatSymbols(java.util.Locale("vi", "VN")).apply {
-                groupingSeparator = '.'
-            }
-            val formatter = java.text.DecimalFormat("#,##0", symbols)
-            "₫${formatter.format(amountValue.toLong())}"
+            // Untuk VND, gunakan format compact karena nilai sangat besar
+            formatVietnameseDongCompact(amountValue, includeSymbol = true)
         }
         "INR" -> {
             val symbols = java.text.DecimalFormatSymbols(java.util.Locale("en", "IN")).apply {
@@ -1325,206 +1411,8 @@ private fun formatCurrencyByISO(amount: Long, currencyISO: String): String {
             val formatter = java.text.DecimalFormat("#,##0.00", symbols)
             "C$${formatter.format(amountValue)}"
         }
-        "CHF" -> {
-            val symbols = java.text.DecimalFormatSymbols(java.util.Locale("de", "CH")).apply {
-                groupingSeparator = '\''
-                decimalSeparator = '.'
-            }
-            val formatter = java.text.DecimalFormat("#,##0.00", symbols)
-            "Fr${formatter.format(amountValue)}"
-        }
-        "NZD" -> {
-            val symbols = java.text.DecimalFormatSymbols(java.util.Locale("en", "NZ")).apply {
-                groupingSeparator = ','
-                decimalSeparator = '.'
-            }
-            val formatter = java.text.DecimalFormat("#,##0.00", symbols)
-            "NZ$${formatter.format(amountValue)}"
-        }
-        "PKR" -> {
-            val symbols = java.text.DecimalFormatSymbols(java.util.Locale("en", "PK")).apply {
-                groupingSeparator = ','
-                decimalSeparator = '.'
-            }
-            val formatter = java.text.DecimalFormat("#,##0.00", symbols)
-            "Rs${formatter.format(amountValue)}"
-        }
-        "BDT" -> {
-            val symbols = java.text.DecimalFormatSymbols(java.util.Locale("bn", "BD")).apply {
-                groupingSeparator = ','
-                decimalSeparator = '.'
-            }
-            val formatter = java.text.DecimalFormat("#,##0.00", symbols)
-            "৳${formatter.format(amountValue)}"
-        }
-        "LKR" -> {
-            val symbols = java.text.DecimalFormatSymbols(java.util.Locale("en", "LK")).apply {
-                groupingSeparator = ','
-                decimalSeparator = '.'
-            }
-            val formatter = java.text.DecimalFormat("#,##0.00", symbols)
-            "Rs${formatter.format(amountValue)}"
-        }
-        "MXN" -> {
-            val symbols = java.text.DecimalFormatSymbols(java.util.Locale("es", "MX")).apply {
-                groupingSeparator = ','
-                decimalSeparator = '.'
-            }
-            val formatter = java.text.DecimalFormat("#,##0.00", symbols)
-            "Mex$${formatter.format(amountValue)}"
-        }
-        "BRL" -> {
-            val symbols = java.text.DecimalFormatSymbols(java.util.Locale("pt", "BR")).apply {
-                groupingSeparator = '.'
-                decimalSeparator = ','
-            }
-            val formatter = java.text.DecimalFormat("#,##0.00", symbols)
-            "R$${formatter.format(amountValue)}"
-        }
-        "ARS" -> {
-            val symbols = java.text.DecimalFormatSymbols(java.util.Locale("es", "AR")).apply {
-                groupingSeparator = '.'
-                decimalSeparator = ','
-            }
-            val formatter = java.text.DecimalFormat("#,##0.00", symbols)
-            "$${formatter.format(amountValue)}"
-        }
-        "CLP" -> {
-            val symbols = java.text.DecimalFormatSymbols(java.util.Locale("es", "CL")).apply {
-                groupingSeparator = '.'
-            }
-            val formatter = java.text.DecimalFormat("#,##0", symbols)
-            "$${formatter.format(amountValue.toLong())}"
-        }
-        "COP" -> {
-            val symbols = java.text.DecimalFormatSymbols(java.util.Locale("es", "CO")).apply {
-                groupingSeparator = '.'
-                decimalSeparator = ','
-            }
-            val formatter = java.text.DecimalFormat("#,##0.00", symbols)
-            "$${formatter.format(amountValue)}"
-        }
-        "AED" -> {
-            val symbols = java.text.DecimalFormatSymbols(java.util.Locale("ar", "AE")).apply {
-                groupingSeparator = ','
-                decimalSeparator = '.'
-            }
-            val formatter = java.text.DecimalFormat("#,##0.00", symbols)
-            "د.إ${formatter.format(amountValue)}"
-        }
-        "SAR" -> {
-            val symbols = java.text.DecimalFormatSymbols(java.util.Locale("ar", "SA")).apply {
-                groupingSeparator = ','
-                decimalSeparator = '.'
-            }
-            val formatter = java.text.DecimalFormat("#,##0.00", symbols)
-            "﷼${formatter.format(amountValue)}"
-        }
-        "TRY" -> {
-            val symbols = java.text.DecimalFormatSymbols(java.util.Locale("tr", "TR")).apply {
-                groupingSeparator = '.'
-                decimalSeparator = ','
-            }
-            val formatter = java.text.DecimalFormat("#,##0.00", symbols)
-            "₺${formatter.format(amountValue)}"
-        }
-        "EGP" -> {
-            val symbols = java.text.DecimalFormatSymbols(java.util.Locale("ar", "EG")).apply {
-                groupingSeparator = ','
-                decimalSeparator = '.'
-            }
-            val formatter = java.text.DecimalFormat("#,##0.00", symbols)
-            "£${formatter.format(amountValue)}"
-        }
-        "ZAR" -> {
-            val symbols = java.text.DecimalFormatSymbols(java.util.Locale("en", "ZA")).apply {
-                groupingSeparator = ','
-                decimalSeparator = '.'
-            }
-            val formatter = java.text.DecimalFormat("#,##0.00", symbols)
-            "R${formatter.format(amountValue)}"
-        }
-        "NGN" -> {
-            val symbols = java.text.DecimalFormatSymbols(java.util.Locale("en", "NG")).apply {
-                groupingSeparator = ','
-                decimalSeparator = '.'
-            }
-            val formatter = java.text.DecimalFormat("#,##0.00", symbols)
-            "₦${formatter.format(amountValue)}"
-        }
-        "RUB" -> {
-            val symbols = java.text.DecimalFormatSymbols(java.util.Locale("ru", "RU")).apply {
-                groupingSeparator = ' '
-                decimalSeparator = ','
-            }
-            val formatter = java.text.DecimalFormat("#,##0.00", symbols)
-            "₽${formatter.format(amountValue)}"
-        }
-        "PLN" -> {
-            val symbols = java.text.DecimalFormatSymbols(java.util.Locale("pl", "PL")).apply {
-                groupingSeparator = ' '
-                decimalSeparator = ','
-            }
-            val formatter = java.text.DecimalFormat("#,##0.00", symbols)
-            "zł${formatter.format(amountValue)}"
-        }
-        "CZK" -> {
-            val symbols = java.text.DecimalFormatSymbols(java.util.Locale("cs", "CZ")).apply {
-                groupingSeparator = ' '
-                decimalSeparator = ','
-            }
-            val formatter = java.text.DecimalFormat("#,##0.00", symbols)
-            "Kč${formatter.format(amountValue)}"
-        }
-        "HUF" -> {
-            val symbols = java.text.DecimalFormatSymbols(java.util.Locale("hu", "HU")).apply {
-                groupingSeparator = ' '
-            }
-            val formatter = java.text.DecimalFormat("#,##0", symbols)
-            "Ft${formatter.format(amountValue.toLong())}"
-        }
-        "SEK" -> {
-            val symbols = java.text.DecimalFormatSymbols(java.util.Locale("sv", "SE")).apply {
-                groupingSeparator = ' '
-                decimalSeparator = ','
-            }
-            val formatter = java.text.DecimalFormat("#,##0.00", symbols)
-            "kr${formatter.format(amountValue)}"
-        }
-        "NOK" -> {
-            val symbols = java.text.DecimalFormatSymbols(java.util.Locale("no", "NO")).apply {
-                groupingSeparator = ' '
-                decimalSeparator = ','
-            }
-            val formatter = java.text.DecimalFormat("#,##0.00", symbols)
-            "kr${formatter.format(amountValue)}"
-        }
-        "DKK" -> {
-            val symbols = java.text.DecimalFormatSymbols(java.util.Locale("da", "DK")).apply {
-                groupingSeparator = '.'
-                decimalSeparator = ','
-            }
-            val formatter = java.text.DecimalFormat("#,##0.00", symbols)
-            "kr${formatter.format(amountValue)}"
-        }
-        "HKD" -> {
-            val symbols = java.text.DecimalFormatSymbols(java.util.Locale("zh", "HK")).apply {
-                groupingSeparator = ','
-                decimalSeparator = '.'
-            }
-            val formatter = java.text.DecimalFormat("#,##0.00", symbols)
-            "HK$${formatter.format(amountValue)}"
-        }
-        "TWD" -> {
-            val symbols = java.text.DecimalFormatSymbols(java.util.Locale("zh", "TW")).apply {
-                groupingSeparator = ','
-                decimalSeparator = '.'
-            }
-            val formatter = java.text.DecimalFormat("#,##0.00", symbols)
-            "NT$${formatter.format(amountValue)}"
-        }
         else -> {
-            // Default fallback dengan simbol mata uang ISO code
+            // Default fallback
             val symbols = java.text.DecimalFormatSymbols(java.util.Locale.US).apply {
                 groupingSeparator = ','
                 decimalSeparator = '.'
@@ -1535,69 +1423,263 @@ private fun formatCurrencyByISO(amount: Long, currencyISO: String): String {
     }
 }
 
+// ✅ FUNGSI UTAMA: Format currency compact (untuk statistik card)
 private fun formatCurrencyCompact(amount: Long, currencyISO: String): String {
-    val absAmount = Math.abs(amount)
-    val isNegative = amount < 0
-    val prefix = if (isNegative) "-" else ""
+    val amountValue = amount / 100.0
 
     return when (currencyISO.uppercase()) {
-        "IDR", "USD", "SGD", "AUD", "CAD", "NZD", "EUR", "GBP", "JPY", "KRW",
-        "CNY", "RMB", "MYR", "THB", "PHP", "VND", "INR", "CHF" -> {
-            when {
-                absAmount >= 1_000_000_000 -> String.format("${prefix}%.1fB", absAmount / 1_000_000_000.0)
-                absAmount >= 1_000_000 -> String.format("${prefix}%.1fM", absAmount / 1_000_000.0)
-                absAmount >= 1_000 -> String.format("${prefix}%.1fK", absAmount / 1_000.0)
-                else -> "${prefix}$absAmount"
-            }
+        "IDR" -> {
+            // Untuk tampilan compact di statistik card - Rupiah
+            formatRupiahVeryCompact(amountValue)
+        }
+        "VND" -> {
+            // Untuk tampilan compact di statistik card - Vietnamese Dong
+            formatVietnameseDongCompact(amountValue, includeSymbol = false)
+        }
+        "USD", "SGD", "AUD", "CAD", "NZD", "HKD", "TWD" -> {
+            formatDollarCompact(amountValue)
+        }
+        "EUR", "GBP", "CHF" -> {
+            formatEuroCompact(amountValue)
+        }
+        "JPY", "KRW" -> {
+            formatAsianCurrencyCompact(amountValue)
+        }
+        "CNY", "RMB" -> {
+            formatChineseYuanCompact(amountValue)
+        }
+        "INR", "PKR", "LKR", "BDT" -> {
+            formatRupeeCompact(amountValue)
+        }
+        "THB" -> {
+            formatThaiBahtCompact(amountValue)
+        }
+        "MYR" -> {
+            formatMalaysianRinggitCompact(amountValue)
+        }
+        "PHP" -> {
+            formatPhilippinePesoCompact(amountValue)
         }
         else -> {
-            when {
-                absAmount >= 1_000_000_000 -> String.format("${prefix}%.1fB", absAmount / 1_000_000_000.0)
-                absAmount >= 1_000_000 -> String.format("${prefix}%.1fM", absAmount / 1_000_000.0)
-                absAmount >= 1_000 -> String.format("${prefix}%.1fK", absAmount / 1_000.0)
-                else -> "${prefix}$absAmount"
-            }
+            formatGenericCompact(amountValue)
         }
     }
 }
 
-private fun formatPrice(price: Double): String {
-    return String.format("%.5f", price)
+// ✅ FUNGSI KHUSUS: Format Rupiah dengan singkatan Indonesia (untuk tampilan detail)
+private fun formatRupiahCompact(amount: Double, includeSymbol: Boolean = true): String {
+    val absAmount = Math.abs(amount)
+    val isNegative = amount < 0
+    val prefix = if (isNegative) "-" else ""
+    val symbol = if (includeSymbol) "Rp " else ""
+
+    return when {
+        absAmount >= 1_000_000_000_000 -> {
+            val value = absAmount / 1_000_000_000_000
+            String.format("$prefix$symbol%.2f T", value).replace(".", ",")
+        }
+        absAmount >= 1_000_000_000 -> {
+            val value = absAmount / 1_000_000_000
+            String.format("$prefix$symbol%.2f M", value).replace(".", ",")
+        }
+        absAmount >= 1_000_000 -> {
+            val value = absAmount / 1_000_000
+            String.format("$prefix$symbol%.2f Jt", value).replace(".", ",")
+        }
+        absAmount >= 1_000 -> {
+            val value = absAmount / 1_000
+            String.format("$prefix$symbol%.2f Rb", value).replace(".", ",")
+        }
+        else -> {
+            // Format biasa tanpa desimal untuk nilai kecil
+            val formatted = String.format("%,.0f", absAmount).replace(",", ".")
+            "$prefix$symbol$formatted"
+        }
+    }
 }
 
-private fun formatDateTime(dateTime: String): String {
-    return try {
-        val deviceTimeZone = TimeZone.getDefault()
-        val deviceLocale = Locale.getDefault()
+// ✅ FUNGSI KHUSUS: Format Rupiah sangat compact (untuk statistik card)
+private fun formatRupiahVeryCompact(amount: Double): String {
+    val absAmount = Math.abs(amount)
+    val isNegative = amount < 0
+    val prefix = if (isNegative) "-" else ""
 
-        val inputFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", deviceLocale).apply {
-            timeZone = TimeZone.getTimeZone("UTC")
+    return when {
+        absAmount >= 1_000_000_000_000 -> {
+            val value = absAmount / 1_000_000_000_000
+            String.format("${prefix}%.1fT", value).replace(".", ",")
         }
-
-        val outputFormat = SimpleDateFormat("dd MMM, HH:mm", deviceLocale).apply {
-            timeZone = deviceTimeZone
+        absAmount >= 1_000_000_000 -> {
+            val value = absAmount / 1_000_000_000
+            String.format("${prefix}%.1fM", value).replace(".", ",")
         }
-
-        val date = inputFormat.parse(dateTime)
-        outputFormat.format(date ?: Date())
-    } catch (e: Exception) {
-        try {
-            val deviceTimeZone = TimeZone.getDefault()
-            val deviceLocale = Locale.getDefault()
-
-            val inputFormat2 = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", deviceLocale).apply {
-                timeZone = TimeZone.getTimeZone("UTC")
-            }
-
-            val outputFormat = SimpleDateFormat("dd MMM, HH:mm", deviceLocale).apply {
-                timeZone = deviceTimeZone
-            }
-
-            val cleanDateTime = dateTime.replace("T", " ").take(19)
-            val date = inputFormat2.parse(cleanDateTime)
-            outputFormat.format(date ?: Date())
-        } catch (e2: Exception) {
-            dateTime.take(16).replace("T", " ")
+        absAmount >= 1_000_000 -> {
+            val value = absAmount / 1_000_000
+            String.format("${prefix}%.1fJt", value).replace(".", ",")
         }
+        absAmount >= 1_000 -> {
+            val value = absAmount / 1_000
+            String.format("${prefix}%.1fRb", value).replace(".", ",")
+        }
+        else -> {
+            "${prefix}${absAmount.toInt()}"
+        }
+    }
+}
+
+// ✅ FUNGSI KHUSUS: Format Vietnamese Dong (nilai sangat besar)
+private fun formatVietnameseDongCompact(amount: Double, includeSymbol: Boolean = true): String {
+    val absAmount = Math.abs(amount)
+    val isNegative = amount < 0
+    val prefix = if (isNegative) "-" else ""
+    val symbol = if (includeSymbol) "₫" else ""
+
+    return when {
+        absAmount >= 1_000_000_000_000 -> {
+            val value = absAmount / 1_000_000_000_000
+            String.format("$prefix$symbol%.1f T", value).replace(".", ",")
+        }
+        absAmount >= 1_000_000_000 -> {
+            val value = absAmount / 1_000_000_000
+            String.format("$prefix$symbol%.1f B", value).replace(".", ",")
+        }
+        absAmount >= 1_000_000 -> {
+            val value = absAmount / 1_000_000
+            String.format("$prefix$symbol%.1f M", value).replace(".", ",")
+        }
+        absAmount >= 1_000 -> {
+            val value = absAmount / 1_000
+            String.format("$prefix$symbol%.1f K", value).replace(".", ",")
+        }
+        else -> {
+            "${prefix}$symbol${absAmount.toInt()}"
+        }
+    }
+}
+
+// ✅ FUNGSI BANTU: Format untuk mata uang dollar
+private fun formatDollarCompact(amount: Double): String {
+    val absAmount = Math.abs(amount)
+    val isNegative = amount < 0
+    val prefix = if (isNegative) "-" else ""
+
+    return when {
+        absAmount >= 1_000_000_000 -> String.format("${prefix}%.1fB", absAmount / 1_000_000_000.0)
+        absAmount >= 1_000_000 -> String.format("${prefix}%.1fM", absAmount / 1_000_000.0)
+        absAmount >= 1_000 -> String.format("${prefix}%.1fK", absAmount / 1_000.0)
+        else -> String.format("${prefix}%.0f", absAmount)
+    }
+}
+
+// ✅ FUNGSI BANTU: Format untuk mata uang euro
+private fun formatEuroCompact(amount: Double): String {
+    val absAmount = Math.abs(amount)
+    val isNegative = amount < 0
+    val prefix = if (isNegative) "-" else ""
+
+    return when {
+        absAmount >= 1_000_000_000 -> String.format("${prefix}%.1fB", absAmount / 1_000_000_000.0)
+        absAmount >= 1_000_000 -> String.format("${prefix}%.1fM", absAmount / 1_000_000.0)
+        absAmount >= 1_000 -> String.format("${prefix}%.1fK", absAmount / 1_000.0)
+        else -> String.format("${prefix}%.0f", absAmount)
+    }
+}
+
+// ✅ FUNGSI BANTU: Format untuk mata uang Asia (Yen, Won)
+private fun formatAsianCurrencyCompact(amount: Double): String {
+    val absAmount = Math.abs(amount)
+    val isNegative = amount < 0
+    val prefix = if (isNegative) "-" else ""
+
+    return when {
+        absAmount >= 100_000_000_000 -> String.format("${prefix}%.1fB", absAmount / 1_000_000_000.0)
+        absAmount >= 10_000_000 -> String.format("${prefix}%.1fM", absAmount / 1_000_000.0)
+        absAmount >= 10_000 -> String.format("${prefix}%.1fK", absAmount / 1_000.0)
+        else -> String.format("${prefix}%.0f", absAmount)
+    }
+}
+
+// ✅ FUNGSI BANTU: Format untuk Chinese Yuan
+private fun formatChineseYuanCompact(amount: Double): String {
+    val absAmount = Math.abs(amount)
+    val isNegative = amount < 0
+    val prefix = if (isNegative) "-" else ""
+
+    return when {
+        absAmount >= 100_000_000_000 -> String.format("${prefix}%.1fB", absAmount / 1_000_000_000.0)
+        absAmount >= 10_000_000 -> String.format("${prefix}%.1fM", absAmount / 1_000_000.0)
+        absAmount >= 10_000 -> String.format("${prefix}%.1fK", absAmount / 1_000.0)
+        else -> String.format("${prefix}%.0f", absAmount)
+    }
+}
+
+// ✅ FUNGSI BANTU: Format untuk Rupee (India, Pakistan, dll)
+private fun formatRupeeCompact(amount: Double): String {
+    val absAmount = Math.abs(amount)
+    val isNegative = amount < 0
+    val prefix = if (isNegative) "-" else ""
+
+    return when {
+        absAmount >= 100_000_000_000 -> String.format("${prefix}%.1fB", absAmount / 1_000_000_000.0)
+        absAmount >= 10_000_000 -> String.format("${prefix}%.1fCr", absAmount / 10_000_000.0) // Crore
+        absAmount >= 100_000 -> String.format("${prefix}%.1fL", absAmount / 100_000.0) // Lakh
+        absAmount >= 1_000 -> String.format("${prefix}%.1fK", absAmount / 1_000.0)
+        else -> String.format("${prefix}%.0f", absAmount)
+    }
+}
+
+// ✅ FUNGSI BANTU: Format untuk Thai Baht
+private fun formatThaiBahtCompact(amount: Double): String {
+    val absAmount = Math.abs(amount)
+    val isNegative = amount < 0
+    val prefix = if (isNegative) "-" else ""
+
+    return when {
+        absAmount >= 1_000_000_000 -> String.format("${prefix}%.1fB", absAmount / 1_000_000_000.0)
+        absAmount >= 1_000_000 -> String.format("${prefix}%.1fM", absAmount / 1_000_000.0)
+        absAmount >= 1_000 -> String.format("${prefix}%.1fK", absAmount / 1_000.0)
+        else -> String.format("${prefix}%.0f", absAmount)
+    }
+}
+
+// ✅ FUNGSI BANTU: Format untuk Malaysian Ringgit
+private fun formatMalaysianRinggitCompact(amount: Double): String {
+    val absAmount = Math.abs(amount)
+    val isNegative = amount < 0
+    val prefix = if (isNegative) "-" else ""
+
+    return when {
+        absAmount >= 1_000_000_000 -> String.format("${prefix}%.1fB", absAmount / 1_000_000_000.0)
+        absAmount >= 1_000_000 -> String.format("${prefix}%.1fM", absAmount / 1_000_000.0)
+        absAmount >= 1_000 -> String.format("${prefix}%.1fK", absAmount / 1_000.0)
+        else -> String.format("${prefix}%.0f", absAmount)
+    }
+}
+
+// ✅ FUNGSI BANTU: Format untuk Philippine Peso
+private fun formatPhilippinePesoCompact(amount: Double): String {
+    val absAmount = Math.abs(amount)
+    val isNegative = amount < 0
+    val prefix = if (isNegative) "-" else ""
+
+    return when {
+        absAmount >= 1_000_000_000 -> String.format("${prefix}%.1fB", absAmount / 1_000_000_000.0)
+        absAmount >= 1_000_000 -> String.format("${prefix}%.1fM", absAmount / 1_000_000.0)
+        absAmount >= 1_000 -> String.format("${prefix}%.1fK", absAmount / 1_000.0)
+        else -> String.format("${prefix}%.0f", absAmount)
+    }
+}
+
+// ✅ FUNGSI BANTU: Format generic untuk mata uang lainnya
+private fun formatGenericCompact(amount: Double): String {
+    val absAmount = Math.abs(amount)
+    val isNegative = amount < 0
+    val prefix = if (isNegative) "-" else ""
+
+    return when {
+        absAmount >= 1_000_000_000 -> String.format("${prefix}%.1fB", absAmount / 1_000_000_000.0)
+        absAmount >= 1_000_000 -> String.format("${prefix}%.1fM", absAmount / 1_000_000.0)
+        absAmount >= 1_000 -> String.format("${prefix}%.1fK", absAmount / 1_000.0)
+        else -> String.format("${prefix}%.0f", absAmount)
     }
 }

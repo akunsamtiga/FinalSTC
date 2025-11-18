@@ -41,6 +41,7 @@ import androidx.compose.foundation.border
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.autotrade.finalstc.presentation.theme.ThemeViewModel
 import androidx.compose.material.icons.filled.Help
+import com.autotrade.finalstc.utils.WebViewConfigManager
 
 object GoogleColors {
     val Blue = Color(0xFF4285F4)
@@ -988,32 +989,17 @@ fun RegisterScreen(
                     .systemBarsPadding()
                     .padding(bottom = if (showBottomNavigation) 80.dp else 0.dp),
                 onCreated = { webView ->
-                    webView.settings.apply {
-                        javaScriptEnabled = true
-                        domStorageEnabled = true
-                        databaseEnabled = true
-                        useWideViewPort = false
-                        loadWithOverviewMode = false
-                        setSupportZoom(false)
-                        builtInZoomControls = false
-                        displayZoomControls = false
-                        minimumFontSize = 8
-                        defaultFontSize = 16
-                        textZoom = 100
-                        cacheMode = WebSettings.LOAD_DEFAULT
-                        allowFileAccess = true
-                        allowContentAccess = true
-                        mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                        mediaPlaybackRequiresUserGesture = false
-                        setSupportMultipleWindows(true)
-                        userAgentString = "Mozilla/5.0 (Linux; Android 13; SM-G991B) " +
-                                "AppleWebKit/537.36 (KHTML, like Gecko) " +
-                                "Chrome/120.0.0.0 Mobile Safari/537.36"
-                    }
+                    // ✅ Gunakan shared configuration
+                    WebViewConfigManager.configureWebView(webView)
 
-                    CookieManager.getInstance().apply {
-                        setAcceptCookie(true)
-                        setAcceptThirdPartyCookies(webView, true)
+                    // ✅ Log existing cookies untuk debugging
+                    Log.d("RegisterScreen", "=== EXISTING COOKIES ON LOAD ===")
+                    val existingCookies = WebViewConfigManager.getAllCookies("https://stockity.id")
+                    Log.d("RegisterScreen", "Existing cookies: $existingCookies")
+
+                    // Check if already logged in
+                    if (WebViewConfigManager.isUserLoggedIn()) {
+                        Log.d("RegisterScreen", "User already has login cookies!")
                     }
 
                     Log.d("RegisterScreen", "WebView created and configured")
@@ -1037,6 +1023,9 @@ fun RegisterScreen(
                                         if (!authToken.isNullOrEmpty() && registrationAuthToken.isNullOrEmpty()) {
                                             registrationAuthToken = authToken
                                             Log.d("RegisterScreen", "AuthToken captured: ${authToken.take(20)}...")
+
+                                            // ✅ Force flush cookies to storage setelah dapat authtoken
+                                            WebViewConfigManager.flushCookies()
                                         }
 
                                         if (!deviceIdFromWeb.isNullOrEmpty() && deviceIdFromWeb != registrationDeviceId) {
