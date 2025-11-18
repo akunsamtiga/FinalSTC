@@ -1,5 +1,6 @@
 package com.autotrade.finalstc.presentation.main.history
 
+import android.util.Log
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
@@ -17,6 +18,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -31,6 +33,12 @@ import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.TimeUnit
+import coil.compose.SubcomposeAsyncImage
+import coil.request.ImageRequest
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.layout.ContentScale
+import coil.request.CachePolicy
+
 
 private val DarkBackground = Color(0xFF1B1B1B)
 private val DarkSurface = Color(0xFF1F1F1F)
@@ -44,6 +52,15 @@ private val BorderColor = Color(0xFF323232)
 private val WifiGreen = Color(0xFF67D88B)
 private val AccentProfit = Color(0xFF7AF1C1)
 private val StatusBlue = Color(0xFF64B5F6)
+
+
+// ✅ TAMBAH: Sealed class untuk state management icon
+sealed class IconLoadState {
+    object Loading : IconLoadState()
+    object Success : IconLoadState()
+    data class Error(val throwable: Throwable?) : IconLoadState()
+    object NoIcon : IconLoadState()
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -549,15 +566,9 @@ private fun ImprovedHistoryCard(
         else -> TextMuted
     }
 
-    val profit = trade.win - trade.amount
-    val profitColor = if (profit >= 0) AccentProfit else AccentSecondary
-    val isWeeklyTrade = isWithinLastWeek(trade.createdAt)
-
     val displayDirection = when (trade.trend.lowercase()) {
-        "call" -> "BUY"
-        "put" -> "SELL"
-        "buy" -> "BUY"
-        "sell" -> "SELL"
+        "call", "buy" -> "BUY"
+        "put", "sell" -> "SELL"
         else -> trade.trend.uppercase()
     }
 
@@ -567,190 +578,287 @@ private fun ImprovedHistoryCard(
         else -> TextSecondary
     }
 
+    val entryTime = formatEntryTime(trade.createdAt)
+    val exitTime = if (trade.finishedAt != null) formatEntryTime(trade.finishedAt) else "-"
+
+    // ✅ IMPROVEMENT: State management untuk icon loading
+    var iconLoadState by remember { mutableStateOf<IconLoadState>(IconLoadState.Loading) }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = CardBackground),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
         shape = RoundedCornerShape(16.dp),
-        border = BorderStroke(
-            1.dp,
-            if (isWeeklyTrade) StatusBlue.copy(alpha = 0.3f) else BorderColor
-        )
+        border = BorderStroke(1.dp, BorderColor)
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            // ROW 1: ICON + ASSET INFO + AMOUNTS
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.Top
             ) {
+                // LEFT SIDE: ICON + ASSET INFO
                 Row(
-                    verticalAlignment = Alignment.CenterVertically
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .background(
-                                statusColor.copy(alpha = 0.15f),
-                                RoundedCornerShape(8.dp)
-                            ),
-                        contentAlignment = Alignment.Center
+                    // ICON CONTAINER
+                    Surface(
+                        modifier = Modifier.size(48.dp),
+                        shape = CircleShape,
+                        color = DarkSurface,
+                        border = BorderStroke(1.dp, BorderColor.copy(alpha = 0.3f))
                     ) {
-                        Text(
-                            text = trade.assetName.take(2).uppercase(),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = statusColor
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.width(12.dp))
-
-                    Column {
-                        Text(
-                            text = trade.assetName,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = TextPrimary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier.fillMaxSize()
                         ) {
-                            Text(
-                                text = trade.assetRic,
-                                fontSize = 12.sp,
-                                color = TextSecondary
-                            )
+                            when {
+                                // CASE 1: ADA ICON URL - LOAD DENGAN COIL
+                                !trade.iconUrl.isNullOrEmpty() -> {
+                                    LaunchedEffect(trade.iconUrl) {
+                                        iconLoadState = IconLoadState.Loading
+                                    }
 
-                            if (isWeeklyTrade) {
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Surface(
-                                    shape = RoundedCornerShape(4.dp),
-                                    color = StatusBlue.copy(alpha = 0.15f)
-                                ) {
+                                    SubcomposeAsyncImage(
+                                        model = ImageRequest.Builder(LocalContext.current)
+                                            .data(trade.iconUrl)
+                                            .crossfade(true)
+                                            .memoryCachePolicy(CachePolicy.ENABLED)
+                                            .diskCachePolicy(CachePolicy.ENABLED)
+                                            .networkCachePolicy(CachePolicy.ENABLED)
+                                            .build(),
+                                        contentDescription = "${trade.assetName} icon",
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .padding(8.dp),
+                                        contentScale = ContentScale.Fit,
+                                        loading = {
+                                            iconLoadState = IconLoadState.Loading
+                                            Box(
+                                                contentAlignment = Alignment.Center,
+                                                modifier = Modifier.fillMaxSize()
+                                            ) {
+                                                CircularProgressIndicator(
+                                                    modifier = Modifier.size(20.dp),
+                                                    color = StatusBlue,
+                                                    strokeWidth = 2.dp
+                                                )
+                                            }
+                                        },
+                                        error = { error ->
+                                            iconLoadState = IconLoadState.Error(error.result.throwable)
+                                            Log.e("HistoryScreen", "❌ Failed to load icon: ${trade.iconUrl} - ${error.result.throwable?.message}")
+
+                                            // ✅ PERBAIKAN: Gunakan AnimatedVisibility biasa, bukan RowScope
+                                            Box(
+                                                contentAlignment = Alignment.Center,
+                                                modifier = Modifier.fillMaxSize()
+                                            ) {
+                                                Text(
+                                                    text = getAssetInitials(trade.assetName),
+                                                    fontSize = 14.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = TextSecondary,
+                                                    textAlign = TextAlign.Center
+                                                )
+                                            }
+                                        },
+                                        onSuccess = {
+                                            iconLoadState = IconLoadState.Success
+                                            Log.d("HistoryScreen", "✅ Successfully loaded icon: ${trade.iconUrl}")
+                                        }
+                                    )
+                                }
+
+                                // CASE 2: TIDAK ADA ICON URL - LANGSUNG SHOW INITIALS
+                                else -> {
+                                    iconLoadState = IconLoadState.NoIcon
                                     Text(
-                                        text = StringsManager.getThisWeek(lang),
-                                        fontSize = 8.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = StatusBlue,
-                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                        text = getAssetInitials(trade.assetName),
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = TextSecondary,
+                                        textAlign = TextAlign.Center
                                     )
                                 }
                             }
                         }
                     }
+
+                    // ASSET INFO COLUMN
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(
+                            text = trade.assetName,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = TextPrimary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+
+                        Text(
+                            text = displayDirection,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = directionColor,
+                            maxLines = 1
+                        )
+                    }
                 }
 
-                Surface(
-                    shape = RoundedCornerShape(6.dp),
-                    color = statusColor.copy(alpha = 0.15f)
+                // RIGHT SIDE: AMOUNTS
+                Column(
+                    horizontalAlignment = Alignment.End,
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
+                    // ✅ IMPROVEMENT: Tampilkan profit/loss
+                    val profitLoss = trade.win - trade.amount
                     Text(
-                        text = trade.status.uppercase(),
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = statusColor,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        text = formatCurrencyByISO(trade.win, currency),
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = when {
+                            profitLoss > 0 -> WifiGreen
+                            profitLoss < 0 -> AccentSecondary
+                            else -> StatusBlue
+                        },
+                        maxLines = 1
                     )
+
+                    Text(
+                        text = formatCurrencyByISO(trade.amount, currency),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Normal,
+                        color = TextSecondary,
+                        maxLines = 1
+                    )
+
                 }
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                TradeMetric(
-                    label = StringsManager.getAmount(lang),
-                    value = formatCurrencyByISO(trade.amount, currency),
-                    color = TextPrimary
-                )
-
-                TradeMetric(
-                    label = StringsManager.getDirection(lang),
-                    value = displayDirection,
-                    color = directionColor
-                )
-
-                TradeMetric(
-                    label = "P&L",
-                    value = formatCurrencyByISO(profit, currency),
-                    color = profitColor
-                )
-            }
-
-            if (trade.openRate > 0 && trade.closeRate != null) {
-                HorizontalDivider(
-                    color = BorderColor.copy(alpha = 0.5f),
-                    thickness = 0.5.dp
-                )
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly
-                ) {
-                    TradeMetric(
-                        label = StringsManager.getOpen(lang),
-                        value = formatPrice(trade.openRate),
-                        color = TextSecondary
-                    )
-
-                    TradeMetric(
-                        label = StringsManager.getClose(lang),
-                        value = formatPrice(trade.closeRate),
-                        color = TextSecondary
-                    )
-
-                    TradeMetric(
-                        label = StringsManager.getPayout(lang),
-                        value = "${trade.paymentRate}%",
-                        color = StatusBlue
-                    )
-                }
-            }
-
-            HorizontalDivider(
-                color = BorderColor.copy(alpha = 0.5f),
-                thickness = 0.5.dp
-            )
-
+            // ROW 2: TIME INFO + STATUS
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
+                // LEFT SIDE: TIME INFO
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Schedule,
-                        contentDescription = null,
-                        tint = TextMuted,
-                        modifier = Modifier.size(12.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = formatDateTime(trade.createdAt),
-                        fontSize = 11.sp,
-                        color = TextMuted
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Schedule,
+                            contentDescription = null,
+                            tint = TextSecondary,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Text(
+                            text = "$entryTime  ${StringsManager.getEntry(lang)}",
+                            fontSize = 12.sp,
+                            color = TextSecondary
+                        )
+                    }
+
+                    if (trade.status != "opened") {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.ExitToApp,
+                                contentDescription = null,
+                                tint = TextSecondary,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Text(
+                                text = "$exitTime  ${StringsManager.getExit(lang)}",
+                                fontSize = 12.sp,
+                                color = TextSecondary
+                            )
+                        }
+                    }
                 }
 
-                Text(
-                    text = "#${trade.id}",
-                    fontSize = 10.sp,
-                    color = TextMuted,
-                    fontWeight = FontWeight.Medium
-                )
+                // RIGHT SIDE: STATUS BADGE
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = statusColor.copy(alpha = 0.2f)
+                ) {
+                    Text(
+                        text = when (trade.status) {
+                            "won" -> "WON"
+                            "lost" -> "LOST"
+                            "opened" -> "OPENED"
+                            else -> trade.status.uppercase()
+                        },
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = statusColor,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                    )
+                }
             }
         }
     }
 }
 
+// ✅ TAMBAH: Helper function untuk asset initials
+private fun getAssetInitials(assetName: String): String {
+    return assetName.take(2).uppercase()
+}
+
+// Helper function to format entry/exit time
+private fun formatEntryTime(dateTime: String): String {
+    return try {
+        val deviceTimeZone = TimeZone.getDefault()
+        val deviceLocale = Locale.getDefault()
+
+        val inputFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", deviceLocale).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }
+
+        val outputFormat = SimpleDateFormat("dd MMM HH.mm.ss", deviceLocale).apply {
+            timeZone = deviceTimeZone
+        }
+
+        val date = inputFormat.parse(dateTime)
+        outputFormat.format(date ?: Date())
+    } catch (e: Exception) {
+        try {
+            val deviceTimeZone = TimeZone.getDefault()
+            val deviceLocale = Locale.getDefault()
+
+            val inputFormat2 = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", deviceLocale).apply {
+                timeZone = TimeZone.getTimeZone("UTC")
+            }
+
+            val outputFormat = SimpleDateFormat("dd MMM HH.mm.ss", deviceLocale).apply {
+                timeZone = deviceTimeZone
+            }
+
+            val cleanDateTime = dateTime.replace("T", " ").take(19)
+            val date = inputFormat2.parse(cleanDateTime)
+            outputFormat.format(date ?: Date())
+        } catch (e2: Exception) {
+            dateTime.take(16).replace("T", " ")
+        }
+    }
+}
 
 @Composable
 private fun TradeMetric(
@@ -790,8 +898,21 @@ private fun LoadingSection(lang: String) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            // ✅ IMPROVEMENT: Infinite transition untuk loading animation
+            val infiniteTransition = rememberInfiniteTransition()
+            val rotation by infiniteTransition.animateFloat(
+                initialValue = 0f,
+                targetValue = 360f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(1000, easing = LinearEasing),
+                    repeatMode = RepeatMode.Restart
+                )
+            )
+
             CircularProgressIndicator(
-                modifier = Modifier.size(32.dp),
+                modifier = Modifier
+                    .size(32.dp)
+                    .rotate(rotation),
                 color = StatusBlue,
                 strokeWidth = 3.dp
             )
@@ -1081,15 +1202,19 @@ private fun getWeekDateRange(): String {
     return "${outputFormat.format(weekAgo)} - ${outputFormat.format(currentDate)}"
 }
 
+// Di HistoryScreen.kt, update fungsi formatCurrencyByISO
+
 private fun formatCurrencyByISO(amount: Long, currencyISO: String): String {
+    val amountValue = amount / 100.0
+
     return when (currencyISO.uppercase()) {
         "IDR" -> {
             val symbols = java.text.DecimalFormatSymbols(java.util.Locale("id", "ID")).apply {
                 groupingSeparator = '.'
                 decimalSeparator = ','
             }
-            val formatter = java.text.DecimalFormat("#,##0.00", symbols)
-            formatter.format(amount / 100.0)
+            val formatter = java.text.DecimalFormat("#,##0", symbols)
+            "Rp ${formatter.format(amountValue.toLong())}"
         }
         "USD" -> {
             val symbols = java.text.DecimalFormatSymbols(java.util.Locale.US).apply {
@@ -1097,7 +1222,7 @@ private fun formatCurrencyByISO(amount: Long, currencyISO: String): String {
                 decimalSeparator = '.'
             }
             val formatter = java.text.DecimalFormat("#,##0.00", symbols)
-            formatter.format(amount / 100.0)
+            "$${formatter.format(amountValue)}"
         }
         "EUR" -> {
             val symbols = java.text.DecimalFormatSymbols(java.util.Locale.GERMANY).apply {
@@ -1105,7 +1230,7 @@ private fun formatCurrencyByISO(amount: Long, currencyISO: String): String {
                 decimalSeparator = ','
             }
             val formatter = java.text.DecimalFormat("#,##0.00", symbols)
-            formatter.format(amount / 100.0)
+            "€${formatter.format(amountValue)}"
         }
         "GBP" -> {
             val symbols = java.text.DecimalFormatSymbols(java.util.Locale.UK).apply {
@@ -1113,14 +1238,14 @@ private fun formatCurrencyByISO(amount: Long, currencyISO: String): String {
                 decimalSeparator = '.'
             }
             val formatter = java.text.DecimalFormat("#,##0.00", symbols)
-            formatter.format(amount / 100.0)
+            "£${formatter.format(amountValue)}"
         }
         "JPY" -> {
             val symbols = java.text.DecimalFormatSymbols(java.util.Locale.JAPAN).apply {
                 groupingSeparator = ','
             }
             val formatter = java.text.DecimalFormat("#,##0", symbols)
-            formatter.format(amount / 100.0)
+            "¥${formatter.format(amountValue.toLong())}"
         }
         "CNY", "RMB" -> {
             val symbols = java.text.DecimalFormatSymbols(java.util.Locale.CHINA).apply {
@@ -1128,14 +1253,14 @@ private fun formatCurrencyByISO(amount: Long, currencyISO: String): String {
                 decimalSeparator = '.'
             }
             val formatter = java.text.DecimalFormat("#,##0.00", symbols)
-            formatter.format(amount / 100.0)
+            "¥${formatter.format(amountValue)}"
         }
         "KRW" -> {
             val symbols = java.text.DecimalFormatSymbols(java.util.Locale.KOREA).apply {
                 groupingSeparator = ','
             }
             val formatter = java.text.DecimalFormat("#,##0", symbols)
-            formatter.format(amount / 100.0)
+            "₩${formatter.format(amountValue.toLong())}"
         }
         "SGD" -> {
             val symbols = java.text.DecimalFormatSymbols(java.util.Locale("en", "SG")).apply {
@@ -1143,7 +1268,7 @@ private fun formatCurrencyByISO(amount: Long, currencyISO: String): String {
                 decimalSeparator = '.'
             }
             val formatter = java.text.DecimalFormat("#,##0.00", symbols)
-            formatter.format(amount / 100.0)
+            "S$${formatter.format(amountValue)}"
         }
         "MYR" -> {
             val symbols = java.text.DecimalFormatSymbols(java.util.Locale("ms", "MY")).apply {
@@ -1151,7 +1276,7 @@ private fun formatCurrencyByISO(amount: Long, currencyISO: String): String {
                 decimalSeparator = '.'
             }
             val formatter = java.text.DecimalFormat("#,##0.00", symbols)
-            formatter.format(amount / 100.0)
+            "RM${formatter.format(amountValue)}"
         }
         "THB" -> {
             val symbols = java.text.DecimalFormatSymbols(java.util.Locale("th", "TH")).apply {
@@ -1159,7 +1284,7 @@ private fun formatCurrencyByISO(amount: Long, currencyISO: String): String {
                 decimalSeparator = '.'
             }
             val formatter = java.text.DecimalFormat("#,##0.00", symbols)
-            formatter.format(amount / 100.0)
+            "฿${formatter.format(amountValue)}"
         }
         "PHP" -> {
             val symbols = java.text.DecimalFormatSymbols(java.util.Locale("en", "PH")).apply {
@@ -1167,14 +1292,14 @@ private fun formatCurrencyByISO(amount: Long, currencyISO: String): String {
                 decimalSeparator = '.'
             }
             val formatter = java.text.DecimalFormat("#,##0.00", symbols)
-            formatter.format(amount / 100.0)
+            "₱${formatter.format(amountValue)}"
         }
         "VND" -> {
             val symbols = java.text.DecimalFormatSymbols(java.util.Locale("vi", "VN")).apply {
                 groupingSeparator = '.'
             }
             val formatter = java.text.DecimalFormat("#,##0", symbols)
-            formatter.format(amount / 100.0)
+            "₫${formatter.format(amountValue.toLong())}"
         }
         "INR" -> {
             val symbols = java.text.DecimalFormatSymbols(java.util.Locale("en", "IN")).apply {
@@ -1182,7 +1307,7 @@ private fun formatCurrencyByISO(amount: Long, currencyISO: String): String {
                 decimalSeparator = '.'
             }
             val formatter = java.text.DecimalFormat("#,##0.00", symbols)
-            formatter.format(amount / 100.0)
+            "₹${formatter.format(amountValue)}"
         }
         "AUD" -> {
             val symbols = java.text.DecimalFormatSymbols(java.util.Locale("en", "AU")).apply {
@@ -1190,7 +1315,7 @@ private fun formatCurrencyByISO(amount: Long, currencyISO: String): String {
                 decimalSeparator = '.'
             }
             val formatter = java.text.DecimalFormat("#,##0.00", symbols)
-            formatter.format(amount / 100.0)
+            "A$${formatter.format(amountValue)}"
         }
         "CAD" -> {
             val symbols = java.text.DecimalFormatSymbols(java.util.Locale.CANADA).apply {
@@ -1198,7 +1323,7 @@ private fun formatCurrencyByISO(amount: Long, currencyISO: String): String {
                 decimalSeparator = '.'
             }
             val formatter = java.text.DecimalFormat("#,##0.00", symbols)
-            formatter.format(amount / 100.0)
+            "C$${formatter.format(amountValue)}"
         }
         "CHF" -> {
             val symbols = java.text.DecimalFormatSymbols(java.util.Locale("de", "CH")).apply {
@@ -1206,7 +1331,7 @@ private fun formatCurrencyByISO(amount: Long, currencyISO: String): String {
                 decimalSeparator = '.'
             }
             val formatter = java.text.DecimalFormat("#,##0.00", symbols)
-            formatter.format(amount / 100.0)
+            "Fr${formatter.format(amountValue)}"
         }
         "NZD" -> {
             val symbols = java.text.DecimalFormatSymbols(java.util.Locale("en", "NZ")).apply {
@@ -1214,15 +1339,198 @@ private fun formatCurrencyByISO(amount: Long, currencyISO: String): String {
                 decimalSeparator = '.'
             }
             val formatter = java.text.DecimalFormat("#,##0.00", symbols)
-            formatter.format(amount / 100.0)
+            "NZ$${formatter.format(amountValue)}"
+        }
+        "PKR" -> {
+            val symbols = java.text.DecimalFormatSymbols(java.util.Locale("en", "PK")).apply {
+                groupingSeparator = ','
+                decimalSeparator = '.'
+            }
+            val formatter = java.text.DecimalFormat("#,##0.00", symbols)
+            "Rs${formatter.format(amountValue)}"
+        }
+        "BDT" -> {
+            val symbols = java.text.DecimalFormatSymbols(java.util.Locale("bn", "BD")).apply {
+                groupingSeparator = ','
+                decimalSeparator = '.'
+            }
+            val formatter = java.text.DecimalFormat("#,##0.00", symbols)
+            "৳${formatter.format(amountValue)}"
+        }
+        "LKR" -> {
+            val symbols = java.text.DecimalFormatSymbols(java.util.Locale("en", "LK")).apply {
+                groupingSeparator = ','
+                decimalSeparator = '.'
+            }
+            val formatter = java.text.DecimalFormat("#,##0.00", symbols)
+            "Rs${formatter.format(amountValue)}"
+        }
+        "MXN" -> {
+            val symbols = java.text.DecimalFormatSymbols(java.util.Locale("es", "MX")).apply {
+                groupingSeparator = ','
+                decimalSeparator = '.'
+            }
+            val formatter = java.text.DecimalFormat("#,##0.00", symbols)
+            "Mex$${formatter.format(amountValue)}"
+        }
+        "BRL" -> {
+            val symbols = java.text.DecimalFormatSymbols(java.util.Locale("pt", "BR")).apply {
+                groupingSeparator = '.'
+                decimalSeparator = ','
+            }
+            val formatter = java.text.DecimalFormat("#,##0.00", symbols)
+            "R$${formatter.format(amountValue)}"
+        }
+        "ARS" -> {
+            val symbols = java.text.DecimalFormatSymbols(java.util.Locale("es", "AR")).apply {
+                groupingSeparator = '.'
+                decimalSeparator = ','
+            }
+            val formatter = java.text.DecimalFormat("#,##0.00", symbols)
+            "$${formatter.format(amountValue)}"
+        }
+        "CLP" -> {
+            val symbols = java.text.DecimalFormatSymbols(java.util.Locale("es", "CL")).apply {
+                groupingSeparator = '.'
+            }
+            val formatter = java.text.DecimalFormat("#,##0", symbols)
+            "$${formatter.format(amountValue.toLong())}"
+        }
+        "COP" -> {
+            val symbols = java.text.DecimalFormatSymbols(java.util.Locale("es", "CO")).apply {
+                groupingSeparator = '.'
+                decimalSeparator = ','
+            }
+            val formatter = java.text.DecimalFormat("#,##0.00", symbols)
+            "$${formatter.format(amountValue)}"
+        }
+        "AED" -> {
+            val symbols = java.text.DecimalFormatSymbols(java.util.Locale("ar", "AE")).apply {
+                groupingSeparator = ','
+                decimalSeparator = '.'
+            }
+            val formatter = java.text.DecimalFormat("#,##0.00", symbols)
+            "د.إ${formatter.format(amountValue)}"
+        }
+        "SAR" -> {
+            val symbols = java.text.DecimalFormatSymbols(java.util.Locale("ar", "SA")).apply {
+                groupingSeparator = ','
+                decimalSeparator = '.'
+            }
+            val formatter = java.text.DecimalFormat("#,##0.00", symbols)
+            "﷼${formatter.format(amountValue)}"
+        }
+        "TRY" -> {
+            val symbols = java.text.DecimalFormatSymbols(java.util.Locale("tr", "TR")).apply {
+                groupingSeparator = '.'
+                decimalSeparator = ','
+            }
+            val formatter = java.text.DecimalFormat("#,##0.00", symbols)
+            "₺${formatter.format(amountValue)}"
+        }
+        "EGP" -> {
+            val symbols = java.text.DecimalFormatSymbols(java.util.Locale("ar", "EG")).apply {
+                groupingSeparator = ','
+                decimalSeparator = '.'
+            }
+            val formatter = java.text.DecimalFormat("#,##0.00", symbols)
+            "£${formatter.format(amountValue)}"
+        }
+        "ZAR" -> {
+            val symbols = java.text.DecimalFormatSymbols(java.util.Locale("en", "ZA")).apply {
+                groupingSeparator = ','
+                decimalSeparator = '.'
+            }
+            val formatter = java.text.DecimalFormat("#,##0.00", symbols)
+            "R${formatter.format(amountValue)}"
+        }
+        "NGN" -> {
+            val symbols = java.text.DecimalFormatSymbols(java.util.Locale("en", "NG")).apply {
+                groupingSeparator = ','
+                decimalSeparator = '.'
+            }
+            val formatter = java.text.DecimalFormat("#,##0.00", symbols)
+            "₦${formatter.format(amountValue)}"
+        }
+        "RUB" -> {
+            val symbols = java.text.DecimalFormatSymbols(java.util.Locale("ru", "RU")).apply {
+                groupingSeparator = ' '
+                decimalSeparator = ','
+            }
+            val formatter = java.text.DecimalFormat("#,##0.00", symbols)
+            "₽${formatter.format(amountValue)}"
+        }
+        "PLN" -> {
+            val symbols = java.text.DecimalFormatSymbols(java.util.Locale("pl", "PL")).apply {
+                groupingSeparator = ' '
+                decimalSeparator = ','
+            }
+            val formatter = java.text.DecimalFormat("#,##0.00", symbols)
+            "zł${formatter.format(amountValue)}"
+        }
+        "CZK" -> {
+            val symbols = java.text.DecimalFormatSymbols(java.util.Locale("cs", "CZ")).apply {
+                groupingSeparator = ' '
+                decimalSeparator = ','
+            }
+            val formatter = java.text.DecimalFormat("#,##0.00", symbols)
+            "Kč${formatter.format(amountValue)}"
+        }
+        "HUF" -> {
+            val symbols = java.text.DecimalFormatSymbols(java.util.Locale("hu", "HU")).apply {
+                groupingSeparator = ' '
+            }
+            val formatter = java.text.DecimalFormat("#,##0", symbols)
+            "Ft${formatter.format(amountValue.toLong())}"
+        }
+        "SEK" -> {
+            val symbols = java.text.DecimalFormatSymbols(java.util.Locale("sv", "SE")).apply {
+                groupingSeparator = ' '
+                decimalSeparator = ','
+            }
+            val formatter = java.text.DecimalFormat("#,##0.00", symbols)
+            "kr${formatter.format(amountValue)}"
+        }
+        "NOK" -> {
+            val symbols = java.text.DecimalFormatSymbols(java.util.Locale("no", "NO")).apply {
+                groupingSeparator = ' '
+                decimalSeparator = ','
+            }
+            val formatter = java.text.DecimalFormat("#,##0.00", symbols)
+            "kr${formatter.format(amountValue)}"
+        }
+        "DKK" -> {
+            val symbols = java.text.DecimalFormatSymbols(java.util.Locale("da", "DK")).apply {
+                groupingSeparator = '.'
+                decimalSeparator = ','
+            }
+            val formatter = java.text.DecimalFormat("#,##0.00", symbols)
+            "kr${formatter.format(amountValue)}"
+        }
+        "HKD" -> {
+            val symbols = java.text.DecimalFormatSymbols(java.util.Locale("zh", "HK")).apply {
+                groupingSeparator = ','
+                decimalSeparator = '.'
+            }
+            val formatter = java.text.DecimalFormat("#,##0.00", symbols)
+            "HK$${formatter.format(amountValue)}"
+        }
+        "TWD" -> {
+            val symbols = java.text.DecimalFormatSymbols(java.util.Locale("zh", "TW")).apply {
+                groupingSeparator = ','
+                decimalSeparator = '.'
+            }
+            val formatter = java.text.DecimalFormat("#,##0.00", symbols)
+            "NT$${formatter.format(amountValue)}"
         }
         else -> {
+            // Default fallback dengan simbol mata uang ISO code
             val symbols = java.text.DecimalFormatSymbols(java.util.Locale.US).apply {
                 groupingSeparator = ','
                 decimalSeparator = '.'
             }
             val formatter = java.text.DecimalFormat("#,##0.00", symbols)
-            formatter.format(amount / 100.0)
+            "$currencyISO ${formatter.format(amountValue)}"
         }
     }
 }

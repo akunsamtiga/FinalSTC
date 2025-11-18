@@ -99,6 +99,11 @@ dependencies {
 
     implementation(libs.androidx.security.crypto)
 
+    implementation("io.coil-kt:coil-compose:2.5.0")
+    implementation("io.coil-kt:coil-svg:2.5.0")
+
+    implementation("com.google.accompanist:accompanist-systemuicontroller:0.32.0")
+
     implementation(libs.json)
 
     implementation(platform("com.google.firebase:firebase-bom:33.4.0"))

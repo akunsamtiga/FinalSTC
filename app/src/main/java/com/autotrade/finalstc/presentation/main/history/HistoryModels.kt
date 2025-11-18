@@ -9,6 +9,7 @@ data class TradingHistory(
     val profit: String,
     val date: String,
     val status: String
+
 )
 
 data class TradingHistoryNew(
@@ -33,9 +34,10 @@ data class TradingHistoryNew(
     val tradeType: String,
     val accountType: String? = null,
     val isDemoAccount: Boolean? = null,
+    val isDemo: Boolean = false,
 
-    val isDemo: Boolean = false
-
+    // ✅ TAMBAH iconUrl
+    val iconUrl: String? = null
 )
 
 data class TradingHistoryRaw(
@@ -58,7 +60,12 @@ data class TradingHistoryRaw(
     val close_quote_created_at: String?,
     val open_quote_created_at: String?,
     val open_rate: Double,
-    val trade_type: String
+    val trade_type: String,
+    val icon: IconData? = null  // ← TAMBAH field ini
+
+)
+data class IconData(
+    val url: String?
 )
 
 data class HistoryUiState(

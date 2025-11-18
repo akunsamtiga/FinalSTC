@@ -17,6 +17,7 @@ data class DashboardUiState(
     val isDemoAccount: Boolean = true,
     val error: String? = null,
     val assetsLoading: Boolean = false,
+    val baseAmountInput: String = "",
     val botState: BotState = BotState.STOPPED,
     val scheduleInput: String = "",
     val martingaleSettings: MartingaleState = MartingaleState(),

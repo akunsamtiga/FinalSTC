@@ -1929,4 +1929,49 @@ object StringsManager {
             else -> "Account Information"
         }
     }
+
+    fun getBalance(language: String) = when(language) {
+        "id" -> "Saldo"
+        else -> "Balance"
+    }
+    fun getEntry(language: String): String {
+        return when (language) {
+            "id" -> "Masuk"
+            "en" -> "Entry"
+            "es" -> "Entrada"
+            "vi" -> "Vào"
+            "tr" -> "Giriş"
+            "hi" -> "प्रवेश"
+            "ms" -> "Masuk"
+            else -> "Entry"
+        }
+    }
+
+    fun getExit(language: String): String {
+        return when (language) {
+            "id" -> "Keluar"
+            "en" -> "Exit"
+            "es" -> "Salida"
+            "vi" -> "Ra"
+            "tr" -> "Çıkış"
+            "hi" -> "निकास"
+            "ms" -> "Keluar"
+            else -> "Exit"
+        }
+    }
+
+    fun getDemoBalance(language: String) = when(language) {
+        "id" -> "Saldo Demo"
+        else -> "Demo Balance"
+    }
+
+    fun getRealBalance(language: String) = when(language) {
+        "id" -> "Saldo Real"
+        else -> "Real Balance"
+    }
+
+    fun getRefreshBalance(language: String) = when(language) {
+        "id" -> "Perbarui Saldo"
+        else -> "Refresh Balance"
+    }
 }

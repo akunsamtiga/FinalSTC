@@ -44,12 +44,14 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.text.input.ImeAction
+import coil.compose.AsyncImage
 import com.autotrade.finalstc.presentation.main.dashboard.*
 import com.autotrade.finalstc.presentation.theme.ThemeViewModel
 import java.math.BigDecimal
@@ -61,6 +63,11 @@ import com.autotrade.finalstc.data.local.LanguageManager
 import com.autotrade.finalstc.utils.StringsManager
 import kotlinx.coroutines.launch
 import kotlin.math.abs
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import androidx.compose.ui.platform.LocalContext
+import coil.compose.SubcomposeAsyncImage
+import com.autotrade.finalstc.data.model.BalanceInfo
 
 data class DashboardTheme(
     val isDarkMode: Boolean = true
@@ -488,6 +495,8 @@ fun DashboardScreen(
     val isCalculatingTodayProfit by dashboardViewModel.isCalculatingTodayProfit.collectAsStateWithLifecycle()
     val ctcOrders by dashboardViewModel.ctcOrders.collectAsStateWithLifecycle()
     val currentLanguage by dashboardViewModel.currentLanguage.collectAsStateWithLifecycle()
+    val balanceInfo by dashboardViewModel.balanceInfo.collectAsStateWithLifecycle()
+    val isLoadingBalance by dashboardViewModel.isLoadingBalance.collectAsStateWithLifecycle()
 
     var showAssetDialog by remember { mutableStateOf(false) }
     var showScheduleDialog by remember { mutableStateOf(false) }
@@ -673,7 +682,13 @@ fun DashboardScreen(
                             martingaleSettings = uiState.martingaleSettings,
                             currencySettings = uiState.currencySettings,
                             canModify = uiState.canModifySettings(),
-                            onAccountTypeChange = dashboardViewModel::setAccountType,
+                            onAccountTypeChange = { isDemo ->
+                                dashboardViewModel.setAccountType(isDemo)
+                                dashboardViewModel.loadBalance()
+                            },
+                            balanceInfo = balanceInfo,
+                            isLoadingBalance = isLoadingBalance,
+                            onRefreshBalance = dashboardViewModel::loadBalance,
                             onCurrencyChange = dashboardViewModel::setSelectedCurrency,
                             onMartingaleStepsChange = dashboardViewModel::setMartingaleMaxSteps,
                             onBaseAmountChange = dashboardViewModel::setMartingaleBaseAmount,
@@ -681,7 +696,9 @@ fun DashboardScreen(
                             onMultiplierTypeChange = dashboardViewModel::setMartingaleMultiplierType,
                             onMultiplierValueChange = dashboardViewModel::setMartingaleMultiplierValue,
                             colors = colors,
-                            currentLanguage = currentLanguage
+                            currentLanguage = currentLanguage,
+                            baseAmountInput = uiState.baseAmountInput, // ✅ TAMBAH
+                            onBaseAmountInputChange = dashboardViewModel::updateBaseAmountInput // ✅ TAMBAH
                         )
 
                         StopLossProfitCard(
@@ -804,8 +821,6 @@ fun DashboardScreen(
         }
     }
 }
-
-// ✅ TAMBAH 2 COMPOSABLE BARU DI SINI
 
 @Composable
 private fun WhitelistCheckingScreen(colors: DashboardColors) {
@@ -2112,30 +2127,36 @@ fun DigitalClockRow(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            // ⏰ Jam digital
+            // ⏰ Jam digital - FULL WIDTH dengan tinggi tetap
             Surface(
-                modifier = Modifier.wrapContentSize(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(46.dp),
                 color = colors.cardBackground,
                 shape = RoundedCornerShape(12.dp),
                 border = BorderStroke(0.6.dp, colors.chartLine.copy(alpha = 0.4f))
             ) {
-                Text(
-                    text = formattedTime,
-                    fontSize = 32.sp,
-                    maxLines = 1,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = digitalClockFontFamily,
-                    color = colors.textPrimary,
-                    letterSpacing = 2.sp,
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
-                    style = LocalTextStyle.current.copy(
-                        shadow = Shadow(
-                            color = colors.textPrimary.copy(alpha = 0.3f),
-                            offset = Offset(0f, 0f),
-                            blurRadius = 8f
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = formattedTime,
+                        fontSize = 32.sp,
+                        maxLines = 1,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = digitalClockFontFamily,
+                        color = colors.textPrimary,
+                        letterSpacing = 2.sp,
+                        style = LocalTextStyle.current.copy(
+                            shadow = Shadow(
+                                color = colors.textPrimary.copy(alpha = 0.3f),
+                                offset = Offset(0f, 0f),
+                                blurRadius = 8f
+                            )
                         )
                     )
-                )
+                }
             }
 
             // 📅 Baris tanggal + UTC + notif bulat
@@ -2197,8 +2218,6 @@ fun DigitalClockRow(
         }
     }
 }
-
-
 
 private fun getLocalizedDateFormat(currentTime: Long, currentLanguage: String): Pair<String, String> {
     val date = Date(currentTime)
@@ -4307,6 +4326,9 @@ fun TradingSettingsCard(
     currencySettings: CurrencySettings,
     canModify: Boolean,
     onAccountTypeChange: (Boolean) -> Unit,
+    balanceInfo: BalanceInfo,
+    isLoadingBalance: Boolean,
+    onRefreshBalance: () -> Unit,
     onCurrencyChange: (CurrencyType) -> Unit,
     onMartingaleStepsChange: (Int) -> Unit,
     onBaseAmountChange: (Long) -> Unit,
@@ -4314,13 +4336,17 @@ fun TradingSettingsCard(
     onMultiplierTypeChange: (MultiplierType) -> Unit,
     onMultiplierValueChange: (Double) -> Unit,
     colors: DashboardColors,
-    currentLanguage: String = "id"  // ✅ ADD PARAMETER
+    currentLanguage: String = "id",
+    baseAmountInput: String = "",
+    onBaseAmountInputChange: (String) -> Unit = {}
 ) {
     var showQuickAmountDropdown by remember { mutableStateOf(false) }
     var showMaxStepDialog by remember { mutableStateOf(false) }
     var amountInput by remember {
         mutableStateOf(formatToIndonesianCurrencyWithoutDecimal(martingaleSettings.baseAmount))
     }
+
+    var isBalanceHidden by remember { mutableStateOf(false) }
 
     Card(
         modifier = Modifier
@@ -4349,7 +4375,7 @@ fun TradingSettingsCard(
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
             Text(
-                text = StringsManager.getTradingSettings(currentLanguage), // ✅ MULTILANGUAGE
+                text = StringsManager.getTradingSettings(currentLanguage),
                 style = MaterialTheme.typography.titleMedium.copy(
                     fontWeight = FontWeight.SemiBold,
                     fontSize = 18.sp
@@ -4358,20 +4384,42 @@ fun TradingSettingsCard(
             )
 
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(
-                    text = StringsManager.getAccountConfiguration(currentLanguage), // ✅ MULTILANGUAGE
-                    style = MaterialTheme.typography.labelMedium.copy(
-                        fontWeight = FontWeight.Medium,
-                        fontSize = 12.sp
-                    ),
-                    color = colors.textPrimary
-                )
+                // ✅ HEADER ROW: Account Configuration + Refresh Button
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = StringsManager.getAccountConfiguration(currentLanguage),
+                        style = MaterialTheme.typography.labelMedium.copy(
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 12.sp
+                        ),
+                        color = colors.textPrimary
+                    )
 
+                    // ✅ Refresh Balance Button - di pojok kanan atas (HANYA ICON)
+                    IconButton(
+                        onClick = onRefreshBalance,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "Refresh Balance",
+                            tint = if (isDemoAccount) colors.warningColor else colors.successColor,
+                            modifier = Modifier.size(20.dp)  // ✅ Icon lebih besar
+                        )
+                    }
+                }
+
+                // ✅ UPDATED ROW - Balance menggantikan Duration
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Box(modifier = Modifier.weight(1f)) {
+                    // Account Type Dropdown
+                    Box(modifier = Modifier.weight(0.4f)) {
                         var showAccountDropdown by remember { mutableStateOf(false) }
 
                         OutlinedCard(
@@ -4382,14 +4430,19 @@ fun TradingSettingsCard(
                                 .height(44.dp),
                             colors = CardDefaults.outlinedCardColors(
                                 containerColor = if (isDemoAccount)
-                                    colors.warningColor.copy(alpha = 0.15f) else colors.successColor.copy(alpha = 0.15f),
+                                    colors.warningColor.copy(alpha = 0.15f)
+                                else
+                                    colors.successColor.copy(alpha = 0.15f),
                                 contentColor = colors.textPrimary,
                                 disabledContainerColor = colors.controls,
                                 disabledContentColor = colors.textMuted
                             ),
                             border = BorderStroke(
                                 0.8.dp,
-                                if (isDemoAccount) colors.warningColor.copy(alpha = 0.5f) else colors.successColor.copy(alpha = 0.5f)
+                                if (isDemoAccount)
+                                    colors.warningColor.copy(alpha = 0.5f)
+                                else
+                                    colors.successColor.copy(alpha = 0.5f)
                             ),
                             shape = RoundedCornerShape(12.dp)
                         ) {
@@ -4405,16 +4458,22 @@ fun TradingSettingsCard(
                                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
                                     Icon(
-                                        imageVector = if (isDemoAccount) Icons.Default.School else Icons.Default.AccountBalance,
+                                        imageVector = if (isDemoAccount)
+                                            Icons.Default.School
+                                        else
+                                            Icons.Default.AccountBalance,
                                         contentDescription = null,
                                         modifier = Modifier.size(16.dp),
-                                        tint = if (isDemoAccount) colors.warningColor else colors.successColor
+                                        tint = if (isDemoAccount)
+                                            colors.warningColor
+                                        else
+                                            colors.successColor
                                     )
                                     Text(
                                         text = if (isDemoAccount)
                                             StringsManager.getDemoAccount(currentLanguage)
                                         else
-                                            StringsManager.getRealAccount(currentLanguage), // ✅ MULTILANGUAGE
+                                            StringsManager.getRealAccount(currentLanguage),
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.SemiBold,
                                         maxLines = 1,
@@ -4454,7 +4513,7 @@ fun TradingSettingsCard(
                                             modifier = Modifier.size(16.dp)
                                         )
                                         Text(
-                                            StringsManager.getDemoAccountFull(currentLanguage), // ✅ MULTILANGUAGE
+                                            StringsManager.getDemoAccountFull(currentLanguage),
                                             color = colors.textPrimary,
                                             fontSize = 13.sp,
                                             fontWeight = FontWeight.Medium
@@ -4488,7 +4547,7 @@ fun TradingSettingsCard(
                                             modifier = Modifier.size(16.dp)
                                         )
                                         Text(
-                                            StringsManager.getRealAccountFull(currentLanguage), // ✅ MULTILANGUAGE
+                                            StringsManager.getRealAccountFull(currentLanguage),
                                             color = colors.textPrimary,
                                             fontSize = 13.sp,
                                             fontWeight = FontWeight.Medium
@@ -4512,116 +4571,95 @@ fun TradingSettingsCard(
                         }
                     }
 
-                    Box(modifier = Modifier.weight(1f)) {
-                        var showDurationDropdown by remember { mutableStateOf(false) }
-                        var selectedDuration by remember { mutableStateOf("AUTO") }
-
-                        OutlinedCard(
-                            onClick = { if (canModify) showDurationDropdown = true },
-                            enabled = canModify,
+                    Card(
+                        modifier = Modifier
+                            .weight(0.6f)
+                            .height(44.dp)
+                            .clickable {
+                                // ✅ TOGGLE HIDE/SHOW SAAT DIKLIK
+                                isBalanceHidden = !isBalanceHidden
+                            },
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (isDemoAccount)
+                                colors.warningColor.copy(alpha = 0.1f)
+                            else
+                                colors.successColor.copy(alpha = 0.1f)
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(
+                            0.8.dp,
+                            if (isDemoAccount)
+                                colors.warningColor.copy(alpha = 0.3f)
+                            else
+                                colors.successColor.copy(alpha = 0.3f)
+                        )
+                    ) {
+                        Row(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .height(44.dp),
-                            colors = CardDefaults.outlinedCardColors(
-                                containerColor = colors.accentPrimary5.copy(alpha = 0.1f),
-                                contentColor = colors.textPrimary,
-                                disabledContainerColor = colors.controls,
-                                disabledContentColor = colors.textMuted
-                            ),
-                            border = BorderStroke(0.8.dp, colors.accentPrimary5.copy(alpha = 0.7f)),
-                            shape = RoundedCornerShape(12.dp)
+                                .fillMaxSize()
+                                .padding(horizontal = 12.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
                             Row(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(horizontal = 12.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Timer,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp),
-                                        tint = colors.accentPrimary5
-                                    )
-                                    Text(
-                                        text = selectedDuration,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        color = colors.textPrimary
-                                    )
-                                }
+                                // ✅ ICON BERUBAH SESUAI STATUS
                                 Icon(
-                                    imageVector = Icons.Default.ArrowDropDown,
-                                    contentDescription = null,
+                                    imageVector = if (isBalanceHidden)
+                                        Icons.Default.VisibilityOff
+                                    else
+                                        Icons.Default.AccountBalanceWallet,
+                                    contentDescription = if (isBalanceHidden)
+                                        "Show Balance"
+                                    else
+                                        "Hide Balance",
                                     modifier = Modifier.size(16.dp),
-                                    tint = colors.textPrimary
+                                    tint = if (isDemoAccount)
+                                        colors.warningColor
+                                    else
+                                        colors.successColor
                                 )
-                            }
-                        }
+                                Column(
+                                    verticalArrangement = Arrangement.Center
+                                ) {
+                                    if (isLoadingBalance) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(12.dp),
+                                            strokeWidth = 1.5.dp,
+                                            color = colors.textMuted
+                                        )
+                                    } else {
+                                        val balance = if (isDemoAccount)
+                                            balanceInfo.demoBalance
+                                        else
+                                            balanceInfo.realBalance
 
-                        DropdownMenu(
-                            expanded = showDurationDropdown,
-                            onDismissRequest = { showDurationDropdown = false },
-                            modifier = Modifier
-                                .background(
-                                    colors.cardBackground,
-                                    shape = RoundedCornerShape(12.dp)
-                                )
-                        ) {
-                            listOf(
-                                "AUTO" to StringsManager.getAutoDuration(currentLanguage), // ✅ MULTILANGUAGE
-                                "1M" to StringsManager.getOneMinute(currentLanguage)  // ✅ MULTILANGUAGE
-                            ).forEach { (value, label) ->
-                                DropdownMenuItem(
-                                    text = {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                        ) {
-                                            Icon(
-                                                Icons.Default.Timer,
-                                                contentDescription = null,
-                                                tint = colors.accentPrimary5,
-                                                modifier = Modifier.size(16.dp)
-                                            )
-                                            Text(
-                                                text = label,
-                                                color = colors.textPrimary,
-                                                fontSize = 13.sp,
-                                                fontWeight = FontWeight.Medium
-                                            )
-                                            if (value == selectedDuration) {
-                                                Spacer(modifier = Modifier.weight(1f))
-                                                Icon(
-                                                    Icons.Default.Check,
-                                                    contentDescription = null,
-                                                    tint = colors.accentPrimary,
-                                                    modifier = Modifier.size(16.dp)
-                                                )
-                                            }
-                                        }
-                                    },
-                                    onClick = {
-                                        selectedDuration = value
-                                        showDurationDropdown = false
+                                        // ✅ TEXT BERUBAH: ***** atau ANGKA ASLI
+                                        Text(
+                                            text = if (isBalanceHidden)
+                                                "*****"
+                                            else
+                                                formatBalanceDisplay(balance, balanceInfo.currency),
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = colors.textPrimary,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
                                     }
-                                )
+                                }
                             }
                         }
                     }
                 }
             }
 
+            // Currency Selection
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
-                    text = StringsManager.getCurrencySelection(currentLanguage), // ✅ MULTILANGUAGE
+                    text = StringsManager.getCurrencySelection(currentLanguage),
                     style = MaterialTheme.typography.labelMedium.copy(
                         fontWeight = FontWeight.Medium,
                         fontSize = 12.sp
@@ -4680,7 +4718,6 @@ fun TradingSettingsCard(
                         }
                     }
 
-
                     DropdownMenu(
                         expanded = showCurrencyDropdown,
                         onDismissRequest = { showCurrencyDropdown = false },
@@ -4689,13 +4726,11 @@ fun TradingSettingsCard(
                             .heightIn(max = 500.dp)
                             .widthIn(min = 280.dp)
                     ) {
-                        // Group currencies by region
                         val currenciesByRegion = CurrencyType.getAllRegions().map { region ->
                             region to CurrencyType.getCurrenciesByRegion(region)
                         }
 
                         currenciesByRegion.forEachIndexed { regionIndex, (region, currencies) ->
-                            // Region Header
                             if (regionIndex > 0) {
                                 Divider(
                                     color = colors.borderColor.copy(alpha = 0.3f),
@@ -4721,7 +4756,6 @@ fun TradingSettingsCard(
                                 )
                             }
 
-                            // Currency items in this region
                             currencies.forEach { currency ->
                                 DropdownMenuItem(
                                     text = {
@@ -4730,7 +4764,6 @@ fun TradingSettingsCard(
                                             verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                                         ) {
-                                            // Currency Symbol
                                             Surface(
                                                 modifier = Modifier.size(36.dp),
                                                 shape = CircleShape,
@@ -4762,7 +4795,6 @@ fun TradingSettingsCard(
                                                 }
                                             }
 
-                                            // Currency Info
                                             Column(
                                                 modifier = Modifier.weight(1f),
                                                 verticalArrangement = Arrangement.spacedBy(2.dp)
@@ -4801,7 +4833,6 @@ fun TradingSettingsCard(
                                                 )
                                             }
 
-                                            // Check icon for selected currency
                                             if (currency == currentCurrency) {
                                                 Icon(
                                                     Icons.Default.CheckCircle,
@@ -4824,6 +4855,7 @@ fun TradingSettingsCard(
                 }
             }
 
+            // Trade Amount
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -4831,7 +4863,7 @@ fun TradingSettingsCard(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = StringsManager.getTradeAmount(currentLanguage), // ✅ MULTILANGUAGE
+                        text = StringsManager.getTradeAmount(currentLanguage),
                         style = MaterialTheme.typography.labelMedium.copy(
                             fontWeight = FontWeight.Medium,
                             fontSize = 12.sp
@@ -4841,7 +4873,7 @@ fun TradingSettingsCard(
 
                     val currentCurrency = currencySettings.selectedCurrency
                     Text(
-                        text = "${StringsManager.getMinimum(currentLanguage)}: ${currentCurrency.formatAmount(currentCurrency.minAmountInCents)}", // ✅ MULTILANGUAGE
+                        text = "${StringsManager.getMinimum(currentLanguage)}: ${currentCurrency.formatAmount(currentCurrency.minAmountInCents)}",
                         style = MaterialTheme.typography.labelSmall,
                         color = colors.textMuted,
                         fontSize = 10.sp
@@ -4852,20 +4884,19 @@ fun TradingSettingsCard(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    var rawAmountInput by remember { mutableStateOf("") }
                     var placeholderAmount by remember { mutableStateOf(currencySettings.baseAmountInCents) }
                     val currentCurrency = currencySettings.selectedCurrency
 
                     LaunchedEffect(currencySettings.baseAmountInCents) {
-                        if (rawAmountInput.isEmpty()) {
+                        if (baseAmountInput.isEmpty()) { // ✅ UBAH rawAmountInput jadi baseAmountInput
                             placeholderAmount = currencySettings.baseAmountInCents
                         }
                     }
 
                     OutlinedTextField(
-                        value = rawAmountInput,
+                        value = baseAmountInput, // ✅ UBAH dari rawAmountInput
                         onValueChange = { input ->
-                            rawAmountInput = input
+                            onBaseAmountInputChange(input) // ✅ UBAH dari rawAmountInput = input
 
                             val amount = currentCurrency.parseUserInput(input)
                             if (amount != null && amount >= currentCurrency.minAmountInCents) {
@@ -4907,9 +4938,9 @@ fun TradingSettingsCard(
                         ),
                         keyboardActions = KeyboardActions(
                             onDone = {
-                                val amount = currentCurrency.parseUserInput(rawAmountInput)
+                                val amount = currentCurrency.parseUserInput(baseAmountInput)
                                 if (amount != null) {
-                                    rawAmountInput = currentCurrency.formatAmount(amount)
+                                    onBaseAmountInputChange(currentCurrency.formatAmount(amount))
                                 }
                             }
                         )
@@ -4940,7 +4971,7 @@ fun TradingSettingsCard(
                                     tint = colors.accentPrimary5
                                 )
                                 Text(
-                                    text = StringsManager.getQuick(currentLanguage), // ✅ MULTILANGUAGE
+                                    text = StringsManager.getQuick(currentLanguage),
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     maxLines = 1,
@@ -4952,11 +4983,10 @@ fun TradingSettingsCard(
                         DropdownMenu(
                             expanded = showQuickAmountDropdown,
                             onDismissRequest = { showQuickAmountDropdown = false },
-                            modifier = Modifier
-                                .background(
-                                    colors.cardBackground,
-                                    shape = RoundedCornerShape(12.dp)
-                                )
+                            modifier = Modifier.background(
+                                colors.cardBackground,
+                                shape = RoundedCornerShape(12.dp)
+                            )
                         ) {
                             val quickAmounts = getQuickAmountsForCurrency(currentCurrency)
 
@@ -4983,7 +5013,7 @@ fun TradingSettingsCard(
                                     },
                                     onClick = {
                                         onBaseAmountChange(amount)
-                                        rawAmountInput = currentCurrency.formatAmount(amount)
+                                        onBaseAmountInputChange(currentCurrency.formatAmount(amount)) // ✅ UBAH
                                         placeholderAmount = amount
                                         showQuickAmountDropdown = false
                                     }
@@ -4994,9 +5024,10 @@ fun TradingSettingsCard(
                 }
             }
 
+            // Martingale Strategy
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
-                    text = StringsManager.getMartingaleStrategy(currentLanguage), // ✅ MULTILANGUAGE
+                    text = StringsManager.getMartingaleStrategy(currentLanguage),
                     style = MaterialTheme.typography.labelMedium.copy(
                         fontWeight = FontWeight.Medium,
                         fontSize = 12.sp
@@ -5045,7 +5076,7 @@ fun TradingSettingsCard(
                                 tint = if (martingaleSettings.isEnabled) colors.successColor else colors.textMuted
                             )
                             Text(
-                                text = StringsManager.getMartingale(currentLanguage), // ✅ MULTILANGUAGE
+                                text = StringsManager.getMartingale(currentLanguage),
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 letterSpacing = 0.3.sp,
@@ -5086,11 +5117,10 @@ fun TradingSettingsCard(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(
-                                text = StringsManager.getMaxSteps(currentLanguage), // ✅ MULTILANGUAGE
+                                text = StringsManager.getMaxSteps(currentLanguage),
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Medium,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
+                                maxLines = 1,overflow = TextOverflow.Ellipsis,
                                 color = colors.textPrimary
                             )
                             Row(
@@ -6450,8 +6480,8 @@ fun MultilineScheduleDialog(
                                 colors = OutlinedTextFieldDefaults.colors(
                                     focusedBorderColor = colors.dialogInputBorderFocused,
                                     unfocusedBorderColor = colors.dialogInputBorder,
-                                    focusedContainerColor = colors.dialogInputBgFocused,
-                                    unfocusedContainerColor = colors.dialogInputBg,
+                                    focusedContainerColor = colors.darkBackground,
+                                    unfocusedContainerColor = colors.darkBackground,
                                     cursorColor = colors.dialogInputBorderFocused,
                                     focusedTextColor = colors.dialogInputText,
                                     unfocusedTextColor = colors.dialogInputText
@@ -7034,7 +7064,7 @@ fun AssetSelectionDialog(
                                                 imageVector = Icons.Default.Warning,
                                                 contentDescription = null,
                                                 tint = colors.warningColor,
-                                                modifier = Modifier.size(34.dp)
+                                                modifier = Modifier.size(30.dp)
                                             )
                                         }
                                     }
@@ -7149,102 +7179,167 @@ fun AssetListItem(
         onClick = onClick,
         border = BorderStroke(0.4.dp, colors.chartLine2.copy(alpha = 0.4f))
     ) {
-        Column(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            // Baris pertama: name | ric | profit
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            // ICON/IMAGE SECTION
+            Surface(
+                modifier = Modifier.size(40.dp),
+                shape = CircleShape,
+                color = colors.controls,
+                border = BorderStroke(1.dp, colors.borderColor.copy(alpha = 0.3f))
             ) {
-                // Name
-                Text(
-                    text = asset.name,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = colors.textPrimary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
-
-                Spacer(modifier = Modifier.width(8.dp))
-
-                // RIC
-                Text(
-                    text = asset.ric,
-                    fontSize = 11.sp,
-                    color = colors.textSecondary,
-                    fontWeight = FontWeight.Normal,
-                    letterSpacing = 0.3.sp,
-                    modifier = Modifier.weight(0.8f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-
-                Spacer(modifier = Modifier.width(12.dp))
-
-                // Profit value
-                Column(
-                    horizontalAlignment = Alignment.End,
-                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier.fillMaxSize()
                 ) {
+                    if (!asset.iconUrl.isNullOrEmpty()) {
+                        val fullUrl = "https://stockity.id${asset.iconUrl}"
+
+                        SubcomposeAsyncImage(
+                            model = ImageRequest.Builder(LocalContext.current)
+                                .data(fullUrl)
+                                .crossfade(true)
+                                .build(),
+                            contentDescription = asset.name,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(8.dp),
+                            contentScale = ContentScale.Fit,
+                            loading = {
+                                CircularProgressIndicator(
+                                    modifier = Modifier
+                                        .size(20.dp)
+                                        .padding(4.dp),
+                                    color = colors.accentPrimary,
+                                    strokeWidth = 2.dp
+                                )
+                            },
+                            error = {
+                                Text(
+                                    text = asset.name.take(2).uppercase(),
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = colors.textSecondary
+                                )
+                            }
+                        )
+                    } else {
+                        Text(
+                            text = asset.name.take(2).uppercase(),
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = colors.textSecondary
+                        )
+                    }
+                }
+            }
+
+            // CONTENT SECTION
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(start = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                // ROW 1: NAME | PROFIT
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Name
+                    Text(
+                        text = asset.name,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = colors.textPrimary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    // ✅ PROFIT dengan Icon TrendingUp/TrendingDown
                     val profitColor = when {
                         asset.profitRate > 0 -> colors.successColor
                         asset.profitRate < 0 -> colors.errorColor
                         else -> colors.textMuted
                     }
 
-                    val profitIcon = when {
-                        asset.profitRate > 0 -> "↑"
-                        asset.profitRate < 0 -> "↓"
-                        else -> ""
+                    val trendIcon = when {
+                        asset.profitRate > 0 -> Icons.Default.TrendingUp
+                        asset.profitRate < 0 -> Icons.Default.TrendingDown
+                        else -> null
                     }
 
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        if (profitIcon.isNotEmpty()) {
-                            Text(
-                                text = profitIcon,
-                                fontSize = 11.sp,
-                                color = profitColor,
-                                fontWeight = FontWeight.Bold
+                        if (trendIcon != null) {
+                            Icon(
+                                imageVector = trendIcon,
+                                contentDescription = if (asset.profitRate > 0) "Trending Up" else "Trending Down",
+                                tint = profitColor,
+                                modifier = Modifier.size(14.dp)
                             )
                         }
                         Text(
                             text = "${asset.profitRate.toInt()}%",
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
                             color = profitColor,
                             letterSpacing = 0.1.sp
                         )
                     }
                 }
-            }
 
-            // Baris kedua: typeName
-            Surface(
-                color = colors.controls,
-                shape = RoundedCornerShape(7.dp),
-                modifier = Modifier.wrapContentWidth()
-            ) {
-                Text(
-                    text = asset.typeName,
-                    fontSize = 10.sp,
-                    color = colors.textSecondary,
-                    modifier = Modifier.padding(
-                        horizontal = 7.dp,
-                        vertical = 2.dp
-                    ),
-                    fontWeight = FontWeight.Normal,
-                    letterSpacing = 0.4.sp
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(7.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // RIC
+                    Surface(
+                        color = colors.controls,
+                        shape = RoundedCornerShape(7.dp),
+                        modifier = Modifier.wrapContentWidth()
+                    ) {
+                        Text(
+                            text = asset.ric,
+                            fontSize = 9.sp,
+                            color = colors.textSecondary,
+                            fontWeight = FontWeight.Medium,
+                            letterSpacing = 0.3.sp,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                        )
+                    }
+
+                    // TypeName
+                    Surface(
+                        color = colors.controls,
+                        shape = RoundedCornerShape(7.dp),
+                        modifier = Modifier.wrapContentWidth()
+                    ) {
+                        Text(
+                            text = asset.typeName,
+                            fontSize = 9.sp,
+                            color = colors.textSecondary,
+                            modifier = Modifier.padding(
+                                horizontal = 5.dp,
+                                vertical = 2.dp
+                            ),
+                            fontWeight = FontWeight.Normal,
+                            letterSpacing = 0.4.sp
+                        )
+                    }
+                }
             }
         }
     }
@@ -7745,7 +7840,6 @@ private fun buildStatusText(order: ScheduledOrder): String {
     }
 }
 
-// ✅ TRADING MODE SELECTOR - COMPACT VERSION
 @Composable
 private fun TradingModeSelector(
     currentMode: TradingMode,
@@ -7813,65 +7907,131 @@ private fun TradingModeSelector(
                 }
             }
 
-            // ✅ COMPACT DROPDOWN
+            // ✅ DROPDOWN DENGAN UKURAN LEBIH KECIL
             DropdownMenu(
                 expanded = showModeDropdown,
                 onDismissRequest = { showModeDropdown = false },
                 modifier = Modifier
-                    .widthIn(min = 240.dp, max = 260.dp)
-                    .heightIn(max = 340.dp)
+                    .widthIn(min = 240.dp, max = 280.dp)  // ✅ Dikecilkan dari 280-320dp
+                    .heightIn(max = 360.dp)                // ✅ Dikecilkan dari 400dp
                     .shadow(
-                        elevation = 16.dp,
-                        shape = RoundedCornerShape(12.dp),
-                        ambientColor = Color.Black.copy(alpha = 0.15f),
-                        spotColor = Color.Black.copy(alpha = 0.2f)
+                        elevation = 20.dp,                 // ✅ Dikecilkan dari 24dp
+                        shape = RoundedCornerShape(14.dp), // ✅ Dikecilkan dari 16dp
+                        ambientColor = Color.Black.copy(alpha = 0.2f),
+                        spotColor = Color.Black.copy(alpha = 0.3f)
                     )
                     .background(
                         color = colors.cardBackground,
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(14.dp)  // ✅ Dikecilkan dari 16dp
                     )
                     .border(
-                        width = 0.8.dp,
+                        width = 1.dp,
                         brush = Brush.verticalGradient(
                             colors = listOf(
-                                colors.chartLine2.copy(alpha = 0.5f),
-                                colors.chartLine2.copy(alpha = 0.2f)
+                                colors.chartLine2.copy(alpha = 0.6f),
+                                colors.chartLine2.copy(alpha = 0.3f),
+                                colors.chartLine2.copy(alpha = 0.1f)
                             )
                         ),
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(14.dp) // ✅ Dikecilkan dari 16dp
                     )
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 6.dp)
+                        .padding(vertical = 6.dp)  // ✅ Dikecilkan dari 8dp
                 ) {
-                    // ✅ COMPACT HEADER
-                    Row(
+                    // ✅ HEADER DENGAN UKURAN LEBIH KECIL
+                    Surface(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 10.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            .padding(horizontal = 10.dp, vertical = 6.dp), // ✅ Dikecilkan dari 12dp, 8dp
+                        shape = RoundedCornerShape(8.dp),  // ✅ Dikecilkan dari 10dp
+                        color = Color.Transparent
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Hub,
-                            contentDescription = null,
-                            tint = colors.accentPrimary2main,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Text(
-                            text = StringsManager.getSelectTradingMode(currentLanguage),
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = colors.textPrimary,
-                            letterSpacing = 0.2.sp
-                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(
+                                    brush = Brush.horizontalGradient(
+                                        colors = listOf(
+                                            colors.accentPrimary2main.copy(alpha = 0.15f),
+                                            colors.accentPrimary2main.copy(alpha = 0.05f),
+                                            Color.Transparent
+                                        )
+                                    ),
+                                    shape = RoundedCornerShape(8.dp) // ✅ Dikecilkan dari 10dp
+                                )
+                                .border(
+                                    width = 0.5.dp,
+                                    color = colors.accentPrimary2main.copy(alpha = 0.3f),
+                                    shape = RoundedCornerShape(8.dp) // ✅ Dikecilkan dari 10dp
+                                )
+                                .padding(10.dp) // ✅ Dikecilkan dari 12dp
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp) // ✅ Dikecilkan dari 10dp
+                            ) {
+                                val infiniteTransition = rememberInfiniteTransition(label = "icon_animation")
+                                val scale by infiniteTransition.animateFloat(
+                                    initialValue = 0.9f,
+                                    targetValue = 1.1f,
+                                    animationSpec = infiniteRepeatable(
+                                        animation = tween(1500, easing = FastOutSlowInEasing),
+                                        repeatMode = RepeatMode.Reverse
+                                    ),
+                                    label = "scale"
+                                )
+
+                                Box(
+                                    modifier = Modifier
+                                        .size(28.dp) // ✅ Dikecilkan dari 32dp
+                                        .graphicsLayer {
+                                            scaleX = scale
+                                            scaleY = scale
+                                        }
+                                        .background(
+                                            brush = Brush.radialGradient(
+                                                colors = listOf(
+                                                    colors.accentPrimary2main.copy(alpha = 0.3f),
+                                                    Color.Transparent
+                                                )
+                                            ),
+                                            shape = CircleShape
+                                        ),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Hub,
+                                        contentDescription = null,
+                                        tint = colors.accentPrimary2main,
+                                        modifier = Modifier.size(16.dp) // ✅ Dikecilkan dari 18dp
+                                    )
+                                }
+
+                                Column {
+                                    Text(
+                                        text = StringsManager.getSelectTradingMode(currentLanguage),
+                                        fontSize = 11.sp,        // ✅ Dikecilkan dari 13sp
+                                        fontWeight = FontWeight.Bold,
+                                        color = colors.textPrimary,
+                                        letterSpacing = 0.2.sp   // ✅ Dikecilkan dari 0.3sp
+                                    )
+                                    Text(
+                                        text = "Choose your strategy",
+                                        fontSize = 8.sp,         // ✅ Dikecilkan dari 9sp
+                                        color = colors.textSecondary,
+                                        letterSpacing = 0.1.sp   // ✅ Dikecilkan dari 0.2sp
+                                    )
+                                }
+                            }
+                        }
                     }
 
-                    Spacer(modifier = Modifier.height(2.dp))
+                    Spacer(modifier = Modifier.height(3.dp)) // ✅ Dikecilkan dari 4dp
 
-                    // ✅ Signal Mode
+                    // ✅ MENU ITEMS
                     EnhancedModeMenuItem(
                         icon = Icons.Default.Schedule,
                         title = "Signal Mode",
@@ -7890,7 +8050,6 @@ private fun TradingModeSelector(
 
                     EnhancedDivider(colors = colors)
 
-                    // ✅ Fastrade FTT Mode
                     EnhancedModeMenuItem(
                         icon = Icons.Default.Speed,
                         title = "Fastrade FTT Mode",
@@ -7910,7 +8069,6 @@ private fun TradingModeSelector(
 
                     EnhancedDivider(colors = colors)
 
-                    // ✅ Analysis Strategy Mode
                     EnhancedModeMenuItem(
                         icon = Icons.Default.Analytics,
                         title = "Analysis Strategy Mode",
@@ -7930,7 +8088,6 @@ private fun TradingModeSelector(
 
                     EnhancedDivider(colors = colors)
 
-                    // ✅ Fastrade CTC Mode
                     EnhancedModeMenuItem(
                         icon = Icons.Default.FlashOn,
                         title = "Fastrade CTC Mode",
@@ -7950,7 +8107,6 @@ private fun TradingModeSelector(
 
                     EnhancedDivider(colors = colors)
 
-                    // ✅ Multi-Momentum Mode
                     EnhancedModeMenuItem(
                         icon = Icons.Default.Lightbulb,
                         title = "Momentum Mode",
@@ -7979,7 +8135,7 @@ private fun TradingModeSelector(
     }
 }
 
-// ✅ COMPACT MENU ITEM
+// ✅ ENHANCED MODE MENU ITEM - UKURAN LEBIH KECIL
 @Composable
 private fun EnhancedModeMenuItem(
     icon: ImageVector,
@@ -7996,135 +8152,178 @@ private fun EnhancedModeMenuItem(
         enabled = isEnabled,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 2.dp),
-        shape = RoundedCornerShape(8.dp),
+            .padding(horizontal = 10.dp, vertical = 3.dp), // ✅ Dikecilkan dari 12dp, 4dp
+        shape = RoundedCornerShape(10.dp),                  // ✅ Dikecilkan dari 12dp
         color = when {
-            isSelected -> accentColor.copy(alpha = 0.12f)
+            isSelected -> accentColor.copy(alpha = 0.15f)
             isEnabled -> Color.Transparent
-            else -> colors.surface.copy(alpha = 0.2f)
+            else -> colors.surface.copy(alpha = 0.3f)
         },
         border = BorderStroke(
-            width = if (isSelected) 0.8.dp else 0.4.dp,
+            width = if (isSelected) 1.dp else 0.5.dp,
             color = when {
-                isSelected -> accentColor.copy(alpha = 0.4f)
-                isEnabled -> colors.borderColor.copy(alpha = 0.15f)
-                else -> colors.borderColor.copy(alpha = 0.08f)
+                isSelected -> accentColor.copy(alpha = 0.5f)
+                isEnabled -> colors.borderColor.copy(alpha = 0.2f)
+                else -> colors.borderColor.copy(alpha = 0.1f)
             }
         )
     ) {
-        Row(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            // ✅ COMPACT ICON (28dp)
-            Box(
-                modifier = Modifier
-                    .size(28.dp)
-                    .background(
-                        color = if (isSelected) {
-                            accentColor.copy(alpha = 0.15f)
-                        } else if (isEnabled) {
-                            colors.surface.copy(alpha = 0.4f)
-                        } else {
-                            colors.surface.copy(alpha = 0.15f)
-                        },
-                        shape = RoundedCornerShape(7.dp)
-                    )
-                    .border(
-                        width = 0.4.dp,
-                        color = if (isSelected) {
-                            accentColor.copy(alpha = 0.3f)
-                        } else {
-                            colors.borderColor.copy(alpha = 0.15f)
-                        },
-                        shape = RoundedCornerShape(7.dp)
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = if (isSelected) {
-                        accentColor
-                    } else if (isEnabled) {
-                        colors.textPrimary
-                    } else {
-                        colors.textMuted
-                    },
-                    modifier = Modifier.size(14.dp)
-                )
-            }
-
-            // ✅ COMPACT TEXT
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(1.dp)
-            ) {
-                Text(
-                    text = title,
-                    fontSize = 11.sp,
-                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
-                    color = if (isEnabled) colors.textPrimary else colors.textMuted,
-                    letterSpacing = 0.1.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = description,
-                    fontSize = 8.sp,
-                    color = if (isEnabled) colors.textSecondary else colors.textMuted.copy(alpha = 0.5f),
-                    letterSpacing = 0.05.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-
-            // ✅ COMPACT CHECKMARK (16dp)
-            if (isSelected) {
-                Box(
-                    modifier = Modifier
-                        .size(16.dp)
-                        .background(
-                            color = accentColor.copy(alpha = 0.15f),
-                            shape = CircleShape
+                .background(
+                    brush = if (isSelected) {
+                        Brush.horizontalGradient(
+                            colors = listOf(
+                                accentColor.copy(alpha = 0.08f),
+                                Color.Transparent,
+                                accentColor.copy(alpha = 0.05f)
+                            )
                         )
-                        .border(
-                            width = 0.8.dp,
-                            color = accentColor,
-                            shape = CircleShape
-                        ),
+                    } else {
+                        Brush.horizontalGradient(
+                            colors = listOf(Color.Transparent, Color.Transparent)
+                        )
+                    }
+                )
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 10.dp, vertical = 10.dp), // ✅ Dikecilkan dari 12dp, 12dp
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp) // ✅ Dikecilkan dari 12dp
+            ) {
+                // Icon Container - UKURAN LEBIH KECIL
+                Box(
+                    modifier = Modifier.size(34.dp), // ✅ Dikecilkan dari 40dp
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Check,
-                        contentDescription = null,
-                        tint = accentColor,
-                        modifier = Modifier.size(10.dp)
+                    // Outer glow
+                    if (isSelected) {
+                        Box(
+                            modifier = Modifier
+                                .size(34.dp) // ✅ Dikecilkan dari 40dp
+                                .background(
+                                    brush = Brush.radialGradient(
+                                        colors = listOf(
+                                            accentColor.copy(alpha = 0.3f),
+                                            Color.Transparent
+                                        )
+                                    ),
+                                    shape = CircleShape
+                                )
+                        )
+                    }
+
+                    // Icon background
+                    Box(
+                        modifier = Modifier
+                            .size(30.dp) // ✅ Dikecilkan dari 36dp
+                            .background(
+                                color = if (isSelected) {
+                                    accentColor.copy(alpha = 0.2f)
+                                } else if (isEnabled) {
+                                    colors.surface.copy(alpha = 0.5f)
+                                } else {
+                                    colors.surface.copy(alpha = 0.2f)
+                                },
+                                shape = RoundedCornerShape(8.dp) // ✅ Dikecilkan dari 10dp
+                            )
+                            .border(
+                                width = 0.5.dp,
+                                color = if (isSelected) {
+                                    accentColor.copy(alpha = 0.4f)
+                                } else {
+                                    colors.borderColor.copy(alpha = 0.2f)
+                                },
+                                shape = RoundedCornerShape(8.dp) // ✅ Dikecilkan dari 10dp
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = null,
+                            tint = if (isSelected) {
+                                accentColor
+                            } else if (isEnabled) {
+                                colors.textPrimary
+                            } else {
+                                colors.textMuted
+                            },
+                            modifier = Modifier.size(16.dp) // ✅ Dikecilkan dari 18dp
+                        )
+                    }
+                }
+
+                // Text Content - FONT LEBIH KECIL
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(1.dp) // ✅ Dikecilkan dari 2dp
+                ) {
+                    Text(
+                        text = title,
+                        fontSize = 11.sp,        // ✅ Dikecilkan dari 12sp
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                        color = if (isEnabled) colors.textPrimary else colors.textMuted,
+                        letterSpacing = 0.1.sp,  // ✅ Dikecilkan dari 0.2sp
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
+                    Text(
+                        text = description,
+                        fontSize = 8.sp,         // ✅ Dikecilkan dari 9sp
+                        color = if (isEnabled) colors.textSecondary else colors.textMuted.copy(alpha = 0.6f),
+                        letterSpacing = 0.05.sp, // ✅ Dikecilkan dari 0.1sp
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                // Checkmark indicator - UKURAN LEBIH KECIL
+                if (isSelected) {
+                    Box(
+                        modifier = Modifier
+                            .size(18.dp) // ✅ Dikecilkan dari 20dp
+                            .background(
+                                color = accentColor.copy(alpha = 0.2f),
+                                shape = CircleShape
+                            )
+                            .border(
+                                width = 1.dp,
+                                color = accentColor,
+                                shape = CircleShape
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = null,
+                            tint = accentColor,
+                            modifier = Modifier.size(11.dp) // ✅ Dikecilkan dari 12dp
+                        )
+                    }
                 }
             }
         }
     }
 }
 
-// ✅ COMPACT DIVIDER (0.5dp)
+// ✅ ENHANCED DIVIDER - Tetap sama
 @Composable
 private fun EnhancedDivider(colors: DashboardColors) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(0.5.dp)
-            .padding(horizontal = 16.dp)
+            .height(1.dp)
+            .padding(horizontal = 20.dp)
             .background(
                 brush = Brush.horizontalGradient(
                     colors = listOf(
                         Color.Transparent,
-                        colors.chartLine2.copy(alpha = 0.25f),
-                        colors.chartLine2.copy(alpha = 0.35f),
-                        colors.chartLine2.copy(alpha = 0.25f),
+                        colors.chartLine2.copy(alpha = 0.3f),
+                        colors.chartLine2.copy(alpha = 0.5f),
+                        colors.chartLine2.copy(alpha = 0.3f),
                         Color.Transparent
                     )
                 )
@@ -8326,10 +8525,10 @@ private fun CTCContent(
                 enabled = !isActive && canModify,
                 modifier = Modifier.fillMaxWidth().height(36.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFFFF6B35),
+                    containerColor = colors.errorColor,
                     contentColor = colors.TextPrimary1,
-                    disabledContainerColor = colors.controls,
-                    disabledContentColor = colors.textMuted
+                    disabledContainerColor = colors.botButtonDisabledBg,
+                    disabledContentColor = colors.textMuted,
                 ),
                 shape = RoundedCornerShape(6.dp)
             ) {
@@ -8523,10 +8722,10 @@ private fun IndicatorContent(
                     .fillMaxWidth()
                     .height(36.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = colors.successColor,
+                    containerColor = colors.errorColor,
                     contentColor = colors.TextPrimary1,
-                    disabledContainerColor = colors.controls,
-                    disabledContentColor = colors.textMuted
+                    disabledContainerColor = colors.botButtonDisabledBg,
+                    disabledContentColor = colors.textMuted,
                 ),
                 shape = RoundedCornerShape(6.dp)
             ) {
@@ -8755,10 +8954,10 @@ private fun FollowContent(
                 enabled = !isActive && canModify,
                 modifier = Modifier.fillMaxWidth().height(36.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = colors.successColor,
+                    containerColor = colors.errorColor,
                     contentColor = colors.TextPrimary1,
-                    disabledContainerColor = colors.controls,
-                    disabledContentColor = colors.textMuted
+                    disabledContainerColor = colors.botButtonDisabledBg,
+                    disabledContentColor = colors.textMuted,
                 ),
                 shape = RoundedCornerShape(6.dp)
             ) {
@@ -8971,7 +9170,6 @@ private fun ScheduleContent(
                 }
             }
         } else {
-            // ✅ TextField SEKARANG DISABLED - tidak bisa diklik, hanya pajangan
             OutlinedTextField(
                 value = scheduleInput,
                 onValueChange = { /* Do nothing - disabled */ },
@@ -8993,10 +9191,10 @@ private fun ScheduleContent(
                     )
                 },
                 colors = OutlinedTextFieldDefaults.colors(
-                    disabledBorderColor = colors.borderColor.copy(alpha = 0.3f), // ✅ Border redup
-                    disabledTextColor = colors.textMuted, // ✅ Text redup
-                    disabledContainerColor = colors.darkBackgroundClock.copy(alpha = 0.5f), // ✅ Background redup
-                    disabledPlaceholderColor = colors.textMuted.copy(alpha = 0.3f) // ✅ Placeholder redup
+                    disabledBorderColor = colors.borderColor.copy(alpha = 0.3f),
+                    disabledTextColor = colors.textMuted,
+                    disabledContainerColor = colors.darkBackground,
+                    disabledPlaceholderColor = colors.darkBackground
                 ),
                 shape = RoundedCornerShape(8.dp),
                 maxLines = 4,
@@ -10581,7 +10779,7 @@ private fun MultiMomentumContent(
                         Icon(
                             imageVector = Icons.Default.Analytics,
                             contentDescription = null,
-                            tint = Color(0xFF00BCD4).copy(alpha = pulseAlpha),
+                            tint = colors.wifiGreen.copy(alpha = pulseAlpha),
                             modifier = Modifier.size(24.dp)
                         )
 
@@ -10655,10 +10853,10 @@ private fun MultiMomentumContent(
                 enabled = !isActive && canModify,
                 modifier = Modifier.fillMaxWidth().height(36.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF00BCD4),
+                    containerColor = colors.errorColor,
                     contentColor = colors.TextPrimary1,
-                    disabledContainerColor = colors.controls,
-                    disabledContentColor = colors.textMuted
+                    disabledContainerColor = colors.botButtonDisabledBg,
+                    disabledContentColor = colors.textMuted,
                 ),
                 shape = RoundedCornerShape(6.dp)
             ) {
@@ -10751,529 +10949,599 @@ fun MultiMomentumInfoCard(
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 2.dp, vertical = 8.dp),
-        shape = RoundedCornerShape(24.dp),
+            .padding(horizontal = 2.dp, vertical = 8.dp)
+            .shadow(
+                elevation = 8.dp,
+                shape = RoundedCornerShape(20.dp),
+                spotColor = Color(0xFF00BCD4).copy(alpha = 0.15f),
+                ambientColor = Color.Black.copy(alpha = 0.2f)
+            ),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
-            containerColor = Color(0xFF2D2D2D)
+            containerColor = colors.cardBackground
         ),
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = 2.dp,
-            pressedElevation = 4.dp,
-            focusedElevation = 4.dp,
-            hoveredElevation = 3.dp
-        ),
-        border = BorderStroke(0.5.dp, Color(0xFF4A4A4A))
+        border = BorderStroke(0.5.dp, Color(0xFF00BCD4).copy(alpha = 0.2f))
     ) {
         Column(
-            modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            // ✅ HEADER - Compact & Clean
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "Momentum Analysis",
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 18.sp
-                    ),
-                    color = Color.White
-                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        modifier = Modifier.size(32.dp),
+                        shape = CircleShape,
+                        color = Color(0xFF00BCD4).copy(alpha = 0.15f),
+                        border = BorderStroke(1.dp, Color(0xFF00BCD4).copy(alpha = 0.3f))
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.Analytics,
+                                contentDescription = null,
+                                tint = Color(0xFF00BCD4),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
 
-                OutlinedCard(
-                    modifier = Modifier.wrapContentSize(),
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.outlinedCardColors(
-                        containerColor = if (isMultiMomentumModeActive)
-                            Color(0xFF0D1A2E) else Color(0xFF2A2A2A),
-                        contentColor = Color.White
-                    ),
+                    Text(
+                        text = "Momentum Analysis",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = colors.textPrimary
+                    )
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (isMultiMomentumModeActive)
+                        Color(0xFF00BCD4).copy(alpha = 0.15f)
+                    else
+                        colors.surface.copy(alpha = 0.5f),
                     border = BorderStroke(
-                        1.dp,
+                        0.5.dp,
                         if (isMultiMomentumModeActive)
-                            Color(0x8000BCD4) else Color(0xFF666666)
-                    ),
-                    elevation = CardDefaults.cardElevation(0.dp)
+                            Color(0xFF00BCD4).copy(alpha = 0.4f)
+                        else
+                            colors.borderColor.copy(alpha = 0.3f)
+                    )
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Analytics,
-                            contentDescription = null,
-                            tint = if (isMultiMomentumModeActive) Color(0xFF00BCD4) else Color(0xFF666666),
-                            modifier = Modifier.size(16.dp)
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .background(
+                                    color = if (isMultiMomentumModeActive)
+                                        Color(0xFF00BCD4)
+                                    else
+                                        colors.textMuted,
+                                    shape = CircleShape
+                                )
                         )
                         Text(
                             text = if (isMultiMomentumModeActive) "Active" else "Inactive",
-                            style = MaterialTheme.typography.bodySmall.copy(
-                                fontWeight = FontWeight.Medium,
-                                fontSize = 12.sp
-                            ),
-                            color = Color.White,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = if (isMultiMomentumModeActive)
+                                Color(0xFF00BCD4)
+                            else
+                                colors.textMuted
                         )
                     }
                 }
             }
 
+            // ✅ CONTENT - Conditional Display
             when {
                 candleLoadError != null -> {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(
-                            containerColor = Color(0xFF1E1E1E)
-                        ),
-                        shape = RoundedCornerShape(16.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(32.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Warning,
-                                    contentDescription = null,
-                                    tint = Color(0xFFEF4444),
-                                    modifier = Modifier.size(32.dp)
-                                )
-                                Text(
-                                    text = "Error loading candle data",
-                                    fontSize = 12.sp,
-                                    color = Color(0xFFEF4444)
-                                )
-                                Text(
-                                    text = candleLoadError ?: "Unknown error",
-                                    fontSize = 10.sp,
-                                    color = Color(0xFF9CA3AF),
-                                    textAlign = TextAlign.Center
-                                )
-                            }
-                        }
-                    }
+                    ErrorStateCompact(
+                        error = candleLoadError ?: "Unknown error",
+                        colors = colors
+                    )
                 }
 
                 loadingCandles && candleHistory.isEmpty() -> {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(
-                            containerColor = Color(0xFF1E1E1E)
-                        ),
-                        shape = RoundedCornerShape(16.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(32.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(32.dp),
-                                    color = Color(0xFF60A5FA),
-                                    strokeWidth = 3.dp
-                                )
-                                Text(
-                                    text = "Collecting candle data...",
-                                    fontSize = 12.sp,
-                                    color = Color(0xFF9CA3AF)
-                                )
-                            }
-                        }
-                    }
+                    LoadingStateCompact(colors = colors)
                 }
 
                 isMultiMomentumModeActive && candleHistory.isNotEmpty() -> {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(
-                            containerColor = Color(0xFF1E1E1E)
-                        ),
-                        shape = RoundedCornerShape(16.dp),
-                        elevation = CardDefaults.cardElevation(1.dp)
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.BarChart,
-                                    contentDescription = null,
-                                    tint = Color(0xFF60A5FA),
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Text(
-                                    text = "Live OHLC Data",
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = Color(0xFF60A5FA)
-                                )
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        CandleDataSection(
+                            candleHistory = candleHistory,
+                            colors = colors
+                        )
 
-                                Spacer(modifier = Modifier.weight(1f))
+                        MomentumTypesGrid(
+                            multiMomentumOrders = multiMomentumOrders,
+                            colors = colors
+                        )
 
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                ) {
-                                    val infiniteTransition = rememberInfiniteTransition(label = "")
-                                    val pulseAlpha by infiniteTransition.animateFloat(
-                                        initialValue = 0.5f,
-                                        targetValue = 1f,
-                                        animationSpec = infiniteRepeatable(
-                                            animation = tween(1000, easing = LinearEasing),
-                                            repeatMode = RepeatMode.Reverse
-                                        ),
-                                        label = "pulseAlpha"
-                                    )
-
-                                    Box(
-                                        modifier = Modifier
-                                            .size(8.dp)
-                                            .background(
-                                                color = Color(0xFF10B981).copy(alpha = pulseAlpha),
-                                                shape = CircleShape
-                                            )
-                                    )
-
-                                    Text(
-                                        text = "LIVE",
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color(0xFF10B981)
-                                    )
-                                }
-                            }
-
-                            Text(
-                                text = "Latest ${candleHistory.size} candles • Updates every minute",
-                                fontSize = 11.sp,
-                                color = Color(0xFF9CA3AF)
+                        if (multiMomentumOrders.isNotEmpty()) {
+                            ExecutionStatsCompact(
+                                multiMomentumOrders = multiMomentumOrders,
+                                colors = colors
                             )
-
-                            Divider(color = Color(0xFF374151), thickness = 0.5.dp)
-
-                            LazyColumn(
-                                modifier = Modifier.heightIn(max = 400.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                items(
-                                    items = candleHistory.takeLast(10).reversed(),
-                                    key = { it["timestamp"] as? String ?: UUID.randomUUID().toString() }
-                                ) { candle ->
-                                    SafeCandleDataRow(
-                                        candle = candle,
-                                        colors = colors
-                                    )
-                                }
-                            }
                         }
+
+                        ActiveStatusFooter(colors = colors)
                     }
                 }
 
                 !isMultiMomentumModeActive -> {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(
-                            containerColor = Color(0xFF1E1E1E)
-                        ),
-                        shape = RoundedCornerShape(16.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(32.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Info,
-                                    contentDescription = null,
-                                    tint = Color(0xFF9CA3AF),
-                                    modifier = Modifier.size(32.dp)
-                                )
-                                Text(
-                                    text = "Multi-Momentum mode inactive",
-                                    fontSize = 12.sp,
-                                    color = Color(0xFF9CA3AF)
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = Color(0xFF1E1E1E)
-                ),
-                shape = RoundedCornerShape(16.dp),
-                elevation = CardDefaults.cardElevation(1.dp)
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Text(
-                        text = "Active Momentum Types",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = Color(0xFF00BCD4)
-                    )
-
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            MomentumTypeCard(
-                                modifier = Modifier.weight(1f),
-                                name = "Candle\nSabit",
-                                count = multiMomentumOrders.count { it.momentumType == "CANDLE_SABIT" },
-                                color = Color(0xFF10B981)
-                            )
-                            MomentumTypeCard(
-                                modifier = Modifier.weight(1f),
-                                name = "Doji\nTerjepit",
-                                count = multiMomentumOrders.count { it.momentumType == "DOJI_TERJEPIT" },
-                                color = Color(0xFFFBBF24)
-                            )
-                        }
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            MomentumTypeCard(
-                                modifier = Modifier.weight(1f),
-                                name = "Doji\nPembatalan",
-                                count = multiMomentumOrders.count { it.momentumType == "DOJI_PEMBATALAN" },
-                                color = Color(0xFFEF4444)
-                            )
-                            MomentumTypeCard(
-                                modifier = Modifier.weight(1f),
-                                name = "BB/SAR\nBreak",
-                                count = multiMomentumOrders.count { it.momentumType == "BB_SAR_BREAK" },
-                                color = Color(0xFF8B5CF6)
-                            )
-                        }
-                    }
-                }
-            }
-
-            if (multiMomentumOrders.isNotEmpty()) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = Color(0xFF1E1E1E)
-                    ),
-                    shape = RoundedCornerShape(16.dp),
-                    elevation = CardDefaults.cardElevation(1.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Text(
-                            text = "Execution Statistics",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = Color(0xFF60A5FA)
-                        )
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            Column(
-                                modifier = Modifier.weight(1f),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Text(
-                                    text = "${multiMomentumOrders.size}",
-                                    fontSize = 18.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF60A5FA)
-                                )
-                                Text(
-                                    text = "Total Orders",
-                                    fontSize = 10.sp,
-                                    color = Color(0xFF9CA3AF)
-                                )
-                            }
-
-                            Column(
-                                modifier = Modifier.weight(1f),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                val executed = multiMomentumOrders.count { it.isExecuted }
-                                Text(
-                                    text = "$executed",
-                                    fontSize = 18.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF10B981)
-                                )
-                                Text(
-                                    text = "Executed",
-                                    fontSize = 10.sp,
-                                    color = Color(0xFF9CA3AF)
-                                )
-                            }
-
-                            Column(
-                                modifier = Modifier.weight(1f),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                val pending = multiMomentumOrders.count { !it.isExecuted }
-                                Text(
-                                    text = "$pending",
-                                    fontSize = 18.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFFFBBF24)
-                                )
-                                Text(
-                                    text = "Pending",
-                                    fontSize = 10.sp,
-                                    color = Color(0xFF9CA3AF)
-                                )
-                            }
-                        }
-
-                        Divider(color = Color(0xFF374151), thickness = 0.5.dp)
-
-                        val buyOrders = multiMomentumOrders.count {
-                            it.trend.lowercase() in listOf("call", "buy")
-                        }
-                        val sellOrders = multiMomentumOrders.count {
-                            it.trend.lowercase() in listOf("put", "sell")
-                        }
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            Column(
-                                modifier = Modifier.weight(1f),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.TrendingUp,
-                                        contentDescription = null,
-                                        tint = Color(0xFF10B981),
-                                        modifier = Modifier.size(14.dp)
-                                    )
-                                    Text(
-                                        text = "$buyOrders",
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color(0xFF10B981)
-                                    )
-                                }
-                                Text(
-                                    text = "Buy Orders",
-                                    fontSize = 9.sp,
-                                    color = Color(0xFF9CA3AF)
-                                )
-                            }
-
-                            Column(
-                                modifier = Modifier.weight(1f),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.TrendingDown,
-                                        contentDescription = null,
-                                        tint = Color(0xFFEF4444),
-                                        modifier = Modifier.size(14.dp)
-                                    )
-                                    Text(
-                                        text = "$sellOrders",
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color(0xFFEF4444)
-                                    )
-                                }
-                                Text(
-                                    text = "Sell Orders",
-                                    fontSize = 9.sp,
-                                    color = Color(0xFF9CA3AF)
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            if (isMultiMomentumModeActive) {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    color = Color(0xFF0D1A2E),
-                    shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(1.dp, Color(0xFF00BCD4).copy(alpha = 0.3f))
-                ) {
-                    Row(
-                        modifier = Modifier.padding(12.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Visibility,
-                            contentDescription = null,
-                            tint = Color(0xFF00BCD4),
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Column(
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text(
-                                text = "Analyzing Market Data",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = Color(0xFF00BCD4)
-                            )
-                            Text(
-                                text = "Monitoring 4 parallel momentum strategies for trading opportunities",
-                                fontSize = 10.sp,
-                                color = Color(0xFFD1D5DB),
-                                lineHeight = 14.sp
-                            )
-                        }
-                    }
+                    InactiveStateCompact(colors = colors)
                 }
             }
         }
     }
 }
 
+// ✅ COMPACT HELPER COMPOSABLES
+
+@Composable
+private fun ErrorStateCompact(
+    error: String,
+    colors: DashboardColors
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = colors.errorColor.copy(alpha = 0.1f),
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(0.5.dp, colors.errorColor.copy(alpha = 0.3f))
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Default.Warning,
+                contentDescription = null,
+                tint = colors.errorColor,
+                modifier = Modifier.size(20.dp)
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = "Error loading data",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = colors.errorColor
+                )
+                Text(
+                    text = error,
+                    fontSize = 9.sp,
+                    color = colors.textMuted,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun LoadingStateCompact(colors: DashboardColors) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = colors.surface.copy(alpha = 0.5f),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(24.dp),
+                color = Color(0xFF00BCD4),
+                strokeWidth = 2.5.dp
+            )
+            Text(
+                text = "Collecting candle data...",
+                fontSize = 12.sp,
+                color = colors.textSecondary
+            )
+        }
+    }
+}
+
+@Composable
+private fun InactiveStateCompact(colors: DashboardColors) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = colors.surface.copy(alpha = 0.3f),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Info,
+                contentDescription = null,
+                tint = colors.textMuted,
+                modifier = Modifier.size(28.dp)
+            )
+            Text(
+                text = "Multi-Momentum mode inactive",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                color = colors.textMuted
+            )
+        }
+    }
+}
+
+@Composable
+private fun CandleDataSection(
+    candleHistory: List<Map<String, Any>>,
+    colors: DashboardColors
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = colors.surface.copy(alpha = 0.5f),
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(0.5.dp, Color(0xFF00BCD4).copy(alpha = 0.2f))
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.BarChart,
+                        contentDescription = null,
+                        tint = Color(0xFF00BCD4),
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Text(
+                        text = "Live OHLC",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = colors.textPrimary
+                    )
+                }
+
+                val infiniteTransition = rememberInfiniteTransition(label = "")
+                val pulseAlpha by infiniteTransition.animateFloat(
+                    initialValue = 0.5f,
+                    targetValue = 1f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(1000),
+                        repeatMode = RepeatMode.Reverse
+                    ),
+                    label = "pulse"
+                )
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .background(
+                                color = Color(0xFF10B981).copy(alpha = pulseAlpha),
+                                shape = CircleShape
+                            )
+                    )
+                    Text(
+                        text = "LIVE",
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF10B981)
+                    )
+                }
+            }
+
+            Text(
+                text = "${candleHistory.size} candles • Updates every minute",
+                fontSize = 9.sp,
+                color = colors.textMuted
+            )
+
+            LazyColumn(
+                modifier = Modifier.heightIn(max = 300.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                items(
+                    items = candleHistory.takeLast(8).reversed(),
+                    key = { it["timestamp"] as? String ?: UUID.randomUUID().toString() }
+                ) { candle ->
+                    SafeCandleDataRow(candle = candle, colors = colors)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MomentumTypesGrid(
+    multiMomentumOrders: List<MultiMomentumOrder>,
+    colors: DashboardColors
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = colors.surface.copy(alpha = 0.5f),
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(0.5.dp, colors.borderColor.copy(alpha = 0.3f))
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = "Active Strategies",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                color = colors.textPrimary
+            )
+
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    MomentumTypeCardCompact(
+                        modifier = Modifier.weight(1f),
+                        name = "Candle Sabit",
+                        count = multiMomentumOrders.count { it.momentumType == "CANDLE_SABIT" },
+                        color = Color(0xFF10B981)
+                    )
+                    MomentumTypeCardCompact(
+                        modifier = Modifier.weight(1f),
+                        name = "Doji Terjepit",
+                        count = multiMomentumOrders.count { it.momentumType == "DOJI_TERJEPIT" },
+                        color = Color(0xFFFBBF24)
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    MomentumTypeCardCompact(
+                        modifier = Modifier.weight(1f),
+                        name = "Doji Pembatalan",
+                        count = multiMomentumOrders.count { it.momentumType == "DOJI_PEMBATALAN" },
+                        color = Color(0xFFEF4444)
+                    )
+                    MomentumTypeCardCompact(
+                        modifier = Modifier.weight(1f),
+                        name = "BB/SAR Break",
+                        count = multiMomentumOrders.count { it.momentumType == "BB_SAR_BREAK" },
+                        color = Color(0xFF8B5CF6)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MomentumTypeCardCompact(
+    modifier: Modifier = Modifier,
+    name: String,
+    count: Int,
+    color: Color
+) {
+    Surface(
+        modifier = modifier,
+        color = color.copy(alpha = 0.1f),
+        shape = RoundedCornerShape(8.dp),
+        border = BorderStroke(0.5.dp, color.copy(alpha = 0.3f))
+    ) {
+        Row(
+            modifier = Modifier.padding(8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = name,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Medium,
+                color = color,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+            Text(
+                text = "$count",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color = color
+            )
+        }
+    }
+}
+
+@Composable
+private fun ExecutionStatsCompact(
+    multiMomentumOrders: List<MultiMomentumOrder>,
+    colors: DashboardColors
+) {
+    val executed = multiMomentumOrders.count { it.isExecuted }
+    val pending = multiMomentumOrders.count { !it.isExecuted }
+    val buyOrders = multiMomentumOrders.count { it.trend.lowercase() in listOf("call", "buy") }
+    val sellOrders = multiMomentumOrders.count { it.trend.lowercase() in listOf("put", "sell") }
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = colors.surface.copy(alpha = 0.5f),
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(0.5.dp, colors.borderColor.copy(alpha = 0.3f))
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = "Statistics",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                color = colors.textPrimary
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                StatItemCompact(
+                    modifier = Modifier.weight(1f),
+                    label = "Total",
+                    value = "${multiMomentumOrders.size}",
+                    color = Color(0xFF00BCD4)
+                )
+                StatItemCompact(
+                    modifier = Modifier.weight(1f),
+                    label = "Executed",
+                    value = "$executed",
+                    color = Color(0xFF10B981)
+                )
+                StatItemCompact(
+                    modifier = Modifier.weight(1f),
+                    label = "Pending",
+                    value = "$pending",
+                    color = Color(0xFFFBBF24)
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                TrendItemCompact(
+                    modifier = Modifier.weight(1f),
+                    label = "Buy",
+                    value = "$buyOrders",
+                    icon = Icons.Default.TrendingUp,
+                    color = Color(0xFF10B981)
+                )
+                TrendItemCompact(
+                    modifier = Modifier.weight(1f),
+                    label = "Sell",
+                    value = "$sellOrders",
+                    icon = Icons.Default.TrendingDown,
+                    color = Color(0xFFEF4444)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatItemCompact(
+    modifier: Modifier = Modifier,
+    label: String,
+    value: String,
+    color: Color
+) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = value,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Bold,
+            color = color
+        )
+        Text(
+            text = label,
+            fontSize = 9.sp,
+            color = Color(0xFF9CA3AF)
+        )
+    }
+}
+
+@Composable
+private fun TrendItemCompact(
+    modifier: Modifier = Modifier,
+    label: String,
+    value: String,
+    icon: ImageVector,
+    color: Color
+) {
+    Surface(
+        modifier = modifier,
+        color = color.copy(alpha = 0.1f),
+        shape = RoundedCornerShape(8.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(8.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = color,
+                modifier = Modifier.size(14.dp)
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                text = value,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color = color
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                text = label,
+                fontSize = 9.sp,
+                color = Color(0xFF9CA3AF)
+            )
+        }
+    }
+}
+
+@Composable
+private fun ActiveStatusFooter(colors: DashboardColors) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = Color(0xFF00BCD4).copy(alpha = 0.1f),
+        shape = RoundedCornerShape(10.dp),
+        border = BorderStroke(0.5.dp, Color(0xFF00BCD4).copy(alpha = 0.3f))
+    ) {
+        Row(
+            modifier = Modifier.padding(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Default.Visibility,
+                contentDescription = null,
+                tint = Color(0xFF00BCD4),
+                modifier = Modifier.size(14.dp)
+            )
+            Text(
+                text = "Analyzing 4 parallel momentum strategies",
+                fontSize = 10.sp,
+                color = Color(0xFF00BCD4),
+                fontWeight = FontWeight.Medium
+            )
+        }
+    }
+}
 
 @Composable
 private fun SafeCandleDataRow(
@@ -11567,214 +11835,6 @@ private fun MetricValue(
     }
 }
 
-@Composable
-private fun MomentumTypeCard(
-    modifier: Modifier = Modifier,
-    name: String,
-    count: Int,
-    color: Color
-) {
-    Surface(
-        modifier = modifier,
-        color = color.copy(alpha = 0.1f),
-        shape = RoundedCornerShape(8.dp),
-        border = BorderStroke(1.dp, color.copy(alpha = 0.3f))
-    ) {
-        Column(
-            modifier = Modifier.padding(8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            Text(
-                text = "$count",
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
-                color = color
-            )
-            Text(
-                text = name,
-                fontSize = 9.sp,
-                color = Color(0xFF9CA3AF),
-                textAlign = TextAlign.Center,
-                lineHeight = 11.sp,
-                maxLines = 2
-            )
-        }
-    }
-}
-
-@Composable
-private fun OHLCDataCard(
-    order: MultiMomentumOrder,
-    candle: Candle,
-    colors: DashboardColors
-) {
-    val trend = candle.getTrend()
-    val trendColor = if (trend == "buy") Color(0xFF10B981) else Color(0xFFEF4444)
-    val bodySize = (candle.close - candle.open).abs().toDouble()
-    val range = (candle.high - candle.low).toDouble()
-
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        color = Color(0xFF2D2E30),
-        shape = RoundedCornerShape(8.dp),
-        border = BorderStroke(1.dp, trendColor.copy(alpha = 0.3f))
-    ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            // Header with momentum type and time
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = order.momentumType.replace("_", " "),
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = Color(0xFFE2E8F0),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
-
-                Surface(
-                    color = trendColor.copy(alpha = 0.2f),
-                    shape = RoundedCornerShape(4.dp)
-                ) {
-                    Text(
-                        text = trend.uppercase(),
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = trendColor,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                    )
-                }
-            }
-
-            // OHLC Values in grid
-            Column(
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    OHLCValue("Open", candle.open.toPlainString())
-                    OHLCValue("High", candle.high.toPlainString())
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    OHLCValue("Low", candle.low.toPlainString())
-                    OHLCValue("Close", candle.close.toPlainString())
-                }
-            }
-
-            Divider(color = Color(0xFF374151), thickness = 0.5.dp)
-
-            // Additional metrics
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Column {
-                    Text(
-                        text = "Body Size",
-                        fontSize = 9.sp,
-                        color = Color(0xFF9CA3AF)
-                    )
-                    Text(
-                        text = String.format("%.5f", bodySize),
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = trendColor,
-                        fontFamily = FontFamily.Monospace
-                    )
-                }
-                Column(
-                    horizontalAlignment = Alignment.End
-                ) {
-                    Text(
-                        text = "Range",
-                        fontSize = 9.sp,
-                        color = Color(0xFF9CA3AF)
-                    )
-                    Text(
-                        text = String.format("%.5f", range),
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = Color(0xFF60A5FA),
-                        fontFamily = FontFamily.Monospace
-                    )
-                }
-            }
-
-            // Execution status
-            if (order.isExecuted) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.CheckCircle,
-                        contentDescription = null,
-                        tint = Color(0xFF10B981),
-                        modifier = Modifier.size(12.dp)
-                    )
-                    Text(
-                        text = "Executed",
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = Color(0xFF10B981)
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun OHLCValue(
-    label: String,
-    value: String
-) {
-    Column(
-        modifier = Modifier.padding(vertical = 2.dp)
-    ) {
-        Text(
-            text = label,
-            fontSize = 9.sp,
-            color = Color(0xFF9CA3AF)
-        )
-        Text(
-            text = value,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.Medium,
-            color = Color(0xFFE2E8F0),
-            fontFamily = FontFamily.Monospace,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-    }
-}
-
-@Composable
-fun BotStatusIndicatorSimple(
-    isRunning: Boolean,
-    modifier: Modifier = Modifier
-) {
-    val color = if (isRunning) Color(0xFF00FF00) else Color(0xFFFF0000) // hijau / merah
-    Box(
-        modifier = modifier
-            .size(14.dp)
-            .background(color = color, shape = CircleShape)
-            .shadow(2.dp, CircleShape)
-    )
-}
 
 private fun formatAmount(amount: Long): String {
     return formatIndonesianCurrencyNew(amount)
@@ -12157,5 +12217,75 @@ private fun getQuickAmountsForCurrency(currency: CurrencyType): List<Pair<Long, 
             70000L to "kr700",
             140000L to "kr1.4K"
         )
+    }
+}
+
+private fun formatBalanceDisplay(balance: Long, currency: String): String {
+    val balanceValue = balance / 100.0
+
+    return when (currency) {
+        "IDR" -> {
+            val formatter = DecimalFormat("#,###", DecimalFormatSymbols(Locale("id", "ID")).apply {
+                groupingSeparator = '.'
+            })
+            "Rp ${formatter.format(balanceValue.toLong())}"
+        }
+        "USD" -> {
+            val value = balanceValue.toLong()
+            if (balanceValue == value.toDouble()) {
+                "$$value"
+            } else {
+                String.format("$%.2f", balanceValue)
+            }
+        }
+        "EUR" -> {
+            val value = balanceValue.toLong()
+            if (balanceValue == value.toDouble()) {
+                "€$value"
+            } else {
+                String.format("€%.2f", balanceValue)
+            }
+        }
+        "GBP" -> {
+            val value = balanceValue.toLong()
+            if (balanceValue == value.toDouble()) {
+                "£$value"
+            } else {
+                String.format("£%.2f", balanceValue)
+            }
+        }
+        "JPY" -> String.format("¥%.0f", balanceValue)
+        "MYR" -> {
+            val value = balanceValue.toLong()
+            if (balanceValue == value.toDouble()) {
+                "RM$value"
+            } else {
+                String.format("RM%.2f", balanceValue)
+            }
+        }
+        "SGD" -> {
+            val value = balanceValue.toLong()
+            if (balanceValue == value.toDouble()) {
+                "S$$value"
+            } else {
+                String.format("S$%.2f", balanceValue)
+            }
+        }
+        "THB" -> {
+            val value = balanceValue.toLong()
+            if (balanceValue == value.toDouble()) {
+                "฿$value"
+            } else {
+                String.format("฿%.2f", balanceValue)
+            }
+        }
+        else -> {
+            val value = balanceValue.toLong()
+            if (balanceValue == value.toDouble()) {
+                "$value $currency"
+            } else {
+                String.format("%.2f %s", balanceValue, currency)
+            }
+        }
     }
 }

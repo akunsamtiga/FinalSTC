@@ -27,6 +27,8 @@ import kotlinx.coroutines.flow.combine
 import com.autotrade.finalstc.data.repository.CurrencyRepository
 import com.autotrade.finalstc.data.local.LanguageManager
 import com.autotrade.finalstc.data.local.SessionManager
+import com.autotrade.finalstc.data.model.BalanceInfo
+import com.autotrade.finalstc.data.repository.BalanceRepository
 import com.autotrade.finalstc.data.repository.FirebaseRepository
 import kotlin.math.abs
 
@@ -36,8 +38,15 @@ class DashboardViewModel @Inject constructor(
     private val currencyRepository: CurrencyRepository,
     private val languageManager: LanguageManager,
     private val sessionManager: SessionManager,
-    private val firebaseRepository: FirebaseRepository
+    private val firebaseRepository: FirebaseRepository,
+    private val balanceRepository: BalanceRepository
 ) : ViewModel() {
+
+    private val _balanceInfo = MutableStateFlow(BalanceInfo())
+    val balanceInfo: StateFlow<BalanceInfo> = _balanceInfo.asStateFlow()
+
+    private val _isLoadingBalance = MutableStateFlow(false)
+    val isLoadingBalance: StateFlow<Boolean> = _isLoadingBalance.asStateFlow()
 
     private val _multiMomentumOrders = MutableStateFlow<List<MultiMomentumOrder>>(emptyList())
     val multiMomentumOrders: StateFlow<List<MultiMomentumOrder>> = _multiMomentumOrders.asStateFlow()
@@ -154,6 +163,9 @@ class DashboardViewModel @Inject constructor(
         startIndicatorPredictionInfoUpdates()
         startLocalStatsResetScheduler()
         loadUserCurrency()
+        loadBalance()
+        startBalanceRefresh()
+
     }
 
     private fun checkWhitelistStatus() {
@@ -380,6 +392,39 @@ class DashboardViewModel @Inject constructor(
         println("  Minimum amount: ${currency.formatAmount(currency.minAmountInCents)}")
         println("  Base amount adjusted to: ${newSettings.getFormattedBaseAmount()}")
         println("All managers updated with new currency: ${currency.code}")
+    }
+
+    fun loadBalance() {
+        viewModelScope.launch {
+            try {
+                _isLoadingBalance.value = true
+
+                val result = balanceRepository.fetchBalance()
+
+                result.onSuccess { balance ->
+                    _balanceInfo.value = balance
+                    Log.d("DashboardViewModel", "Balance loaded: Real=${balance.realBalance/100.0}, Demo=${balance.demoBalance/100.0}")
+                }
+
+                result.onFailure { exception ->
+                    Log.e("DashboardViewModel", "Failed to load balance: ${exception.message}")
+                }
+            } catch (e: Exception) {
+                Log.e("DashboardViewModel", "Error loading balance: ${e.message}", e)
+            } finally {
+                _isLoadingBalance.value = false
+            }
+        }
+    }
+
+    // Add periodic refresh
+    private fun startBalanceRefresh() {
+        viewModelScope.launch {
+            while (true) {
+                delay(30000L) // Refresh every 30 seconds
+                loadBalance()
+            }
+        }
     }
 
     fun setBaseAmountInCurrency(input: String) {
@@ -824,6 +869,10 @@ class DashboardViewModel @Inject constructor(
                 delay(5000L)
             }
         }
+    }
+
+    fun updateBaseAmountInput(input: String) {
+        _uiState.value = _uiState.value.copy(baseAmountInput = input)
     }
 
     fun getCurrentIndicatorPredictionInfo(): Map<String, Any> {

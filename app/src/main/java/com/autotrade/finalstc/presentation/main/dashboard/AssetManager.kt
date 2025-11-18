@@ -74,6 +74,9 @@ class AssetManager(
             val assetType = asset.type
             val typeName = typeNameMapping[assetType] ?: "Tipe-$assetType"
 
+            // ✅ AMBIL ICON URL
+            val iconUrl = asset.icon?.url
+
             var profit: Double? = null
 
             asset.personal_user_payment_rates?.forEach { rateEntry ->
@@ -97,7 +100,8 @@ class AssetManager(
                         name = name,
                         typeName = typeName,
                         profitRate = profitRate,
-                        isActive = true
+                        isActive = true,
+                        iconUrl = iconUrl  // ✅ TAMBAH INI
                     )
                 )
             }

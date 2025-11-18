@@ -25,7 +25,8 @@ data class Asset(
     val name: String,
     val typeName: String,
     val profitRate: Double,
-    val isActive: Boolean = true
+    val isActive: Boolean = true,
+    val iconUrl: String? = null
 )
 
 data class TradeOrder(
@@ -63,10 +64,10 @@ data class TradeResult(
 
 data class MartingaleState(
     val isEnabled: Boolean = true,
-    val maxSteps: Int = 3,
+    val maxSteps: Int = 2,
     val multiplierType: MultiplierType = MultiplierType.FIXED,
     val baseAmount: Long = 1_400_000L,
-    val multiplierValue: Double = 2.0,
+    val multiplierValue: Double = 2.5,
 ) {
     fun validate(currency: CurrencyType = CurrencyType.IDR): Result<Unit> {
         return try {
@@ -221,7 +222,7 @@ data class MartingaleState(
                     else -> "Martingale ${index}"
                 }
                 "$stepLabel: ${formatCompactAmount(amount)}"
-            }.joinToString(" â†’ ")
+            }.joinToString(" → ")
         } catch (e: ArithmeticException) {
             "Calculation overflow"
         }
@@ -701,7 +702,13 @@ data class AssetRaw(
     val name: String,
     val type: Int,
     val personal_user_payment_rates: List<PaymentRate>? = null,
-    val trading_tools_settings: TradingToolsSettings? = null
+    val trading_tools_settings: TradingToolsSettings? = null,
+    val icon: AssetIcon? = null  // ✅ TAMBAH INI
+)
+
+// ✅ TAMBAH DATA CLASS BARU
+data class AssetIcon(
+    val url: String?
 )
 data class PaymentRate(val trading_type: String, val payment_rate: Double)
 data class TradingToolsSettings(

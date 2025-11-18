@@ -1,5 +1,6 @@
 package com.autotrade.finalstc.di
 
+import com.autotrade.finalstc.data.api.BalanceApiService
 import com.autotrade.finalstc.data.api.LoginApiService
 import com.autotrade.finalstc.data.api.UserProfileApiService
 import com.autotrade.finalstc.data.api.CurrencyApiService
@@ -61,5 +62,11 @@ object NetworkModule {
     @Singleton
     fun provideCurrencyApiService(retrofit: Retrofit): CurrencyApiService {
         return retrofit.create(CurrencyApiService::class.java)
+    }
+
+    @Provides
+    @Singleton
+    fun provideBalanceApiService(retrofit: Retrofit): BalanceApiService {
+        return retrofit.create(BalanceApiService::class.java)
     }
 }

@@ -37,6 +37,7 @@ import com.autotrade.finalstc.presentation.admin.AdminScreen
 import com.autotrade.finalstc.presentation.theme.ThemeViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import com.google.accompanist.systemuicontroller.rememberSystemUiController
 
 data class BottomNavItem(
     val route: String,
@@ -70,6 +71,9 @@ fun MainScreen(
     val currentTheme by themeViewModel.currentTheme.collectAsStateWithLifecycle()
     val colors = currentTheme.colors
 
+    // ✅ System UI Controller untuk mengatur warna navigation bar sistem
+    val systemUiController = rememberSystemUiController()
+
     val bottomNavItems = listOf(
         BottomNavItem("dashboard", Icons.Outlined.Dashboard, "Dashboard"),
         BottomNavItem("history", Icons.Outlined.History, "History"),
@@ -84,6 +88,14 @@ fun MainScreen(
         colors.bgmain2
     } else {
         colors.background
+    }
+
+    // ✅ FIXED: Selalu set navigation bar sistem jadi hitam
+    LaunchedEffect(currentRoute) {
+        systemUiController.setNavigationBarColor(
+            color = Color(0xFF000000), // Hitam (tidak bergantung pada tema)
+            darkIcons = false // Icon sistem tetap putih
+        )
     }
 
     Scaffold(
