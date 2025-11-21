@@ -300,6 +300,63 @@ class AdminViewModel @Inject constructor(
         }
     }
 
+    // Tambahkan fungsi ini di AdminViewModel
+    fun removeUserFromRecents(userId: String) {
+        viewModelScope.launch {
+            try {
+                val user = _uiState.value.allUsersForStats.find { it.id == userId }
+                if (user != null) {
+                    val updatedUser = user.copy(lastLogin = 0L)
+                    firebaseRepository.updateWhitelistUser(updatedUser)
+
+                    val updatedList = _uiState.value.whitelistUsers.map {
+                        if (it.id == userId) updatedUser else it
+                    }
+                    val updatedAllUsers = _uiState.value.allUsersForStats.map {
+                        if (it.id == userId) updatedUser else it
+                    }
+                    _uiState.value = _uiState.value.copy(
+                        whitelistUsers = updatedList,
+                        allUsersForStats = updatedAllUsers,
+                        successMessage = "User berhasil dihapus dari Recent Logins"
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    error = "Gagal menghapus dari recents: ${e.message}"
+                )
+            }
+        }
+    }
+
+    fun deactivateUser(userId: String) {
+        viewModelScope.launch {
+            try {
+                val user = _uiState.value.allUsersForStats.find { it.id == userId }
+                if (user != null) {
+                    val updatedUser = user.copy(isActive = false)
+                    firebaseRepository.updateWhitelistUser(updatedUser)
+
+                    val updatedList = _uiState.value.whitelistUsers.map {
+                        if (it.id == userId) updatedUser else it
+                    }
+                    val updatedAllUsers = _uiState.value.allUsersForStats.map {
+                        if (it.id == userId) updatedUser else it
+                    }
+                    _uiState.value = _uiState.value.copy(
+                        whitelistUsers = updatedList,
+                        allUsersForStats = updatedAllUsers,
+                        successMessage = "User berhasil dinonaktifkan"
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    error = "Gagal menonaktifkan user: ${e.message}"
+                )
+            }
+        }
+    }
+
     fun addAdmin(admin: AdminUser) {
         if (!_uiState.value.isSuperAdmin) {
             _uiState.value = _uiState.value.copy(

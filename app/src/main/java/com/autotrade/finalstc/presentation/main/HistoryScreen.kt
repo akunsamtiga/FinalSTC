@@ -38,7 +38,8 @@ import coil.request.ImageRequest
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.layout.ContentScale
 import coil.request.CachePolicy
-
+import com.autotrade.finalstc.presentation.main.dashboard.DashboardColors
+import com.autotrade.finalstc.presentation.theme.ThemeViewModel
 
 private val DarkBackground = Color(0xFF1B1B1B)
 private val DarkSurface = Color(0xFF1F1F1F)
@@ -65,14 +66,18 @@ sealed class IconLoadState {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HistoryScreen(
-    viewModel: HistoryViewModel = hiltViewModel()
-) {
+    viewModel: HistoryViewModel = hiltViewModel(),
+    themeViewModel: ThemeViewModel = hiltViewModel() // ✅ TAMBAH INI
+    ) {
+    val dashboardTheme by themeViewModel.currentTheme.collectAsStateWithLifecycle()
+    val colors = dashboardTheme.colors // ✅ AMBIL COLORS
+
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val historyList by viewModel.historyList.collectAsStateWithLifecycle()
     val lang by viewModel.currentLanguage.collectAsStateWithLifecycle()
     val currency by viewModel.currentCurrency.collectAsStateWithLifecycle()
 
-    var selectedFilter by remember { mutableStateOf("all") }
+    var selectedFilter by remember { mutableStateOf("today") }
     var showFilterSheet by remember { mutableStateOf(false) }
     var isVisible by remember { mutableStateOf(false) }
 
@@ -84,6 +89,7 @@ fun HistoryScreen(
 
     val filteredHistory = remember(historyList, selectedFilter) {
         when (selectedFilter) {
+            "today" -> historyList.filter { isToday(it.createdAt) }
             "won" -> historyList.filter { it.status == "won" }
             "lost" -> historyList.filter { it.status == "lost" }
             "opened" -> historyList.filter { it.status == "opened" }
@@ -119,7 +125,8 @@ fun HistoryScreen(
                         selectedFilter = selectedFilter,
                         onFilterClick = { showFilterSheet = true },
                         onRefresh = { viewModel.refreshHistory() },
-                        onToggleAccount = { viewModel.toggleAccountType() }
+                        onToggleAccount = { viewModel.toggleAccountType() },
+                        colors = colors
                     )
                 }
 
@@ -128,7 +135,8 @@ fun HistoryScreen(
                         CompactStatisticsSection(
                             lang = lang,
                             historyList = historyList,
-                            currency = currency
+                            currency = currency,
+                            colors = colors
                         )
                     }
                 }
@@ -195,7 +203,8 @@ private fun ImprovedHeader(
     selectedFilter: String,
     onFilterClick: () -> Unit,
     onRefresh: () -> Unit,
-    onToggleAccount: () -> Unit
+    onToggleAccount: () -> Unit,
+    colors: DashboardColors
 ) {
     Card(
         modifier = Modifier
@@ -204,107 +213,145 @@ private fun ImprovedHeader(
         colors = CardDefaults.cardColors(containerColor = CardBackground),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         shape = RoundedCornerShape(24.dp),
-        border = BorderStroke(0.5.dp, Color(0xFF4A4A4A))
+        border = BorderStroke(0.6.dp, colors.chartLine.copy(alpha = 0.4f))
     ) {
         Column(
             modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // ROW 1: JUDUL + TOMBOL AKUN + FILTER + REFRESH
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            // CONTAINER UNTUK LAYOUT DENGAN TOMBOL MELAYANG
+            Box(
+                modifier = Modifier.fillMaxWidth()
             ) {
-                // LEFT SIDE: JUDUL
-                Text(
-                    text = StringsManager.getTradingHistory(lang),
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 18.sp
-                    ),
-                    color = Color.White,
-                    modifier = Modifier.weight(1f)
-                )
-
-                // RIGHT SIDE: TOMBOL AKUN + REFRESH + FILTER
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                // LEFT SIDE: JUDUL + TOMBOL ACCOUNT TYPE
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    // TOMBOL ACCOUNT TYPE YANG BISA DIKLIK UNTUK TOGGLE
+                    // JUDUL
+                    Text(
+                        text = StringsManager.getTradingHistory(lang),
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 18.sp
+                        ),
+                        color = Color.White
+                    )
+
+                    // TOMBOL ACCOUNT TYPE
                     OutlinedCard(
                         onClick = onToggleAccount,
                         modifier = Modifier
-                            .height(36.dp)
+                            .height(44.dp)
                             .wrapContentWidth(),
-                        shape = RoundedCornerShape(18.dp),
+                        shape = RoundedCornerShape(12.dp),
                         colors = CardDefaults.outlinedCardColors(
-                            containerColor = if (uiState.showDemoAccount) Color(0xFF3A2F00) else Color(0xFF1A3A1A),
+                            containerColor = if (uiState.showDemoAccount)
+                                AccentWarning.copy(alpha = 0.15f)
+                            else
+                                WifiGreen.copy(alpha = 0.15f),
                             contentColor = Color.White
                         ),
                         border = BorderStroke(
-                            1.dp,
-                            if (uiState.showDemoAccount) Color(0x80FFCC80) else Color(0x804CAF50)
-                        ),
-                        elevation = CardDefaults.cardElevation(0.dp)
+                            0.8.dp,
+                            if (uiState.showDemoAccount)
+                                AccentWarning.copy(alpha = 0.5f)
+                            else
+                                WifiGreen.copy(alpha = 0.5f)
+                        )
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .padding(horizontal = 12.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Icon(
-                                imageVector = if (uiState.showDemoAccount) Icons.Default.School else Icons.Default.AccountBalance,
+                                imageVector = if (uiState.showDemoAccount)
+                                    Icons.Default.School
+                                else
+                                    Icons.Default.AccountBalance,
                                 contentDescription = null,
-                                tint = if (uiState.showDemoAccount) Color(0xFFFFCC80) else Color(0xFF4CAF50),
-                                modifier = Modifier.size(14.dp)
+                                modifier = Modifier.size(16.dp),
+                                tint = if (uiState.showDemoAccount)
+                                    AccentWarning
+                                else
+                                    WifiGreen
                             )
                             Text(
                                 text = if (uiState.showDemoAccount)
                                     StringsManager.getDemoAccount(lang)
                                 else
                                     StringsManager.getRealAccount(lang),
-                                style = MaterialTheme.typography.bodySmall.copy(
-                                    fontWeight = FontWeight.Medium,
-                                    fontSize = 11.sp
-                                ),
-                                color = Color.White,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
                                 maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                                overflow = TextOverflow.Ellipsis,
+                                color = Color.White
+                            )
+                            Icon(
+                                imageVector = Icons.Default.ArrowDropDown,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                                tint = Color.White
+                            )
+                        }
+                    }
+                }
+
+                // RIGHT SIDE: TOMBOL REFRESH + FILTER (POJOK KANAN, CENTERED VERTICALLY)
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd) // Pojok kanan, tengah vertikal
+                ) {
+                    // TOMBOL REFRESH
+                    Surface(
+                        onClick = onRefresh,
+                        modifier = Modifier.size(36.dp),
+                        shape = CircleShape,
+                        color = StatusBlue.copy(alpha = 0.15f),
+                        border = BorderStroke(1.dp, StatusBlue.copy(alpha = 0.3f))
+                    ) {
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Refresh,
+                                contentDescription = StringsManager.getRefresh(lang),
+                                tint = StatusBlue,
+                                modifier = Modifier.size(20.dp)
                             )
                         }
                     }
 
-                    // TOMBOL REFRESH
-                    IconButton(
-                        onClick = onRefresh,
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Refresh,
-                            contentDescription = StringsManager.getRefresh(lang),
-                            tint = StatusBlue,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-
-                    // TOMBOL FILTER (TANPA BACKGROUND)
-                    IconButton(
+                    // TOMBOL FILTER
+                    Surface(
                         onClick = onFilterClick,
-                        modifier = Modifier.size(36.dp)
+                        modifier = Modifier.size(36.dp),
+                        shape = CircleShape,
+                        color = StatusBlue.copy(alpha = 0.15f),
+                        border = BorderStroke(1.dp, StatusBlue.copy(alpha = 0.3f))
                     ) {
-                        Icon(
-                            imageVector = Icons.Outlined.FilterList,
-                            contentDescription = StringsManager.getFilter(lang),
-                            tint = StatusBlue,
-                            modifier = Modifier.size(20.dp)
-                        )
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.FilterList,
+                                contentDescription = StringsManager.getFilter(lang),
+                                tint = StatusBlue,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
                     }
                 }
             }
 
-            // ROW 2: BADGE FILTER AKTIF (JIKA ADA)
+            // ROW 3: BADGE FILTER AKTIF (JIKA ADA)
             if (selectedFilter != "all") {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -312,6 +359,16 @@ private fun ImprovedHeader(
                 ) {
                     // BADGE UNTUK FILTER YANG AKTIF
                     when (selectedFilter) {
+                        "today" -> { // Tambahkan case ini
+                            FilterBadge(
+                                icon = Icons.Default.Today,
+                                text = StringsManager.getToday(lang),
+                                iconColor = Color(0xFF9C27B0), // Warna ungu
+                                backgroundColor = Color(0xFF2D1F3D),
+                                borderColor = Color(0x809C27B0)
+                            )
+                        }
+
                         "week" -> {
                             FilterBadge(
                                 icon = Icons.Default.DateRange,
@@ -355,7 +412,7 @@ private fun ImprovedHeader(
     }
 }
 
-// ✅ COMPOSABLE BARU: Badge untuk menampilkan filter aktif
+// COMPOSABLE BADGE: Filter Badge
 @Composable
 private fun FilterBadge(
     icon: ImageVector,
@@ -403,7 +460,8 @@ private fun FilterBadge(
 private fun CompactStatisticsSection(
     lang: String,
     historyList: List<TradingHistoryNew>,
-    currency: String
+    currency: String,
+    colors: DashboardColors
 ) {
     val weeklyTrades = historyList.filter { isWithinLastWeek(it.createdAt) }
     val allTrades = historyList
@@ -428,7 +486,7 @@ private fun CompactStatisticsSection(
             colors = CardDefaults.cardColors(containerColor = CardBackground),
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
             shape = RoundedCornerShape(24.dp),
-            border = BorderStroke(0.5.dp, Color(0xFF4A4A4A))
+            border = BorderStroke(0.6.dp, colors.chartLine.copy(alpha = 0.4f))
         ) {
             Column(
                 modifier = Modifier.padding(20.dp),
@@ -529,7 +587,8 @@ private fun CompactStatisticsSection(
                 title = StringsManager.getTotal(lang),
                 value = totalTrades.toString(),
                 icon = Icons.Outlined.BarChart,
-                color = StatusBlue
+                color = StatusBlue,
+                colors = colors
             )
 
             StatCard(
@@ -537,7 +596,8 @@ private fun CompactStatisticsSection(
                 title = StringsManager.getWinRate(lang),
                 value = "${winRate.toInt()}%",
                 icon = Icons.Outlined.TrendingUp,
-                color = if (winRate >= 50) WifiGreen else AccentSecondary
+                color = if (winRate >= 50) WifiGreen else AccentSecondary,
+                colors = colors
             )
 
             StatCard(
@@ -545,7 +605,8 @@ private fun CompactStatisticsSection(
                 title = StringsManager.getAllPnL(lang),
                 value = formatCurrencyCompact(totalProfit, currency),
                 icon = Icons.Outlined.AccountBalance,
-                color = if (totalProfit >= 0) WifiGreen else AccentSecondary
+                color = if (totalProfit >= 0) WifiGreen else AccentSecondary,
+                colors = colors
             )
         }
     }
@@ -557,18 +618,20 @@ private fun StatCard(
     title: String,
     value: String,
     icon: ImageVector,
-    color: Color
+    color: Color,
+    colors: DashboardColors
 ) {
     Card(
         modifier = modifier.height(80.dp),
-        colors = CardDefaults.cardColors(containerColor = DarkSurface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-        shape = RoundedCornerShape(12.dp)
+        colors = CardDefaults.cardColors(containerColor = CardBackground),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        shape = RoundedCornerShape(14.dp),
+        border = BorderStroke(0.6.dp, colors.chartLine.copy(alpha = 0.4f))
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(12.dp),
+                .padding(16.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
             Row(
@@ -578,7 +641,7 @@ private fun StatCard(
             ) {
                 Text(
                     text = title,
-                    fontSize = 11.sp,
+                    fontSize = 10.sp,
                     fontWeight = FontWeight.Medium,
                     color = TextSecondary,
                     maxLines = 1,
@@ -595,7 +658,7 @@ private fun StatCard(
 
             Text(
                 text = value,
-                fontSize = 16.sp,
+                fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = color,
                 maxLines = 1,
@@ -709,7 +772,6 @@ private fun ImprovedHistoryCard(
                                             iconLoadState = IconLoadState.Error(error.result.throwable)
                                             Log.e("HistoryScreen", "❌ Failed to load icon: ${trade.iconUrl} - ${error.result.throwable?.message}")
 
-                                            // ✅ PERBAIKAN: Gunakan AnimatedVisibility biasa, bukan RowScope
                                             Box(
                                                 contentAlignment = Alignment.Center,
                                                 modifier = Modifier.fillMaxSize()
@@ -774,7 +836,6 @@ private fun ImprovedHistoryCard(
                     horizontalAlignment = Alignment.End,
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    // ✅ IMPROVEMENT: Tampilkan profit/loss
                     val profitLoss = trade.win - trade.amount
                     Text(
                         text = formatCurrencyByISO(trade.win, currency),
@@ -950,7 +1011,6 @@ private fun LoadingSection(lang: String) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // ✅ IMPROVEMENT: Infinite transition untuk loading animation
             val infiniteTransition = rememberInfiniteTransition()
             val rotation by infiniteTransition.animateFloat(
                 initialValue = 0f,
@@ -1072,6 +1132,7 @@ private fun EmptyStateSection(
 
             Text(
                 text = when (selectedFilter) {
+                    "today" -> StringsManager.getNoTradesToday(lang)
                     "all" -> StringsManager.getNoTradingHistory(lang)
                     "week" -> StringsManager.getNoTradesThisWeek(lang)
                     "won" -> StringsManager.getNoWonTrades(lang)
@@ -1110,6 +1171,7 @@ private fun FilterBottomSheet(
     onDismiss: () -> Unit
 ) {
     val filters = listOf(
+        "today" to StringsManager.getToday(lang),
         "all" to StringsManager.getAllTrades(lang),
         "week" to StringsManager.getThisWeek(lang),
         "won" to StringsManager.getWonTrades(lang),
@@ -1244,7 +1306,6 @@ private fun isWithinLastWeek(dateTime: String): Boolean {
     }
 }
 
-
 private fun getWeekDateRange(): String {
     val currentDate = Date()
     val weekAgo = Date(currentDate.time - TimeUnit.DAYS.toMillis(7))
@@ -1295,14 +1356,12 @@ private fun formatDateTime(dateTime: String): String {
     }
 }
 
-
 // ✅ FUNGSI UTAMA: Format currency dengan ISO code (untuk tampilan detail)
 private fun formatCurrencyByISO(amount: Long, currencyISO: String): String {
     val amountValue = amount / 100.0
 
     return when (currencyISO.uppercase()) {
         "IDR" -> {
-            // Format khusus untuk Indonesia dengan singkatan
             formatRupiahCompact(amountValue, includeSymbol = true)
         }
         "USD" -> {
@@ -1357,7 +1416,7 @@ private fun formatCurrencyByISO(amount: Long, currencyISO: String): String {
                 decimalSeparator = '.'
             }
             val formatter = java.text.DecimalFormat("#,##0.00", symbols)
-            "S$${formatter.format(amountValue)}"
+            "S${formatter.format(amountValue)}"
         }
         "MYR" -> {
             val symbols = java.text.DecimalFormatSymbols(java.util.Locale("ms", "MY")).apply {
@@ -1384,7 +1443,6 @@ private fun formatCurrencyByISO(amount: Long, currencyISO: String): String {
             "₱${formatter.format(amountValue)}"
         }
         "VND" -> {
-            // Untuk VND, gunakan format compact karena nilai sangat besar
             formatVietnameseDongCompact(amountValue, includeSymbol = true)
         }
         "INR" -> {
@@ -1401,7 +1459,7 @@ private fun formatCurrencyByISO(amount: Long, currencyISO: String): String {
                 decimalSeparator = '.'
             }
             val formatter = java.text.DecimalFormat("#,##0.00", symbols)
-            "A$${formatter.format(amountValue)}"
+            "A${formatter.format(amountValue)}"
         }
         "CAD" -> {
             val symbols = java.text.DecimalFormatSymbols(java.util.Locale.CANADA).apply {
@@ -1409,10 +1467,9 @@ private fun formatCurrencyByISO(amount: Long, currencyISO: String): String {
                 decimalSeparator = '.'
             }
             val formatter = java.text.DecimalFormat("#,##0.00", symbols)
-            "C$${formatter.format(amountValue)}"
+            "C${formatter.format(amountValue)}"
         }
         else -> {
-            // Default fallback
             val symbols = java.text.DecimalFormatSymbols(java.util.Locale.US).apply {
                 groupingSeparator = ','
                 decimalSeparator = '.'
@@ -1429,11 +1486,9 @@ private fun formatCurrencyCompact(amount: Long, currencyISO: String): String {
 
     return when (currencyISO.uppercase()) {
         "IDR" -> {
-            // Untuk tampilan compact di statistik card - Rupiah
             formatRupiahVeryCompact(amountValue)
         }
         "VND" -> {
-            // Untuk tampilan compact di statistik card - Vietnamese Dong
             formatVietnameseDongCompact(amountValue, includeSymbol = false)
         }
         "USD", "SGD", "AUD", "CAD", "NZD", "HKD", "TWD" -> {
@@ -1473,29 +1528,12 @@ private fun formatRupiahCompact(amount: Double, includeSymbol: Boolean = true): 
     val prefix = if (isNegative) "-" else ""
     val symbol = if (includeSymbol) "Rp " else ""
 
-    return when {
-        absAmount >= 1_000_000_000_000 -> {
-            val value = absAmount / 1_000_000_000_000
-            String.format("$prefix$symbol%.2f T", value).replace(".", ",")
-        }
-        absAmount >= 1_000_000_000 -> {
-            val value = absAmount / 1_000_000_000
-            String.format("$prefix$symbol%.2f M", value).replace(".", ",")
-        }
-        absAmount >= 1_000_000 -> {
-            val value = absAmount / 1_000_000
-            String.format("$prefix$symbol%.2f Jt", value).replace(".", ",")
-        }
-        absAmount >= 1_000 -> {
-            val value = absAmount / 1_000
-            String.format("$prefix$symbol%.2f Rb", value).replace(".", ",")
-        }
-        else -> {
-            // Format biasa tanpa desimal untuk nilai kecil
-            val formatted = String.format("%,.0f", absAmount).replace(",", ".")
-            "$prefix$symbol$formatted"
-        }
+    val symbols = java.text.DecimalFormatSymbols(java.util.Locale("id", "ID")).apply {
+        groupingSeparator = '.'
+        decimalSeparator = ','
     }
+    val formatter = java.text.DecimalFormat("#,##0", symbols)
+    return "$prefix$symbol${formatter.format(absAmount.toLong())}"
 }
 
 // ✅ FUNGSI KHUSUS: Format Rupiah sangat compact (untuk statistik card)
@@ -1504,27 +1542,12 @@ private fun formatRupiahVeryCompact(amount: Double): String {
     val isNegative = amount < 0
     val prefix = if (isNegative) "-" else ""
 
-    return when {
-        absAmount >= 1_000_000_000_000 -> {
-            val value = absAmount / 1_000_000_000_000
-            String.format("${prefix}%.1fT", value).replace(".", ",")
-        }
-        absAmount >= 1_000_000_000 -> {
-            val value = absAmount / 1_000_000_000
-            String.format("${prefix}%.1fM", value).replace(".", ",")
-        }
-        absAmount >= 1_000_000 -> {
-            val value = absAmount / 1_000_000
-            String.format("${prefix}%.1fJt", value).replace(".", ",")
-        }
-        absAmount >= 1_000 -> {
-            val value = absAmount / 1_000
-            String.format("${prefix}%.1fRb", value).replace(".", ",")
-        }
-        else -> {
-            "${prefix}${absAmount.toInt()}"
-        }
+    val symbols = java.text.DecimalFormatSymbols(java.util.Locale("id", "ID")).apply {
+        groupingSeparator = '.'
+        decimalSeparator = ','
     }
+    val formatter = java.text.DecimalFormat("#,##0", symbols)
+    return "$prefix${formatter.format(absAmount.toLong())}"
 }
 
 // ✅ FUNGSI KHUSUS: Format Vietnamese Dong (nilai sangat besar)
@@ -1534,25 +1557,56 @@ private fun formatVietnameseDongCompact(amount: Double, includeSymbol: Boolean =
     val prefix = if (isNegative) "-" else ""
     val symbol = if (includeSymbol) "₫" else ""
 
-    return when {
-        absAmount >= 1_000_000_000_000 -> {
-            val value = absAmount / 1_000_000_000_000
-            String.format("$prefix$symbol%.1f T", value).replace(".", ",")
+    val symbols = java.text.DecimalFormatSymbols(java.util.Locale("vi", "VN")).apply {
+        groupingSeparator = ','
+    }
+    val formatter = java.text.DecimalFormat("#,##0", symbols)
+    return "$prefix$symbol${formatter.format(absAmount.toLong())}"
+}
+
+// Perbaikan function isToday()
+private fun isToday(dateTime: String): Boolean {
+    return try {
+        val inputFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault()).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
         }
-        absAmount >= 1_000_000_000 -> {
-            val value = absAmount / 1_000_000_000
-            String.format("$prefix$symbol%.1f B", value).replace(".", ",")
+
+        val tradeDate = inputFormat.parse(dateTime) ?: return false
+
+        // Convert UTC trade date ke local timezone
+        val localCalendar = Calendar.getInstance().apply {
+            time = tradeDate
         }
-        absAmount >= 1_000_000 -> {
-            val value = absAmount / 1_000_000
-            String.format("$prefix$symbol%.1f M", value).replace(".", ",")
-        }
-        absAmount >= 1_000 -> {
-            val value = absAmount / 1_000
-            String.format("$prefix$symbol%.1f K", value).replace(".", ",")
-        }
-        else -> {
-            "${prefix}$symbol${absAmount.toInt()}"
+
+        // Get today's date in local timezone
+        val todayCalendar = Calendar.getInstance()
+
+        // Compare year, month, and day
+        return localCalendar.get(Calendar.YEAR) == todayCalendar.get(Calendar.YEAR) &&
+                localCalendar.get(Calendar.MONTH) == todayCalendar.get(Calendar.MONTH) &&
+                localCalendar.get(Calendar.DAY_OF_MONTH) == todayCalendar.get(Calendar.DAY_OF_MONTH)
+
+    } catch (e: Exception) {
+        try {
+            val inputFormat2 = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).apply {
+                timeZone = TimeZone.getTimeZone("UTC")
+            }
+
+            val cleanDateTime = dateTime.replace("T", " ").take(19)
+            val tradeDate = inputFormat2.parse(cleanDateTime) ?: return false
+
+            val localCalendar = Calendar.getInstance().apply {
+                time = tradeDate
+            }
+
+            val todayCalendar = Calendar.getInstance()
+
+            return localCalendar.get(Calendar.YEAR) == todayCalendar.get(Calendar.YEAR) &&
+                    localCalendar.get(Calendar.MONTH) == todayCalendar.get(Calendar.MONTH) &&
+                    localCalendar.get(Calendar.DAY_OF_MONTH) == todayCalendar.get(Calendar.DAY_OF_MONTH)
+
+        } catch (e2: Exception) {
+            false
         }
     }
 }
@@ -1563,12 +1617,12 @@ private fun formatDollarCompact(amount: Double): String {
     val isNegative = amount < 0
     val prefix = if (isNegative) "-" else ""
 
-    return when {
-        absAmount >= 1_000_000_000 -> String.format("${prefix}%.1fB", absAmount / 1_000_000_000.0)
-        absAmount >= 1_000_000 -> String.format("${prefix}%.1fM", absAmount / 1_000_000.0)
-        absAmount >= 1_000 -> String.format("${prefix}%.1fK", absAmount / 1_000.0)
-        else -> String.format("${prefix}%.0f", absAmount)
+    val symbols = java.text.DecimalFormatSymbols(java.util.Locale.US).apply {
+        groupingSeparator = ','
+        decimalSeparator = '.'
     }
+    val formatter = java.text.DecimalFormat("#,##0", symbols)
+    return "$prefix${formatter.format(absAmount.toLong())}"
 }
 
 // ✅ FUNGSI BANTU: Format untuk mata uang euro
@@ -1577,12 +1631,12 @@ private fun formatEuroCompact(amount: Double): String {
     val isNegative = amount < 0
     val prefix = if (isNegative) "-" else ""
 
-    return when {
-        absAmount >= 1_000_000_000 -> String.format("${prefix}%.1fB", absAmount / 1_000_000_000.0)
-        absAmount >= 1_000_000 -> String.format("${prefix}%.1fM", absAmount / 1_000_000.0)
-        absAmount >= 1_000 -> String.format("${prefix}%.1fK", absAmount / 1_000.0)
-        else -> String.format("${prefix}%.0f", absAmount)
+    val symbols = java.text.DecimalFormatSymbols(java.util.Locale.GERMANY).apply {
+        groupingSeparator = '.'
+        decimalSeparator = ','
     }
+    val formatter = java.text.DecimalFormat("#,##0", symbols)
+    return "$prefix${formatter.format(absAmount.toLong())}"
 }
 
 // ✅ FUNGSI BANTU: Format untuk mata uang Asia (Yen, Won)
@@ -1591,12 +1645,11 @@ private fun formatAsianCurrencyCompact(amount: Double): String {
     val isNegative = amount < 0
     val prefix = if (isNegative) "-" else ""
 
-    return when {
-        absAmount >= 100_000_000_000 -> String.format("${prefix}%.1fB", absAmount / 1_000_000_000.0)
-        absAmount >= 10_000_000 -> String.format("${prefix}%.1fM", absAmount / 1_000_000.0)
-        absAmount >= 10_000 -> String.format("${prefix}%.1fK", absAmount / 1_000.0)
-        else -> String.format("${prefix}%.0f", absAmount)
+    val symbols = java.text.DecimalFormatSymbols(java.util.Locale.JAPAN).apply {
+        groupingSeparator = ','
     }
+    val formatter = java.text.DecimalFormat("#,##0", symbols)
+    return "$prefix${formatter.format(absAmount.toLong())}"
 }
 
 // ✅ FUNGSI BANTU: Format untuk Chinese Yuan
@@ -1605,12 +1658,12 @@ private fun formatChineseYuanCompact(amount: Double): String {
     val isNegative = amount < 0
     val prefix = if (isNegative) "-" else ""
 
-    return when {
-        absAmount >= 100_000_000_000 -> String.format("${prefix}%.1fB", absAmount / 1_000_000_000.0)
-        absAmount >= 10_000_000 -> String.format("${prefix}%.1fM", absAmount / 1_000_000.0)
-        absAmount >= 10_000 -> String.format("${prefix}%.1fK", absAmount / 1_000.0)
-        else -> String.format("${prefix}%.0f", absAmount)
+    val symbols = java.text.DecimalFormatSymbols(java.util.Locale.CHINA).apply {
+        groupingSeparator = ','
+        decimalSeparator = '.'
     }
+    val formatter = java.text.DecimalFormat("#,##0", symbols)
+    return "$prefix${formatter.format(absAmount.toLong())}"
 }
 
 // ✅ FUNGSI BANTU: Format untuk Rupee (India, Pakistan, dll)
@@ -1619,13 +1672,12 @@ private fun formatRupeeCompact(amount: Double): String {
     val isNegative = amount < 0
     val prefix = if (isNegative) "-" else ""
 
-    return when {
-        absAmount >= 100_000_000_000 -> String.format("${prefix}%.1fB", absAmount / 1_000_000_000.0)
-        absAmount >= 10_000_000 -> String.format("${prefix}%.1fCr", absAmount / 10_000_000.0) // Crore
-        absAmount >= 100_000 -> String.format("${prefix}%.1fL", absAmount / 100_000.0) // Lakh
-        absAmount >= 1_000 -> String.format("${prefix}%.1fK", absAmount / 1_000.0)
-        else -> String.format("${prefix}%.0f", absAmount)
+    val symbols = java.text.DecimalFormatSymbols(java.util.Locale("en", "IN")).apply {
+        groupingSeparator = ','
+        decimalSeparator = '.'
     }
+    val formatter = java.text.DecimalFormat("#,##0", symbols)
+    return "$prefix${formatter.format(absAmount.toLong())}"
 }
 
 // ✅ FUNGSI BANTU: Format untuk Thai Baht
@@ -1634,12 +1686,12 @@ private fun formatThaiBahtCompact(amount: Double): String {
     val isNegative = amount < 0
     val prefix = if (isNegative) "-" else ""
 
-    return when {
-        absAmount >= 1_000_000_000 -> String.format("${prefix}%.1fB", absAmount / 1_000_000_000.0)
-        absAmount >= 1_000_000 -> String.format("${prefix}%.1fM", absAmount / 1_000_000.0)
-        absAmount >= 1_000 -> String.format("${prefix}%.1fK", absAmount / 1_000.0)
-        else -> String.format("${prefix}%.0f", absAmount)
+    val symbols = java.text.DecimalFormatSymbols(java.util.Locale("th", "TH")).apply {
+        groupingSeparator = ','
+        decimalSeparator = '.'
     }
+    val formatter = java.text.DecimalFormat("#,##0", symbols)
+    return "$prefix${formatter.format(absAmount.toLong())}"
 }
 
 // ✅ FUNGSI BANTU: Format untuk Malaysian Ringgit
@@ -1648,12 +1700,12 @@ private fun formatMalaysianRinggitCompact(amount: Double): String {
     val isNegative = amount < 0
     val prefix = if (isNegative) "-" else ""
 
-    return when {
-        absAmount >= 1_000_000_000 -> String.format("${prefix}%.1fB", absAmount / 1_000_000_000.0)
-        absAmount >= 1_000_000 -> String.format("${prefix}%.1fM", absAmount / 1_000_000.0)
-        absAmount >= 1_000 -> String.format("${prefix}%.1fK", absAmount / 1_000.0)
-        else -> String.format("${prefix}%.0f", absAmount)
+    val symbols = java.text.DecimalFormatSymbols(java.util.Locale("ms", "MY")).apply {
+        groupingSeparator = ','
+        decimalSeparator = '.'
     }
+    val formatter = java.text.DecimalFormat("#,##0", symbols)
+    return "$prefix${formatter.format(absAmount.toLong())}"
 }
 
 // ✅ FUNGSI BANTU: Format untuk Philippine Peso
@@ -1662,12 +1714,12 @@ private fun formatPhilippinePesoCompact(amount: Double): String {
     val isNegative = amount < 0
     val prefix = if (isNegative) "-" else ""
 
-    return when {
-        absAmount >= 1_000_000_000 -> String.format("${prefix}%.1fB", absAmount / 1_000_000_000.0)
-        absAmount >= 1_000_000 -> String.format("${prefix}%.1fM", absAmount / 1_000_000.0)
-        absAmount >= 1_000 -> String.format("${prefix}%.1fK", absAmount / 1_000.0)
-        else -> String.format("${prefix}%.0f", absAmount)
+    val symbols = java.text.DecimalFormatSymbols(java.util.Locale("en", "PH")).apply {
+        groupingSeparator = ','
+        decimalSeparator = '.'
     }
+    val formatter = java.text.DecimalFormat("#,##0", symbols)
+    return "$prefix${formatter.format(absAmount.toLong())}"
 }
 
 // ✅ FUNGSI BANTU: Format generic untuk mata uang lainnya
@@ -1676,10 +1728,10 @@ private fun formatGenericCompact(amount: Double): String {
     val isNegative = amount < 0
     val prefix = if (isNegative) "-" else ""
 
-    return when {
-        absAmount >= 1_000_000_000 -> String.format("${prefix}%.1fB", absAmount / 1_000_000_000.0)
-        absAmount >= 1_000_000 -> String.format("${prefix}%.1fM", absAmount / 1_000_000.0)
-        absAmount >= 1_000 -> String.format("${prefix}%.1fK", absAmount / 1_000.0)
-        else -> String.format("${prefix}%.0f", absAmount)
+    val symbols = java.text.DecimalFormatSymbols(java.util.Locale.US).apply {
+        groupingSeparator = ','
+        decimalSeparator = '.'
     }
+    val formatter = java.text.DecimalFormat("#,##0", symbols)
+    return "$prefix${formatter.format(absAmount.toLong())}"
 }

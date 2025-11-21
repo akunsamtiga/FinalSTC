@@ -9406,7 +9406,7 @@ private fun ScheduleContent(
 
             OutlinedButton(
                 onClick = onViewSchedules,
-                modifier = Modifier.fillMaxWidth().height(35.dp),
+                modifier = Modifier.fillMaxWidth()        .defaultMinSize(minHeight = 35.dp),   // ✅ aman untuk semua layar
                 shape = RoundedCornerShape(10.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = colors.accentPrimary3,
@@ -9434,7 +9434,7 @@ private fun ScheduleContent(
             Button(
                 onClick = onStartBot,
                 enabled = canStartBot,
-                modifier = Modifier.fillMaxWidth().height(36.dp),
+                modifier = Modifier.fillMaxWidth()        .defaultMinSize(minHeight = 35.dp),   // ✅ aman untuk semua layar
                 colors = ButtonDefaults.buttonColors(
                     containerColor = colors.errorColor,
                     contentColor = colors.TextPrimary1,
@@ -9451,7 +9451,7 @@ private fun ScheduleContent(
             Button(
                 onClick = onStopBot,
                 enabled = true,
-                modifier = Modifier.fillMaxWidth().height(36.dp),
+                modifier = Modifier.fillMaxWidth()        .defaultMinSize(minHeight = 35.dp),   // ✅ aman untuk semua layar
                 colors = ButtonDefaults.buttonColors(
                     containerColor = colors.errorColor,
                     contentColor = colors.TextPrimary1,

@@ -237,14 +237,14 @@ object StringsManager {
     }
 
     fun getTradingHistory(lang: String) = when(lang) {
-        "id" -> "Riwayat"
-        "en" -> "Trading"
+        "id" -> "Riwayat Trading"
+        "en" -> "Trading Trading"
         "es" -> "Historial de Trading"
         "vi" -> "Lịch Sử Giao Dịch"
         "tr" -> "İşlem Geçmişi"
         "hi" -> "ट्रेडिंग इतिहास"
         "ms" -> "Sejarah Dagangan"
-        else -> "Riwayat"
+        else -> "Riwayat Trading"
     }
 
     fun getDemoAccount(lang: String) = when(lang) {
@@ -1973,5 +1973,21 @@ object StringsManager {
     fun getRefreshBalance(language: String) = when(language) {
         "id" -> "Perbarui Saldo"
         else -> "Refresh Balance"
+    }
+
+    fun getToday(lang: String): String {
+        return when (lang) {
+            "id" -> "Hari Ini"
+            "en" -> "Today"
+            else -> "Today"
+        }
+    }
+
+    fun getNoTradesToday(lang: String): String {
+        return when (lang) {
+            "id" -> "Tidak ada trade hari ini"
+            "en" -> "No trades today"
+            else -> "No trades today"
+        }
     }
 }

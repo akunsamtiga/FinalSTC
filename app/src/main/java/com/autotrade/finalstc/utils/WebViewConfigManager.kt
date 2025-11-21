@@ -9,7 +9,7 @@ object WebViewConfigManager {
     private const val TAG = "WebViewConfig"
 
     /**
-     * Configure WebView dengan settings yang optimal untuk sharing cache dan cookies
+     * Configure WebView dengan settings yang optimal untuk caching dan state preservation
      */
     fun configureWebView(webView: WebView) {
         webView.settings.apply {
@@ -18,16 +18,17 @@ object WebViewConfigManager {
             domStorageEnabled = true
             databaseEnabled = true
 
-            // Cache Settings - menggunakan HTTP cache headers (default behavior)
-            cacheMode = WebSettings.LOAD_DEFAULT
-
-            // Storage Settings
+            // ✅ MODERN CACHE SETTINGS untuk state preservation
+            cacheMode = WebSettings.LOAD_CACHE_ELSE_NETWORK // Prioritaskan cache
             allowFileAccess = true
             allowContentAccess = true
 
-            // Layout & Display
-            useWideViewPort = true
+            // ✅ OPTIMAL CACHE CONFIGURATION
+            setSupportMultipleWindows(false)
             loadWithOverviewMode = true
+            useWideViewPort = true
+
+            // Layout & Display
             setSupportZoom(true)
             builtInZoomControls = true
             displayZoomControls = false
@@ -40,9 +41,8 @@ object WebViewConfigManager {
             // Security & Content
             mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
             mediaPlaybackRequiresUserGesture = false
-            setSupportMultipleWindows(true)
 
-            // User Agent - Gunakan yang sama untuk konsistensi
+            // ✅ OPTIMIZED USER AGENT
             userAgentString = "Mozilla/5.0 (Linux; Android 13; SM-G991B) " +
                     "AppleWebKit/537.36 (KHTML, like Gecko) " +
                     "Chrome/120.0.0.0 Mobile Safari/537.36"
@@ -51,22 +51,23 @@ object WebViewConfigManager {
         // Configure Cookie Manager - KUNCI untuk sharing session
         configureCookieManager(webView)
 
-        Log.d(TAG, "WebView configured successfully")
+        Log.d(TAG, "WebView configured with modern caching")
     }
 
     /**
-     * Configure Cookie Manager untuk sharing cookies antar WebView
+     * Configure Cookie Manager untuk persistent cookies
      */
     private fun configureCookieManager(webView: WebView) {
         val cookieManager = CookieManager.getInstance()
 
-        // Enable cookies
+        // Enable cookies dan persistent storage
         cookieManager.setAcceptCookie(true)
-
-        // Enable third-party cookies (penting untuk OAuth/SSO)
         cookieManager.setAcceptThirdPartyCookies(webView, true)
 
-        Log.d(TAG, "Cookie Manager configured")
+        // ✅ FORCE FLUSH COOKIES ke persistent storage
+        cookieManager.flush()
+
+        Log.d(TAG, "Cookie Manager configured with persistence")
     }
 
     /**

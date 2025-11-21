@@ -48,6 +48,10 @@ import android.net.Uri
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.window.Dialog
 
 private val DarkBackground = Color(0xFF1B1B1B)
 private val DarkSurface = Color(0xFF1F1F1F)
@@ -60,6 +64,7 @@ private val TextMuted = Color(0xBA7E7E7E)
 private val BorderColor = Color(0xFF323232)
 private val WifiGreen = Color(0xFF67D88B)
 private val StatusBlue = Color(0xFF64B5F6)
+private val DangerRed = Color(0xFFE53935)
 
 @HiltViewModel
 class ProfileViewModel @Inject constructor(
@@ -76,10 +81,17 @@ class ProfileViewModel @Inject constructor(
     private val _showLanguageDialog = MutableStateFlow(false)
     val showLanguageDialog: StateFlow<Boolean> = _showLanguageDialog.asStateFlow()
 
+    private val _deleteAccountState = MutableStateFlow<DeleteAccountState>(DeleteAccountState.Idle)
+    val deleteAccountState: StateFlow<DeleteAccountState> = _deleteAccountState.asStateFlow()
+
     val currentLanguage: StateFlow<String> = languageManager.currentLanguage
     val currentCountry: StateFlow<String> = languageManager.currentCountry
 
-    init {
+    sealed class DeleteAccountState {
+        object Idle : DeleteAccountState()
+        object Loading : DeleteAccountState()
+        data class Success(val message: String) : DeleteAccountState()
+        data class Error(val message: String) : DeleteAccountState()
     }
 
     fun checkAdminStatus(email: String) {
@@ -99,6 +111,37 @@ class ProfileViewModel @Inject constructor(
             _showLanguageDialog.value = false
         }
     }
+
+    fun deleteAccount(userId: String, email: String) {
+        viewModelScope.launch {
+            _deleteAccountState.value = DeleteAccountState.Loading
+
+            try {
+                // Cari user di whitelist berdasarkan userId
+                val user = firebaseRepository.getWhitelistUserByUserId(userId)
+
+                if (user != null) {
+                    // Hapus user dari Firestore
+                    firebaseRepository.deleteWhitelistUser(user.id)
+                    _deleteAccountState.value = DeleteAccountState.Success(
+                        "Account deleted successfully. You will be logged out."
+                    )
+                } else {
+                    _deleteAccountState.value = DeleteAccountState.Error(
+                        "User not found in whitelist. Cannot delete account."
+                    )
+                }
+            } catch (e: Exception) {
+                _deleteAccountState.value = DeleteAccountState.Error(
+                    "Failed to delete account: ${e.message}"
+                )
+            }
+        }
+    }
+
+    fun resetDeleteAccountState() {
+        _deleteAccountState.value = DeleteAccountState.Idle
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -114,6 +157,7 @@ fun ProfileScreen(
     val context = LocalContext.current
     val userSession = viewModel.getUserSession()
     var showLogoutDialog by remember { mutableStateOf(false) }
+    var showDeleteAccountDialog by remember { mutableStateOf(false) }
     var isVisible by remember { mutableStateOf(false) }
 
     val isAdmin by profileViewModel.isAdmin.collectAsStateWithLifecycle()
@@ -121,6 +165,7 @@ fun ProfileScreen(
     val lang by profileViewModel.currentLanguage.collectAsStateWithLifecycle()
     val currentCountry by profileViewModel.currentCountry.collectAsStateWithLifecycle()
     val showLanguageDialog by profileViewModel.showLanguageDialog.collectAsStateWithLifecycle()
+    val deleteAccountState by profileViewModel.deleteAccountState.collectAsStateWithLifecycle()
 
     val dashboardUiState by dashboardViewModel.uiState.collectAsStateWithLifecycle()
     val currentCurrency = dashboardUiState.currencySettings.selectedCurrency
@@ -138,6 +183,18 @@ fun ProfileScreen(
         delay(100)
         isVisible = true
         historyViewModel.loadTradingHistory(isDemoAccount)
+    }
+
+    // Handle delete account state
+    LaunchedEffect(deleteAccountState) {
+        when (deleteAccountState) {
+            is ProfileViewModel.DeleteAccountState.Success -> {
+                delay(1500)
+                viewModel.logout()
+                onLogout()
+            }
+            else -> { /* Do nothing */ }
+        }
     }
 
     val totalTrades = remember(historyList, isDemoAccount) {
@@ -246,19 +303,19 @@ fun ProfileScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Box(
-                                modifier = Modifier.size(80.dp),  // ✅ DIKURANGI dari 96.dp
+                                modifier = Modifier.size(80.dp),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Box(
                                     modifier = Modifier
-                                        .size(80.dp)  // ✅ DIKURANGI dari 96.dp
+                                        .size(80.dp)
                                         .background(
                                             brush = Brush.radialGradient(
                                                 colors = listOf(
                                                     StatusBlue.copy(alpha = 0.3f),
                                                     Color.Transparent
                                                 ),
-                                                radius = 40f  // ✅ DIKURANGI dari 48f
+                                                radius = 40f
                                             ),
                                             shape = CircleShape
                                         )
@@ -266,7 +323,7 @@ fun ProfileScreen(
 
                                 Box(
                                     modifier = Modifier
-                                        .size(72.dp)  // ✅ DIKURANGI dari 88.dp
+                                        .size(72.dp)
                                         .border(
                                             width = 2.dp,
                                             brush = Brush.linearGradient(
@@ -282,7 +339,7 @@ fun ProfileScreen(
                                 ) {
                                     Box(
                                         modifier = Modifier
-                                            .size(64.dp)  // ✅ DIKURANGI dari 80.dp
+                                            .size(64.dp)
                                             .background(
                                                 brush = Brush.linearGradient(
                                                     colors = listOf(
@@ -297,17 +354,16 @@ fun ProfileScreen(
                                         Icon(
                                             imageVector = if (isAdmin) Icons.Default.AdminPanelSettings else Icons.Default.Person,
                                             contentDescription = null,
-                                            modifier = Modifier.size(32.dp),  // ✅ DIKURANGI dari 36.dp
+                                            modifier = Modifier.size(32.dp),
                                             tint = Color.White
                                         )
                                     }
                                 }
                             }
 
-                            Spacer(modifier = Modifier.width(16.dp))  // ✅ DIKURANGI dari 20.dp
+                            Spacer(modifier = Modifier.width(16.dp))
 
                             Column {
-                                // ✅ AFTER: Nama saja (tanpa badge)
                                 Text(
                                     text = extractNameFromEmail(userSession?.email ?: "User"),
                                     fontSize = 24.sp,
@@ -318,7 +374,6 @@ fun ProfileScreen(
 
                                 Spacer(modifier = Modifier.height(6.dp))
 
-                                // Teks akun (Admin/User)
                                 Text(
                                     text = when {
                                         isSuperAdmin -> StringsManager.getSuperAdminAccount(lang)
@@ -336,7 +391,6 @@ fun ProfileScreen(
 
                                 Spacer(modifier = Modifier.height(8.dp))
 
-                                // ✅ AFTER: Badge Online DI BAWAH ROLE
                                 Card(
                                     colors = CardDefaults.cardColors(
                                         containerColor = WifiGreen.copy(alpha = 0.15f)
@@ -418,7 +472,7 @@ fun ProfileScreen(
                                     .padding(vertical = 12.dp, horizontal = 12.dp),
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = AccentWarning,
-                                    contentColor = Color.White  // ✅ DIPERBAIKI: Putih kontras dengan orange
+                                    contentColor = Color.White
                                 ),
                                 shape = RoundedCornerShape(16.dp),
                                 elevation = ButtonDefaults.buttonElevation(
@@ -430,7 +484,7 @@ fun ProfileScreen(
                                     imageVector = Icons.Outlined.AdminPanelSettings,
                                     contentDescription = null,
                                     modifier = Modifier.size(24.dp),
-                                    tint = Color.White  // ✅ DIPERBAIKI: Icon putih
+                                    tint = Color.White
                                 )
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Text(
@@ -441,7 +495,7 @@ fun ProfileScreen(
                                     fontSize = 16.sp,
                                     fontWeight = FontWeight.Bold,
                                     letterSpacing = 0.5.sp,
-                                    color = Color.White  // ✅ DIPERBAIKI: Teks putih eksplisit
+                                    color = Color.White
                                 )
                             }
                         }
@@ -534,6 +588,51 @@ fun ProfileScreen(
                                 value = StringsManager.getVerified(lang),
                                 iconColor = WifiGreen
                             )
+
+                            // ✅ Tombol Hapus Akun dipindahkan ke sini
+                            Divider(
+                                color = BorderColor,
+                                thickness = 1.dp,
+                                modifier = Modifier.padding(vertical = 8.dp)
+                            )
+
+                            Button(
+                                onClick = { showDeleteAccountDialog = true },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 8.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = DangerRed,
+                                    contentColor = Color.White
+                                ),
+                                shape = RoundedCornerShape(12.dp),
+                                elevation = ButtonDefaults.buttonElevation(
+                                    defaultElevation = 2.dp,
+                                    pressedElevation = 6.dp
+                                )
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.DeleteForever,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text(
+                                    text = when(lang) {
+                                        "id" -> "Hapus Akun"
+                                        "en" -> "Delete Account"
+                                        "es" -> "Eliminar Cuenta"
+                                        "vi" -> "Xóa Tài Khoản"
+                                        "tr" -> "Hesabı Sil"
+                                        "hi" -> "खाता हटाएं"
+                                        "ms" -> "Padam Akaun"
+                                        else -> "Delete Account"
+                                    },
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 0.3.sp
+                                )
+                            }
                         }
                     }
 
@@ -644,7 +743,7 @@ fun ProfileScreen(
                                             "TR" -> "🇹🇷"
                                             "IN" -> "🇮🇳"
                                             "MY" -> "🇲🇾"
-                                            else -> "🌍"
+                                            else -> "🌐"
                                         },
                                         fontSize = 24.sp
                                     )
@@ -730,7 +829,6 @@ fun ProfileScreen(
                                 modifier = Modifier.padding(top = 2.dp)
                             )
 
-                            // Email yang clickable
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier
@@ -742,7 +840,7 @@ fun ProfileScreen(
                                         try {
                                             context.startActivity(intent)
                                         } catch (e: Exception) {
-                                            // Handle jika tidak ada email client
+                                            // Handle if no email client
                                         }
                                     }
                                     .padding(top = 2.dp, bottom = 4.dp, start = 8.dp, end = 8.dp)
@@ -755,7 +853,7 @@ fun ProfileScreen(
                                 Text(
                                     text = "support@stcbroker.id",
                                     fontSize = 11.sp,
-                                    color = StatusBlue, // Beri warna biru untuk menunjukkan clickable
+                                    color = StatusBlue,
                                     fontWeight = FontWeight.Medium,
                                     textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline
                                 )
@@ -767,6 +865,7 @@ fun ProfileScreen(
         }
     }
 
+    // Logout Dialog
     if (showLogoutDialog) {
         AlertDialog(
             onDismissRequest = { showLogoutDialog = false },
@@ -842,6 +941,435 @@ fun ProfileScreen(
                 }
             }
         )
+    }
+
+    // Delete Account Dialog
+    if (showDeleteAccountDialog) {
+        DeleteAccountDialog(
+            userEmail = userSession?.email ?: "",
+            userId = userSession?.userId ?: "",
+            lang = lang,
+            deleteAccountState = deleteAccountState,
+            onDismiss = {
+                showDeleteAccountDialog = false
+                profileViewModel.resetDeleteAccountState()
+            },
+            onConfirmDelete = { userId, email ->
+                profileViewModel.deleteAccount(userId, email)
+            }
+        )
+    }
+}
+
+// ✅ NEW: Delete Account Dialog Composable
+@Composable
+private fun DeleteAccountDialog(
+    userEmail: String,
+    userId: String,
+    lang: String,
+    deleteAccountState: ProfileViewModel.DeleteAccountState,
+    onDismiss: () -> Unit,
+    onConfirmDelete: (String, String) -> Unit
+) {
+    var confirmationText by remember { mutableStateOf("") }
+    val isDeleteEnabled = confirmationText.equals("DELETE", ignoreCase = true)
+
+    Dialog(onDismissRequest = {
+        if (deleteAccountState !is ProfileViewModel.DeleteAccountState.Loading) {
+            onDismiss()
+        }
+    }) {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = CardBackground),
+            shape = RoundedCornerShape(24.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp)
+            ) {
+                // Header
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .background(
+                                DangerRed.copy(alpha = 0.15f),
+                                RoundedCornerShape(14.dp)
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Warning,
+                            contentDescription = null,
+                            tint = DangerRed,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(14.dp))
+                    Text(
+                        text = when(lang) {
+                            "id" -> "Hapus Akun"
+                            "en" -> "Delete Account"
+                            "es" -> "Eliminar Cuenta"
+                            "vi" -> "Xóa Tài Khoản"
+                            "tr" -> "Hesabı Sil"
+                            "hi" -> "खाता हटाएं"
+                            "ms" -> "Padam Akaun"
+                            else -> "Delete Account"
+                        },
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary,
+                        fontSize = 20.sp
+                    )
+                }
+
+                Divider(
+                    color = BorderColor,
+                    thickness = 1.dp,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+
+                // Warning Message
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = DangerRed.copy(alpha = 0.1f)
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.padding(bottom = 16.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp)
+                    ) {
+                        Text(
+                            text = when(lang) {
+                                "id" -> "⚠️ Peringatan Penting"
+                                "en" -> "⚠️ Important Warning"
+                                "es" -> "⚠️ Advertencia Importante"
+                                "vi" -> "⚠️ Cảnh Báo Quan Trọng"
+                                "tr" -> "⚠️ Önemli Uyarı"
+                                "hi" -> "⚠️ महत्वपूर्ण चेतावनी"
+                                "ms" -> "⚠️ Amaran Penting"
+                                else -> "⚠️ Important Warning"
+                            },
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = DangerRed,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+
+                        Text(
+                            text = when(lang) {
+                                "id" -> "Menghapus akun akan:\n\n" +
+                                        "• Menghapus akses Anda dari aplikasi ini\n" +
+                                        "• Menghapus data whitelist Anda dari database\n" +
+                                        "• Memerlukan admin untuk mendaftar ulang jika ingin menggunakan aplikasi lagi\n\n" +
+                                        "Akun Stockity Anda TIDAK akan terhapus, hanya akses ke aplikasi bot ini."
+                                "en" -> "Deleting your account will:\n\n" +
+                                        "• Remove your access from this application\n" +
+                                        "• Delete your whitelist data from the database\n" +
+                                        "• Require admin registration to use the app again\n\n" +
+                                        "Your Stockity account will NOT be deleted, only your access to this bot app."
+                                "es" -> "Eliminar tu cuenta:\n\n" +
+                                        "• Eliminará tu acceso a esta aplicación\n" +
+                                        "• Eliminará tus datos de la lista blanca\n" +
+                                        "• Requerirá registro de administrador para usar la aplicación nuevamente\n\n" +
+                                        "Tu cuenta de Stockity NO se eliminará, solo tu acceso a esta aplicación de bot."
+                                "vi" -> "Xóa tài khoản sẽ:\n\n" +
+                                        "• Xóa quyền truy cập của bạn khỏi ứng dụng này\n" +
+                                        "• Xóa dữ liệu danh sách trắng của bạn\n" +
+                                        "• Yêu cầu đăng ký quản trị viên để sử dụng lại\n\n" +
+                                        "Tài khoản Stockity của bạn sẽ KHÔNG bị xóa, chỉ quyền truy cập vào ứng dụng bot này."
+                                "tr" -> "Hesabınızı silmek:\n\n" +
+                                        "• Bu uygulamadan erişiminizi kaldıracak\n" +
+                                        "• Beyaz liste verilerinizi silecek\n" +
+                                        "• Tekrar kullanmak için yönetici kaydı gerektirecek\n\n" +
+                                        "Stockity hesabınız SİLİNMEYECEK, sadece bu bot uygulamasına erişiminiz."
+                                "hi" -> "खाता हटाने से:\n\n" +
+                                        "• इस एप्लिकेशन से आपकी पहुंच हट जाएगी\n" +
+                                        "• आपका व्हाइटलिस्ट डेटा डिलीट हो जाएगा\n" +
+                                        "• दोबारा उपयोग के लिए एडमिन पंजीकरण की आवश्यकता होगी\n\n" +
+                                        "आपका Stockity खाता हटाया नहीं जाएगा, केवल इस बॉट ऐप तक पहुंच।"
+                                "ms" -> "Memadam akaun akan:\n\n" +
+                                        "• Membuang akses anda dari aplikasi ini\n" +
+                                        "• Memadam data senarai putih anda\n" +
+                                        "• Memerlukan pendaftaran admin untuk guna semula\n\n" +
+                                        "Akaun Stockity anda TIDAK akan dipadam, hanya akses ke aplikasi bot ini."
+                                else -> "Deleting your account will:\n\n" +
+                                        "• Remove your access from this application\n" +
+                                        "• Delete your whitelist data from the database\n" +
+                                        "• Require admin registration to use the app again\n\n" +
+                                        "Your Stockity account will NOT be deleted, only your access to this bot app."
+                            },
+                            fontSize = 13.sp,
+                            color = TextSecondary,
+                            lineHeight = 18.sp
+                        )
+                    }
+                }
+
+                // User Info
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = DarkSurface.copy(alpha = 0.5f)
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.padding(bottom = 16.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp)
+                    ) {
+                        Text(
+                            text = when(lang) {
+                                "id" -> "Akun yang akan dihapus:"
+                                "en" -> "Account to be deleted:"
+                                "es" -> "Cuenta a eliminar:"
+                                "vi" -> "Tài khoản sẽ bị xóa:"
+                                "tr" -> "Silinecek hesap:"
+                                "hi" -> "हटाया जाने वाला खाता:"
+                                "ms" -> "Akaun yang akan dipadam:"
+                                else -> "Account to be deleted:"
+                            },
+                            fontSize = 12.sp,
+                            color = TextMuted,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                        Text(
+                            text = userEmail,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
+                        )
+                        Text(
+                            text = "User ID: $userId",
+                            fontSize = 11.sp,
+                            color = TextSecondary,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    }
+                }
+
+                // Confirmation Input
+                Text(
+                    text = when(lang) {
+                        "id" -> "Ketik DELETE untuk konfirmasi:"
+                        "en" -> "Type DELETE to confirm:"
+                        "es" -> "Escribe DELETE para confirmar:"
+                        "vi" -> "Gõ DELETE để xác nhận:"
+                        "tr" -> "Onaylamak için DELETE yazın:"
+                        "hi" -> "पुष्टि के लिए DELETE लिखें:"
+                        "ms" -> "Taip DELETE untuk mengesahkan:"
+                        else -> "Type DELETE to confirm:"
+                    },
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = TextSecondary,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+
+                OutlinedTextField(
+                    value = confirmationText,
+                    onValueChange = { confirmationText = it },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 16.dp),
+                    placeholder = {
+                        Text(
+                            "DELETE",
+                            fontSize = 14.sp,
+                            color = TextMuted
+                        )
+                    },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = if (isDeleteEnabled) DangerRed else StatusBlue,
+                        unfocusedBorderColor = BorderColor,
+                        cursorColor = DangerRed,
+                        focusedTextColor = TextPrimary,
+                        unfocusedTextColor = TextSecondary
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    singleLine = true,
+                    textStyle = LocalTextStyle.current.copy(fontSize = 14.sp),
+                    keyboardOptions = KeyboardOptions(
+                        imeAction = ImeAction.Done
+                    ),
+                    enabled = deleteAccountState !is ProfileViewModel.DeleteAccountState.Loading
+                )
+
+                // State Messages
+                when (deleteAccountState) {
+                    is ProfileViewModel.DeleteAccountState.Loading -> {
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = StatusBlue.copy(alpha = 0.1f)
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.padding(bottom = 16.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    color = StatusBlue,
+                                    strokeWidth = 2.dp
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text(
+                                    text = when(lang) {
+                                        "id" -> "Menghapus akun..."
+                                        "en" -> "Deleting account..."
+                                        "es" -> "Eliminando cuenta..."
+                                        "vi" -> "Đang xóa tài khoản..."
+                                        "tr" -> "Hesap siliniyor..."
+                                        "hi" -> "खाता हटाया जा रहा है..."
+                                        "ms" -> "Memadam akaun..."
+                                        else -> "Deleting account..."
+                                    },
+                                    fontSize = 13.sp,
+                                    color = StatusBlue
+                                )
+                            }
+                        }
+                    }
+                    is ProfileViewModel.DeleteAccountState.Success -> {
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = WifiGreen.copy(alpha = 0.1f)
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.padding(bottom = 16.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.CheckCircle,
+                                    contentDescription = null,
+                                    tint = WifiGreen,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text(
+                                    text = when(lang) {
+                                        "id" -> "Akun berhasil dihapus. Logging out..."
+                                        "en" -> "Account deleted successfully. Logging out..."
+                                        "es" -> "Cuenta eliminada. Cerrando sesión..."
+                                        "vi" -> "Đã xóa tài khoản. Đăng xuất..."
+                                        "tr" -> "Hesap silindi. Çıkış yapılıyor..."
+                                        "hi" -> "खाता हटाया गया। लॉगआउट..."
+                                        "ms" -> "Akaun dipadam. Log keluar..."
+                                        else -> "Account deleted successfully. Logging out..."
+                                    },
+                                    fontSize = 13.sp,
+                                    color = WifiGreen
+                                )
+                            }
+                        }
+                    }
+                    is ProfileViewModel.DeleteAccountState.Error -> {
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = DangerRed.copy(alpha = 0.1f)
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.padding(bottom = 16.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.Top
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Error,
+                                    contentDescription = null,
+                                    tint = DangerRed,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text(
+                                    text = deleteAccountState.message,
+                                    fontSize = 13.sp,
+                                    color = DangerRed,
+                                    lineHeight = 18.sp
+                                )
+                            }
+                        }
+                    }
+                    else -> { /* Idle state */ }
+                }
+
+                // Action Buttons
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = TextSecondary
+                        ),
+                        border = BorderStroke(1.dp, BorderColor),
+                        shape = RoundedCornerShape(12.dp),
+                        enabled = deleteAccountState !is ProfileViewModel.DeleteAccountState.Loading
+                    ) {
+                        Text(
+                            when(lang) {
+                                "id" -> "Batal"
+                                "en" -> "Cancel"
+                                "es" -> "Cancelar"
+                                "vi" -> "Hủy"
+                                "tr" -> "İptal"
+                                "hi" -> "रद्द करें"
+                                "ms" -> "Batal"
+                                else -> "Cancel"
+                            },
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 14.sp
+                        )
+                    }
+
+                    Button(
+                        onClick = { onConfirmDelete(userId, userEmail) },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = DangerRed,
+                            contentColor = Color.White,
+                            disabledContainerColor = DangerRed.copy(alpha = 0.5f)
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        enabled = isDeleteEnabled && deleteAccountState !is ProfileViewModel.DeleteAccountState.Loading
+                    ) {
+                        if (deleteAccountState is ProfileViewModel.DeleteAccountState.Loading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                color = Color.White,
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Text(
+                                when(lang) {
+                                    "id" -> "Hapus"
+                                    "en" -> "Delete"
+                                    "es" -> "Eliminar"
+                                    "vi" -> "Xóa"
+                                    "tr" -> "Sil"
+                                    "hi" -> "हटाएं"
+                                    "ms" -> "Padam"
+                                    else -> "Delete"
+                                },
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

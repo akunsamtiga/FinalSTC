@@ -39,6 +39,8 @@ import kotlinx.coroutines.delay
 import com.autotrade.finalstc.data.model.WhitelistUser
 import java.text.SimpleDateFormat
 import java.util.*
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.lazy.items
 
 private val DarkBackground = Color(0xFF0B1A14)
@@ -597,10 +599,7 @@ fun AdminScreen(
                 selectedStatsFilter = null
             },
             onEdit = { user ->
-                selectedUser = user
-                showStatsDialog = false
-                selectedStatsFilter = null
-                showEditDialog = true
+                viewModel.updateUser(user)
             },
             onDelete = { user ->
                 selectedUser = user
@@ -610,6 +609,14 @@ fun AdminScreen(
             },
             onToggleStatus = { user ->
                 viewModel.toggleUserStatus(user)
+            },
+            onRemoveFromRecents = { user ->
+                viewModel.removeUserFromRecents(user.id)
+            },
+            // ✅ NEW: Quick edit added by callback
+            onQuickEditAddedBy = { user, newAddedBy ->
+                val updatedUser = user.copy(addedBy = newAddedBy)
+                viewModel.updateUser(updatedUser)
             }
         )
     }
@@ -968,9 +975,13 @@ private fun StatsDetailDialog(
     onDismiss: () -> Unit,
     onEdit: (WhitelistUser) -> Unit,
     onDelete: (WhitelistUser) -> Unit,
-    onToggleStatus: (WhitelistUser) -> Unit
+    onToggleStatus: (WhitelistUser) -> Unit,
+    onRemoveFromRecents: (WhitelistUser) -> Unit = {},
+    onQuickEditAddedBy: (WhitelistUser, String) -> Unit = { _, _ -> } // ✅ NEW
 ) {
-    // ✅ Filter dan sort dari yang terbaru berdasarkan createdAt
+    var showEditDialog by remember { mutableStateOf(false) }
+    var selectedUserForEdit by remember { mutableStateOf<WhitelistUser?>(null) }
+
     val filteredUsers = remember(filterType, users) {
         val filtered = when (filterType) {
             StatsFilterType.TOTAL -> users
@@ -981,8 +992,6 @@ private fun StatsDetailDialog(
                 users.filter { it.lastLogin > timeThreshold }
             }
         }
-
-        // ✅ Sort berdasarkan createdAt descending (terbaru dulu)
         filtered.sortedByDescending { it.createdAt }
     }
 
@@ -1043,7 +1052,6 @@ private fun StatsDetailDialog(
                                 fontSize = 13.sp,
                                 color = TextSecondary
                             )
-                            // ✅ Indikator sorting
                             Surface(
                                 shape = RoundedCornerShape(6.dp),
                                 color = color.copy(alpha = 0.15f)
@@ -1124,15 +1132,39 @@ private fun StatsDetailDialog(
                         ) { user ->
                             StatsUserCardWithActions(
                                 user = user,
-                                onEdit = { onEdit(user) },
+                                onEdit = {
+                                    selectedUserForEdit = user
+                                    showEditDialog = true
+                                },
                                 onDelete = { onDelete(user) },
-                                onToggleStatus = { onToggleStatus(user) }
+                                onToggleStatus = { onToggleStatus(user) },
+                                onRemoveFromRecents = { onRemoveFromRecents(user) },
+                                onQuickEditAddedBy = { newAddedBy ->
+                                    onQuickEditAddedBy(user, newAddedBy)
+                                }
                             )
                         }
                     }
                 }
             }
         }
+    }
+
+    // ✅ NEW: Edit dialog within StatsDetailDialog
+    if (showEditDialog && selectedUserForEdit != null) {
+        EditUserDialog(
+            user = selectedUserForEdit!!,
+            onDismiss = {
+                showEditDialog = false
+                selectedUserForEdit = null
+            },
+            onEditUser = { updatedUser ->
+                onEdit(updatedUser)
+                showEditDialog = false
+                selectedUserForEdit = null
+            },
+            isSuperAdmin = true
+        )
     }
 }
 
@@ -1141,8 +1173,14 @@ private fun StatsUserCardWithActions(
     user: WhitelistUser,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
-    onToggleStatus: () -> Unit
+    onToggleStatus: () -> Unit,
+    onRemoveFromRecents: () -> Unit = {},
+    onQuickEditAddedBy: (String) -> Unit = {} // ✅ NEW: Quick edit callback
 ) {
+    var showAddedByMenu by remember { mutableStateOf(false) }
+    val clipboardManager = LocalClipboardManager.current
+    val context = LocalContext.current
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -1181,14 +1219,6 @@ private fun StatsUserCardWithActions(
 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = user.name,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = TextPrimary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
                         text = user.email,
                         fontSize = 12.sp,
                         color = TextSecondary,
@@ -1225,21 +1255,129 @@ private fun StatsUserCardWithActions(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column {
-                    Text(
-                        text = "ID: ${user.userId}",
-                        fontSize = 11.sp,
-                        color = TextTertiary
-                    )
-                    if (user.addedBy.isNotEmpty()) {
+                    // ✅ NEW: ID with copy button
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
                         Text(
-                            text = "Added by: ${user.addedBy.substringBefore("@")}",
-                            fontSize = 10.sp,
+                            text = "ID: ${user.userId}",
+                            fontSize = 11.sp,
                             color = TextTertiary
                         )
+                        IconButton(
+                            onClick = {
+                                clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(user.userId))
+                                android.widget.Toast.makeText(context, "ID copied to clipboard", android.widget.Toast.LENGTH_SHORT).show()
+                            },
+                            modifier = Modifier.size(20.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.ContentCopy,
+                                contentDescription = "Copy ID",
+                                tint = AccentPrimary,
+                                modifier = Modifier.size(12.dp)
+                            )
+                        }
+                    }
+
+                    // ✅ NEW: Added by with dropdown menu
+                    if (user.addedBy.isNotEmpty()) {
+                        Box {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                                modifier = Modifier
+                                    .clickable { showAddedByMenu = true }
+                                    .padding(vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = "Added by: ${user.addedBy.substringBefore("@")}",
+                                    fontSize = 10.sp,
+                                    color = AccentPrimary,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Icon(
+                                    imageVector = Icons.Default.ArrowDropDown,
+                                    contentDescription = "Quick Edit",
+                                    tint = AccentPrimary,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
+
+                            DropdownMenu(
+                                expanded = showAddedByMenu,
+                                onDismissRequest = { showAddedByMenu = false },
+                                modifier = Modifier.background(DarkCard)
+                            ) {
+                                DropdownMenuItem(
+                                    text = {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Outlined.CheckCircle,
+                                                contentDescription = null,
+                                                tint = SuccessColor,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Text(
+                                                text = "ID Terdaftar",
+                                                fontSize = 12.sp,
+                                                color = TextPrimary
+                                            )
+                                        }
+                                    },
+                                    onClick = {
+                                        onQuickEditAddedBy("id_terdaftar@stockity.id")
+                                        showAddedByMenu = false
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Outlined.Cancel,
+                                                contentDescription = null,
+                                                tint = ErrorColor,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Text(
+                                                text = "ID Tidak Terdaftar",
+                                                fontSize = 12.sp,
+                                                color = TextPrimary
+                                            )
+                                        }
+                                    },
+                                    onClick = {
+                                        onQuickEditAddedBy("id_tidak_terdaftar@stockity.id")
+                                        showAddedByMenu = false
+                                    }
+                                )
+                            }
+                        }
                     }
                 }
 
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if (user.lastLogin > 0) {
+                        IconButton(
+                            onClick = onRemoveFromRecents,
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.HistoryToggleOff,
+                                contentDescription = "Remove from Recents",
+                                tint = WarningColor,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+
                     IconButton(
                         onClick = onEdit,
                         modifier = Modifier.size(32.dp)
@@ -1251,6 +1389,7 @@ private fun StatsUserCardWithActions(
                             modifier = Modifier.size(16.dp)
                         )
                     }
+
                     IconButton(
                         onClick = onDelete,
                         modifier = Modifier.size(32.dp)
@@ -2301,6 +2440,7 @@ private fun EditUserDialog(
     var userId by remember { mutableStateOf(user.userId) }
     var deviceId by remember { mutableStateOf(user.deviceId) }
     var addedBy by remember { mutableStateOf(user.addedBy) }
+    var resetLastLogin by remember { mutableStateOf(false) }
     val keyboardController = LocalSoftwareKeyboardController.current
 
     Dialog(onDismissRequest = onDismiss) {
@@ -2445,7 +2585,72 @@ private fun EditUserDialog(
                             fontWeight = FontWeight.Medium
                         )
                     }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // ✅ Reset Recent Login Option
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = InfoColor.copy(alpha = 0.1f)
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { resetLastLogin = !resetLastLogin }
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(
+                                checked = resetLastLogin,
+                                onCheckedChange = { resetLastLogin = it },
+                                colors = CheckboxDefaults.colors(
+                                    checkedColor = InfoColor,
+                                    uncheckedColor = TextTertiary,
+                                    checkmarkColor = Color.White
+                                )
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.HistoryToggleOff,
+                                        contentDescription = null,
+                                        tint = InfoColor,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Text(
+                                        text = "Reset Recent Login",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = InfoColor
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "Remove this user from Recent Logins (24h) statistics",
+                                    fontSize = 11.sp,
+                                    color = TextSecondary,
+                                    lineHeight = 14.sp
+                                )
+                                if (user.lastLogin > 0) {
+                                    Text(
+                                        text = "Last login: ${SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).format(Date(user.lastLogin))}",
+                                        fontSize = 10.sp,
+                                        color = TextTertiary,
+                                        modifier = Modifier.padding(top = 2.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
                 } else {
+                    // ✅ Untuk admin biasa (bukan super admin)
                     Spacer(modifier = Modifier.height(12.dp))
 
                     Card(
@@ -2476,8 +2681,50 @@ private fun EditUserDialog(
                     }
                 }
 
+// ✅ Di bawah if-else, baru tombol Nonaktifkan dan Update
                 Spacer(modifier = Modifier.height(20.dp))
 
+// ✅ Tombol Nonaktifkan User (hanya muncul jika user masih aktif)
+                if (user.isActive) {
+                    Button(
+                        onClick = {
+                            if (name.isNotBlank() && email.isNotBlank() && userId.isNotBlank() && deviceId.isNotBlank()) {
+                                onEditUser(
+                                    user.copy(
+                                        name = name,
+                                        email = email,
+                                        userId = userId,
+                                        deviceId = deviceId,
+                                        addedBy = addedBy,
+                                        lastLogin = if (resetLastLogin) 0L else user.lastLogin,
+                                        isActive = false // ✅ Set inactive
+                                    )
+                                )
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(44.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = WarningColor,
+                            contentColor = Color.White
+                        ),
+                        shape = RoundedCornerShape(10.dp),
+                        enabled = name.isNotBlank() && email.isNotBlank() && userId.isNotBlank() && deviceId.isNotBlank()
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Block,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Nonaktifkan User", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
+
+// ✅ Row dengan tombol Cancel dan Update
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -2502,7 +2749,8 @@ private fun EditUserDialog(
                                         email = email,
                                         userId = userId,
                                         deviceId = deviceId,
-                                        addedBy = addedBy
+                                        addedBy = addedBy,
+                                        lastLogin = if (resetLastLogin) 0L else user.lastLogin
                                     )
                                 )
                             }

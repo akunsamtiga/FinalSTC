@@ -43,6 +43,11 @@ class WebSocketManager(
     private val isStable = AtomicBoolean(false)
     private val isChannelJoining = AtomicBoolean(false)
 
+    // ✅ FIX: Add global reconnection lock
+    private val isReconnecting = AtomicBoolean(false)
+    private var lastReconnectionAttempt = AtomicLong(0L)
+    private val MIN_RECONNECTION_INTERVAL = 3000L // ✅ Minimum 3s between attempts
+
     private var reconnectionJob: Job? = null
     private var heartbeatJob: Job? = null
     private var healthCheckJob: Job? = null
@@ -88,7 +93,7 @@ class WebSocketManager(
         private const val HEALTH_CHECK_INTERVAL = 20000L
         private const val MAX_TIME_WITHOUT_MESSAGE = 45000L
         private const val HEARTBEAT_RESPONSE_TIMEOUT = 8000L
-        private const val RECONNECT_COOLDOWN = 2000L
+        private const val RECONNECT_COOLDOWN = 3000L // ✅ Used now
         private const val NETWORK_CHECK_INTERVAL = 3000L
         private const val STABILITY_CHECK_INTERVAL = 5000L
         private const val CHANNEL_RECOVERY_DELAY = 2000L
@@ -102,8 +107,9 @@ class WebSocketManager(
             try {
                 performConnection(userAgent, authToken, deviceType, deviceId, isReconnection = false)
             } catch (e: Exception) {
-                Log.e(TAG, "Koneksi gagal: ${e.message}", e)
-                handleConnectionError(e)
+                Log.e(TAG, "Initial connection failed: ${e.message}", e)
+                // ✅ FIX: Don't immediately reconnect, let scheduleReconnection handle it
+                scheduleReconnection(isNetworkTransition = false)
             }
         }
     }
@@ -117,13 +123,24 @@ class WebSocketManager(
         isNetworkRecovery: Boolean = false
     ) {
         connectionMutex.withLock {
+            // ✅ FIX: Check if already connecting
             if (isConnecting.get() && !isNetworkRecovery) {
-                Log.d(TAG, "Koneksi sedang berlangsung, melewati")
+                Log.d(TAG, "Already connecting, skip duplicate attempt")
                 return@withLock
             }
 
+            // ✅ FIX: Check reconnection cooldown
+            val now = System.currentTimeMillis()
+            val timeSinceLastAttempt = now - lastReconnectionAttempt.get()
+            if (isReconnection && timeSinceLastAttempt < MIN_RECONNECTION_INTERVAL) {
+                Log.d(TAG, "Reconnection too soon (${timeSinceLastAttempt}ms), enforcing cooldown")
+                return@withLock
+            }
+
+            lastReconnectionAttempt.set(now)
+
             if (!checkNetworkAvailabilityWithRetry()) {
-                Log.w(TAG, "Jaringan tidak tersedia setelah retry, menjadwalkan pemulihan jaringan")
+                Log.w(TAG, "Network unavailable, schedule network recovery")
                 if (!isNetworkRecovery) {
                     scheduleNetworkRecovery()
                 }
@@ -136,7 +153,7 @@ class WebSocketManager(
             connectionStartTime.set(System.currentTimeMillis())
 
             try {
-                Log.d(TAG, "Memulai koneksi (reconnection: $isReconnection, network recovery: $isNetworkRecovery)")
+                Log.d(TAG, "Starting connection (reconnection: $isReconnection, attempts: ${reconnectionAttempts.get()})")
 
                 cleanupConnection(preserveCredentials = true, preserveStats = isReconnection)
 
@@ -144,6 +161,7 @@ class WebSocketManager(
                     delay(networkTransitionDelay)
                 } else if (isReconnection) {
                     val adaptiveDelay = calculateAdaptiveDelay()
+                    Log.d(TAG, "Applying adaptive delay: ${adaptiveDelay}ms")
                     delay(adaptiveDelay)
                 }
 
@@ -151,19 +169,19 @@ class WebSocketManager(
                 val request = createWebSocketRequest(userAgent, authToken, deviceType, deviceId)
 
                 val statusMessage = when {
-                    isNetworkRecovery -> "Memulihkan dari perubahan jaringan..."
-                    isReconnection -> "Menyambung kembali... (percobaan ${reconnectionAttempts.get() + 1}/$maxReconnectionAttempts)"
-                    else -> "Menyambung ke WebSocket..."
+                    isNetworkRecovery -> "Recovering from network change..."
+                    isReconnection -> "Reconnecting... (attempt ${reconnectionAttempts.get() + 1}/$maxReconnectionAttempts)"
+                    else -> "Connecting to WebSocket..."
                 }
                 onConnectionStatusChange(false, statusMessage)
 
                 webSocket = client.newWebSocket(request, createWebSocketListener())
 
             } catch (e: Exception) {
-                Log.e(TAG, "Gagal membuat WebSocket: ${e.message}", e)
+                Log.e(TAG, "Failed to create WebSocket: ${e.message}", e)
                 isConnecting.set(false)
-                handleConnectionError(e)
-                throw e
+                // ✅ FIX: Don't throw, let scheduleReconnection handle it
+                scheduleReconnection(isNetworkTransition = isNetworkRelatedError(e))
             }
         }
     }
@@ -227,15 +245,16 @@ class WebSocketManager(
     private fun createWebSocketListener(): WebSocketListener {
         return object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
-                Log.d(TAG, "WebSocket berhasil dibuka")
+                Log.d(TAG, "✅ WebSocket opened successfully")
 
                 scope.launch {
                     try {
                         cleanupJobs()
 
                         isConnecting.set(false)
+                        isReconnecting.set(false) // ✅ FIX: Clear reconnecting flag
                         isNetworkTransition.set(false)
-                        reconnectionAttempts.set(0)
+                        reconnectionAttempts.set(0) // ✅ FIX: Reset on successful connection
                         consecutiveFailures.set(0)
                         networkFailures.set(0)
                         lastSuccessfulConnection.set(System.currentTimeMillis())
@@ -243,7 +262,7 @@ class WebSocketManager(
                         lastMessageSent.set(System.currentTimeMillis())
                         lastHeartbeatResponse.set(System.currentTimeMillis())
 
-                        onConnectionStatusChange(true, "Terhubung ke Stockity WebSocket")
+                        onConnectionStatusChange(true, "Connected to Stockity WebSocket")
 
                         delay(1000)
 
@@ -254,7 +273,7 @@ class WebSocketManager(
                         }
 
                     } catch (e: Exception) {
-                        Log.e(TAG, "Error dalam onOpen handler: ${e.message}", e)
+                        Log.e(TAG, "Error in onOpen handler: ${e.message}", e)
                         handleConnectionFailure(e, null)
                     }
                 }
@@ -270,9 +289,9 @@ class WebSocketManager(
                     val event = json.optString("event", "")
                     if (event == "phx_reply" && json.optString("topic") == "phoenix") {
                         lastHeartbeatResponse.set(now)
-                        Log.v(TAG, "Respons heartbeat diterima")
                     }
                 } catch (e: Exception) {
+                    // Ignore parsing errors
                 }
 
                 scope.launch {
@@ -280,23 +299,23 @@ class WebSocketManager(
                         onWebSocketMessage(text)
                         handleWebSocketMessage(text)
                     } catch (e: Exception) {
-                        Log.e(TAG, "Error memproses pesan WebSocket: ${e.message}", e)
+                        Log.e(TAG, "Error processing message: ${e.message}", e)
                     }
                 }
             }
 
             override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
-                Log.d(TAG, "WebSocket menutup: $reason (Kode: $code)")
+                Log.d(TAG, "WebSocket closing: $reason (Code: $code)")
                 handleConnectionClosed(code, reason)
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-                Log.d(TAG, "WebSocket ditutup: $reason (Kode: $code)")
+                Log.d(TAG, "WebSocket closed: $reason (Code: $code)")
                 handleConnectionClosed(code, reason)
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                Log.e(TAG, "WebSocket gagal: ${t.message}", t)
+                Log.e(TAG, "WebSocket failure: ${t.message}", t)
                 consecutiveFailures.incrementAndGet()
 
                 if (isNetworkRelatedError(t)) {
@@ -322,7 +341,7 @@ class WebSocketManager(
 
     private suspend fun joinChannelsWithRetry() {
         if (isChannelJoining.getAndSet(true)) {
-            Log.d(TAG, "Bergabung dengan channel sedang berlangsung")
+            Log.d(TAG, "Channel joining already in progress")
             return
         }
 
@@ -344,7 +363,7 @@ class WebSocketManager(
                     if (!scope.isActive || isManualDisconnect.get()) break
 
                     if (webSocket == null) {
-                        Log.w(TAG, "WebSocket null saat bergabung dengan channel")
+                        Log.w(TAG, "WebSocket null while joining channels")
                         allJoined = false
                         break
                     }
@@ -365,9 +384,8 @@ class WebSocketManager(
                             joinedChannels.add(channel)
                         }
                         delay(800)
-                        Log.v(TAG, "Berhasil bergabung dengan channel: $channel")
                     } else {
-                        Log.w(TAG, "Gagal bergabung dengan channel: $channel")
+                        Log.w(TAG, "Failed to join channel: $channel")
                         allJoined = false
                     }
                 }
@@ -377,13 +395,13 @@ class WebSocketManager(
                 }
 
                 if (hasAllRequired) {
-                    Log.d(TAG, "Semua channel yang dibutuhkan berhasil bergabung")
-                    onConnectionStatusChange(true, "Siap untuk trading otomatis")
+                    Log.d(TAG, "✅ All required channels joined")
+                    onConnectionStatusChange(true, "Ready for automated trading")
                     isStable.set(true)
                     break
                 } else {
                     retryCount++
-                    Log.w(TAG, "Tidak semua channel yang dibutuhkan bergabung (percobaan $retryCount/$maxRetries). Bergabung: ${joinedChannels.joinToString()}")
+                    Log.w(TAG, "Not all required channels joined (attempt $retryCount/$maxRetries)")
 
                     if (retryCount < maxRetries) {
                         delay(2000)
@@ -396,17 +414,17 @@ class WebSocketManager(
             }
 
             if (hasEssentialChannels) {
-                Log.d(TAG, "Channel esensial tersedia, melanjutkan")
-                onConnectionStatusChange(true, "Terhubung dengan channel esensial")
+                Log.d(TAG, "Essential channels available")
+                onConnectionStatusChange(true, "Connected with essential channels")
                 if (!isStable.get()) {
                     isStable.set(true)
                 }
             } else {
-                Log.w(TAG, "Gagal bergabung dengan channel esensial setelah $maxRetries percobaan")
+                Log.w(TAG, "Failed to join essential channels after $maxRetries attempts")
             }
 
         } catch (e: Exception) {
-            Log.e(TAG, "Error saat bergabung dengan channel: ${e.message}", e)
+            Log.e(TAG, "Error joining channels: ${e.message}", e)
         } finally {
             isChannelJoining.set(false)
         }
@@ -418,7 +436,7 @@ class WebSocketManager(
         startNetworkMonitoring()
         startStabilityCheck()
 
-        Log.d(TAG, "Monitoring canggih dimulai")
+        Log.d(TAG, "Enhanced monitoring started")
     }
 
     private fun startHeartbeat() {
@@ -434,18 +452,15 @@ class WebSocketManager(
                     )
 
                     if (sendWebSocketMessage(heartbeatMessage, skipIfNotConnected = true)) {
-                        Log.v(TAG, "Heartbeat dikirim")
                         lastMessageSent.set(System.currentTimeMillis())
 
                         scope.launch {
                             delay(HEARTBEAT_RESPONSE_TIMEOUT)
                             val timeSinceResponse = System.currentTimeMillis() - lastHeartbeatResponse.get()
                             if (timeSinceResponse > HEARTBEAT_RESPONSE_TIMEOUT) {
-                                Log.w(TAG, "Timeout respons heartbeat: ${timeSinceResponse}ms")
+                                Log.w(TAG, "Heartbeat timeout: ${timeSinceResponse}ms")
                             }
                         }
-                    } else {
-                        Log.w(TAG, "Gagal mengirim heartbeat")
                     }
 
                     delay(HEARTBEAT_INTERVAL)
@@ -453,7 +468,7 @@ class WebSocketManager(
                 } catch (e: CancellationException) {
                     break
                 } catch (e: Exception) {
-                    Log.e(TAG, "Error heartbeat: ${e.message}", e)
+                    Log.e(TAG, "Heartbeat error: ${e.message}", e)
                     delay(5000)
                 }
             }
@@ -482,30 +497,29 @@ class WebSocketManager(
                     val heartbeatHealthy = timeSinceLastHeartbeat <= (HEARTBEAT_INTERVAL * 2)
                     val channelsHealthy = isRequiredChannelsReady() || isChannelJoining.get()
 
-                    Log.v(TAG, "Pemeriksaan kesehatan - Pesan: ${timeSinceLastMessage}ms, Heartbeat: ${timeSinceLastHeartbeat}ms, Channel: $channelsHealthy")
-
                     if (!messageHealthy) {
-                        Log.w(TAG, "Pemeriksaan kesehatan gagal: tidak ada pesan selama ${timeSinceLastMessage}ms (batas: ${messageThreshold}ms)")
-                        forceReconnect()
+                        Log.w(TAG, "Health check failed: no message for ${timeSinceLastMessage}ms")
+                        // ✅ FIX: Use scheduleReconnection instead of forceReconnect
+                        scheduleReconnection(isNetworkTransition = false)
                         return@launch
                     }
 
                     if (isConnected && !heartbeatHealthy && isStable.get()) {
-                        Log.w(TAG, "Pemeriksaan kesehatan gagal: tidak ada respons heartbeat selama ${timeSinceLastHeartbeat}ms")
-                        forceReconnect()
+                        Log.w(TAG, "Health check failed: no heartbeat for ${timeSinceLastHeartbeat}ms")
+                        // ✅ FIX: Use scheduleReconnection instead of forceReconnect
+                        scheduleReconnection(isNetworkTransition = false)
                         return@launch
                     }
 
-
                     if (isConnected && !channelsHealthy && !isChannelJoining.get()) {
-                        Log.w(TAG, "Channel yang dibutuhkan hilang, mencoba pemulihan")
+                        Log.w(TAG, "Required channels missing, attempting recovery")
                         scheduleChannelRecovery()
                     }
 
                 } catch (e: CancellationException) {
                     break
                 } catch (e: Exception) {
-                    Log.e(TAG, "Error pemeriksaan kesehatan: ${e.message}", e)
+                    Log.e(TAG, "Health check error: ${e.message}", e)
                     delay(10000)
                 }
             }
@@ -531,15 +545,15 @@ class WebSocketManager(
                     if (isCurrentlyStable != wasStable) {
                         isStable.set(isCurrentlyStable)
                         if (isCurrentlyStable) {
-                            Log.d(TAG, "Koneksi stabil setelah ${connectionAge}ms")
-                            onConnectionStatusChange(true, "Koneksi stabil dan siap")
+                            Log.d(TAG, "Connection stable after ${connectionAge}ms")
+                            onConnectionStatusChange(true, "Connection stable and ready")
                         }
                     }
 
                 } catch (e: CancellationException) {
                     break
                 } catch (e: Exception) {
-                    Log.e(TAG, "Error pemeriksaan stabilitas: ${e.message}", e)
+                    Log.e(TAG, "Stability check error: ${e.message}", e)
                     delay(5000)
                 }
             }
@@ -553,12 +567,13 @@ class WebSocketManager(
                 delay(CHANNEL_RECOVERY_DELAY)
 
                 if (webSocket != null && !isManualDisconnect.get() && !isChannelJoining.get()) {
-                    Log.d(TAG, "Mencoba pemulihan channel")
+                    Log.d(TAG, "Attempting channel recovery")
                     joinChannelsWithRetry()
                 }
             } catch (e: CancellationException) {
+                // Normal cancellation
             } catch (e: Exception) {
-                Log.e(TAG, "Error pemulihan channel: ${e.message}", e)
+                Log.e(TAG, "Channel recovery error: ${e.message}", e)
             }
         }
     }
@@ -579,18 +594,13 @@ class WebSocketManager(
 
                     if (!previousNetworkState && currentNetworkState) {
                         val downDuration = if (networkDownTime > 0) now - networkDownTime else 0
-                        Log.d(TAG, "Jaringan pulih setelah ${downDuration}ms, memulai pemulihan koneksi")
+                        Log.d(TAG, "Network recovered after ${downDuration}ms")
                         networkDownTime = 0L
                         scheduleNetworkRecovery()
                     } else if (previousNetworkState && !currentNetworkState) {
-                        Log.d(TAG, "Jaringan terputus terdeteksi")
+                        Log.d(TAG, "Network disconnected")
                         networkDownTime = now
-                        onConnectionStatusChange(false, "Jaringan tidak tersedia")
-                    } else if (!currentNetworkState && networkDownTime > 0) {
-                        val downDuration = now - networkDownTime
-                        if (downDuration % 10000 == 0L) {
-                            onConnectionStatusChange(false, "Jaringan terputus selama ${downDuration/1000}s")
-                        }
+                        onConnectionStatusChange(false, "Network unavailable")
                     }
 
                     previousNetworkState = currentNetworkState
@@ -598,7 +608,7 @@ class WebSocketManager(
                 } catch (e: CancellationException) {
                     break
                 } catch (e: Exception) {
-                    Log.e(TAG, "Error monitoring jaringan: ${e.message}", e)
+                    Log.e(TAG, "Network monitoring error: ${e.message}", e)
                     delay(5000)
                 }
             }
@@ -610,7 +620,9 @@ class WebSocketManager(
 
         val credentials = lastCredentials ?: return
 
+        // ✅ FIX: Cancel existing recovery to prevent duplicates
         networkRecoveryJob?.cancel()
+
         networkRecoveryJob = scope.launch {
             try {
                 var stabilityCount = 0
@@ -625,7 +637,7 @@ class WebSocketManager(
                     }
                 }
 
-                Log.d(TAG, "Jaringan tampak stabil, mencoba pemulihan")
+                Log.d(TAG, "Network stable, attempting recovery")
 
                 if (isNetworkAvailable() && !isManualDisconnect.get()) {
                     performConnection(
@@ -636,15 +648,12 @@ class WebSocketManager(
                         isReconnection = true,
                         isNetworkRecovery = true
                     )
-                } else {
-                    Log.d(TAG, "Jaringan masih tidak tersedia, mencoba ulang pemulihan")
-                    delay(5000L)
-                    scheduleNetworkRecovery()
                 }
             } catch (e: CancellationException) {
+                // Normal cancellation
             } catch (e: Exception) {
-                Log.e(TAG, "Pemulihan jaringan gagal: ${e.message}", e)
-                handleConnectionError(e)
+                Log.e(TAG, "Network recovery failed: ${e.message}", e)
+                scheduleReconnection(isNetworkTransition = true)
             }
         }
     }
@@ -653,7 +662,7 @@ class WebSocketManager(
         cleanupConnection(preserveCredentials = true, preserveStats = true)
 
         if (!isManualDisconnect.get()) {
-            onConnectionStatusChange(false, "Koneksi ditutup: $reason")
+            onConnectionStatusChange(false, "Connection closed: $reason")
 
             val isNetworkIssue = when (code) {
                 1000 -> false
@@ -665,7 +674,7 @@ class WebSocketManager(
 
             scheduleReconnection(isNetworkTransition = isNetworkIssue)
         } else {
-            onConnectionStatusChange(false, "Terputus")
+            onConnectionStatusChange(false, "Disconnected")
         }
     }
 
@@ -674,58 +683,50 @@ class WebSocketManager(
 
         if (!isManualDisconnect.get()) {
             val isNetworkIssue = isNetworkRelatedError(throwable)
+            Log.w(TAG, "Connection failure (network issue: $isNetworkIssue): ${throwable.message}")
+            onConnectionStatusChange(false, "Connection failed: ${throwable.message}")
 
-            Log.w(TAG, "Kegagalan koneksi (masalah jaringan: $isNetworkIssue): ${throwable.message}")
-            onConnectionStatusChange(false, "Koneksi gagal: ${throwable.message}")
-
-            handleConnectionError(throwable)
-        }
-    }
-
-    private fun handleConnectionError(throwable: Throwable) {
-        val isNetworkIssue = isNetworkRelatedError(throwable)
-
-        if (isNetworkIssue) {
-            if (networkFailures.get() <= MAX_NETWORK_FAILURES) {
-                scheduleNetworkRecovery()
-            } else {
-                scheduleReconnection(isNetworkTransition = true)
-            }
-        } else {
-            scheduleReconnection(isNetworkTransition = false)
+            scheduleReconnection(isNetworkTransition = isNetworkIssue)
         }
     }
 
     private fun scheduleReconnection(isNetworkTransition: Boolean = false) {
-        if (isManualDisconnect.get()) {
-            Log.d(TAG, "Pemutusan manual aktif, melewati reconnection")
+        // ✅ FIX: Prevent multiple simultaneous reconnection attempts
+        if (!isReconnecting.compareAndSet(false, true)) {
+            Log.d(TAG, "Reconnection already in progress, skip duplicate")
             return
         }
 
-        val credentials = lastCredentials ?: run {
-            Log.w(TAG, "Tidak ada kredensial yang tersedia untuk reconnection")
+        if (isManualDisconnect.get()) {
+            Log.d(TAG, "Manual disconnect active, skip reconnection")
+            isReconnecting.set(false)
+            return
+        }
+
+        val credentials = lastCredentials
+        if (credentials == null) {
+            Log.w(TAG, "No credentials available for reconnection")
+            isReconnecting.set(false)
             return
         }
 
         val currentAttempts = reconnectionAttempts.incrementAndGet()
-        if (currentAttempts > 2) {
-            Log.w(TAG, "Reconnection gagal berulang ($currentAttempts kali), memaksa reset WebSocket...")
-            forceReconnect()
-            return
-        }
 
+        // ✅ FIX: Don't call forceReconnect, just fail and stop
         if (currentAttempts > maxReconnectionAttempts) {
-            Log.e(TAG, "Percobaan reconnection maksimum tercapai ($maxReconnectionAttempts)")
-            onConnectionStatusChange(false, "Koneksi gagal setelah $maxReconnectionAttempts percobaan")
+            Log.e(TAG, "Max reconnection attempts reached ($maxReconnectionAttempts)")
+            onConnectionStatusChange(false, "Connection failed after $maxReconnectionAttempts attempts")
+            isReconnecting.set(false)
+            reconnectionAttempts.set(0) // Reset for future attempts
             return
         }
-
 
         val delay = calculateAdaptiveDelay()
+        Log.d(TAG, "Scheduling reconnection #$currentAttempts in ${delay}ms")
 
-        Log.d(TAG, "Menjadwalkan reconnection #$currentAttempts dalam ${delay}ms (transisi jaringan: $isNetworkTransition, kegagalan jaringan: ${networkFailures.get()})")
-
+        // ✅ FIX: Cancel existing job to prevent duplicates
         cancelReconnection()
+
         reconnectionJob = scope.launch {
             try {
                 delay(delay)
@@ -741,15 +742,16 @@ class WebSocketManager(
                             isNetworkRecovery = isNetworkTransition
                         )
                     } else {
-                        Log.d(TAG, "Jaringan tidak tersedia untuk reconnection, menjadwalkan pemulihan jaringan")
+                        Log.d(TAG, "Network unavailable for reconnection")
                         scheduleNetworkRecovery()
                     }
                 }
             } catch (e: CancellationException) {
+                // Normal cancellation
             } catch (e: Exception) {
-                Log.e(TAG, "Reconnection gagal: ${e.message}", e)
-                delay(5000L)
-                handleConnectionError(e)
+                Log.e(TAG, "Reconnection error: ${e.message}", e)
+            } finally {
+                isReconnecting.set(false)
             }
         }
     }
@@ -800,9 +802,9 @@ class WebSocketManager(
         }
 
         try {
-            webSocket?.close(1000, "Pembersihan")
+            webSocket?.close(1000, "Cleanup")
         } catch (e: Exception) {
-            Log.w(TAG, "Error menutup WebSocket: ${e.message}")
+            Log.w(TAG, "Error closing WebSocket: ${e.message}")
         } finally {
             webSocket = null
         }
@@ -818,23 +820,34 @@ class WebSocketManager(
 
     fun forceReconnect() {
         scope.launch {
-            Log.d(TAG, "Force reconnect diminta")
+            Log.d(TAG, "Force reconnect requested")
 
             val credentials = lastCredentials
             if (credentials == null) {
-                Log.w(TAG, "Tidak dapat force reconnect: kredensial tidak tersedia")
+                Log.w(TAG, "Cannot force reconnect: no credentials")
+                return@launch
+            }
+
+            // ✅ FIX: Check if already reconnecting
+            if (isReconnecting.get()) {
+                Log.d(TAG, "Already reconnecting, skip force reconnect")
                 return@launch
             }
 
             isManualDisconnect.set(false)
-            reconnectionAttempts.set(0)
+
+            // ✅ FIX: Only reset if not already trying to reconnect
+            if (reconnectionAttempts.get() > maxReconnectionAttempts) {
+                reconnectionAttempts.set(0)
+            }
+
             consecutiveFailures.set(0)
             networkFailures.set(0)
 
             cleanupConnection(preserveCredentials = true, preserveStats = false)
             cancelAllReconnectionJobs()
 
-            delay(1000)
+            delay(RECONNECT_COOLDOWN)
 
             try {
                 performConnection(
@@ -846,16 +859,17 @@ class WebSocketManager(
                     isNetworkRecovery = false
                 )
             } catch (e: Exception) {
-                Log.e(TAG, "Force reconnect gagal: ${e.message}", e)
-                handleConnectionError(e)
+                Log.e(TAG, "Force reconnect failed: ${e.message}", e)
+                scheduleReconnection(isNetworkTransition = false)
             }
         }
     }
 
     fun disconnect() {
-        Log.d(TAG, "Pemutusan manual diminta")
+        Log.d(TAG, "Manual disconnect requested")
 
         isManualDisconnect.set(true)
+        isReconnecting.set(false) // ✅ FIX: Clear reconnecting flag
         cancelAllReconnectionJobs()
         cleanupJobs()
         reconnectionAttempts.set(0)
@@ -902,7 +916,7 @@ class WebSocketManager(
             val currentWebSocket = webSocket
             if (currentWebSocket == null) {
                 if (!skipIfNotConnected) {
-                    Log.w(TAG, "Tidak dapat mengirim pesan: WebSocket null")
+                    Log.w(TAG, "Cannot send message: WebSocket null")
                 }
                 return false
             }
@@ -927,7 +941,7 @@ class WebSocketManager(
 
             success
         } catch (e: Exception) {
-            Log.e(TAG, "Error mengirim pesan: ${e.message}", e)
+            Log.e(TAG, "Error sending message: ${e.message}", e)
             false
         }
     }
@@ -973,7 +987,7 @@ class WebSocketManager(
                 "close_deal_batch" -> handleCloseDealBatch(topic, json, payload)
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error parsing pesan WebSocket: ${e.message}", e)
+            Log.e(TAG, "Error parsing message: ${e.message}", e)
         }
     }
 
@@ -1034,6 +1048,7 @@ class WebSocketManager(
         return mapOf(
             "is_connected" to (webSocket != null),
             "is_connecting" to isConnecting.get(),
+            "is_reconnecting" to isReconnecting.get(), // ✅ NEW
             "is_stable" to isStable.get(),
             "is_network_transition" to isNetworkTransition.get(),
             "is_channel_joining" to isChannelJoining.get(),
@@ -1044,6 +1059,7 @@ class WebSocketManager(
             "time_since_last_message_ms" to (now - lastMessageReceived.get()),
             "time_since_last_heartbeat_ms" to (now - lastHeartbeatResponse.get()),
             "time_since_last_network_check_ms" to (now - lastNetworkCheck.get()),
+            "time_since_last_reconnect_attempt_ms" to (now - lastReconnectionAttempt.get()), // ✅ NEW
             "pending_trades" to pendingTrades.size,
             "manual_disconnect" to isManualDisconnect.get(),
             "has_credentials" to (lastCredentials != null),
@@ -1076,13 +1092,14 @@ class WebSocketManager(
         val isStableConnection = isStable.get()
 
         return when {
-            !isConnected -> "TERPUTUS"
-            !hasRequiredChannels -> "MENYAMBUNG"
-            !isStableConnection -> "TIDAK_STABIL"
-            timeSinceLastMessage > 30000 -> "BURUK"
-            timeSinceLastHeartbeat > 60000 -> "MENURUN"
-            timeSinceLastMessage > 15000 -> "CUKUP"
-            else -> "SANGAT_BAIK"
+            !isConnected -> "DISCONNECTED"
+            isReconnecting.get() -> "RECONNECTING" // ✅ NEW
+            !hasRequiredChannels -> "CONNECTING"
+            !isStableConnection -> "UNSTABLE"
+            timeSinceLastMessage > 30000 -> "POOR"
+            timeSinceLastHeartbeat > 60000 -> "DEGRADED"
+            timeSinceLastMessage > 15000 -> "FAIR"
+            else -> "EXCELLENT"
         }
     }
 }
