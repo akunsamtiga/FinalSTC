@@ -165,7 +165,7 @@ class DashboardViewModel @Inject constructor(
         loadUserCurrency()
         loadBalance()
         startBalanceRefresh()
-
+        sessionManager.emitCurrentCurrency()
     }
 
     private fun checkWhitelistStatus() {
@@ -215,10 +215,10 @@ class DashboardViewModel @Inject constructor(
                     val failureReason = if (userExists) {
                         WhitelistCheckState.Failed(
                             reason = "INACTIVE",
-                            message = "Akun Anda terdaftar tetapi tidak aktif.\n\n" +
+                            message = "Akun Anda terdaftar tapi tidak aktif.\n\n" +
                                     "UserID: $userId\n" +
                                     "Email: $email\n\n" +
-                                    "Silakan hubungi administrator untuk mengaktifkan akses Anda."
+                                    "Silahkan hubungi admin untuk bisa akses permanent di aplikasi ini."
                         )
                     } else {
                         WhitelistCheckState.Failed(
@@ -295,6 +295,7 @@ class DashboardViewModel @Inject constructor(
 
                     tradeManager.updateCurrency(currencyType)
                     martingaleManager.updateCurrency(currencyType)
+                    scheduleManager.updateCurrency(currencyType)  // ✅ ADD THIS
 
                     Log.d("DashboardViewModel", "Currency updated to: ${currencyType.code}")
                     Log.d("DashboardViewModel", "Minimum amount: ${currencyType.formatAmount(currencyType.minAmountInCents)}")
@@ -309,6 +310,7 @@ class DashboardViewModel @Inject constructor(
             }
         }
     }
+
 
     fun refreshCurrency() {
         viewModelScope.launch {
@@ -387,11 +389,20 @@ class DashboardViewModel @Inject constructor(
 
         tradeManager.updateCurrency(currency)
         martingaleManager.updateCurrency(currency)
+        scheduleManager.updateCurrency(currency)  // ✅ ADD THIS
 
         println("Currency changed to ${currency.code}")
         println("  Minimum amount: ${currency.formatAmount(currency.minAmountInCents)}")
         println("  Base amount adjusted to: ${newSettings.getFormattedBaseAmount()}")
         println("All managers updated with new currency: ${currency.code}")
+
+        sessionManager.saveCurrencyIso(currency.code)
+
+        // ✅ TAMBAHAN: Juga save currency symbol jika diperlukan
+        sessionManager.saveCurrency(currency.symbol)
+
+        loadBalance() // Refresh balance dengan currency baru
+
     }
 
     fun loadBalance() {
@@ -753,6 +764,32 @@ class DashboardViewModel @Inject constructor(
             )
         }
     }
+
+    fun setMartingaleAlwaysSignal(enabled: Boolean) {
+        if (!_uiState.value.canModifySettings()) {
+            _uiState.value = _uiState.value.copy(
+                error = "Tidak dapat mengubah pengaturan martingale saat ada mode trading aktif"
+            )
+            return
+        }
+
+        val currentSettings = _uiState.value.martingaleSettings
+        val newSettings = currentSettings.copy(isAlwaysSignal = enabled)
+
+        // Validate with currency
+        val validationResult = newSettings.validate(_uiState.value.currencySettings.selectedCurrency)
+        if (validationResult.isFailure) {
+            _uiState.value = _uiState.value.copy(
+                error = "Validasi martingale gagal: ${validationResult.exceptionOrNull()?.message}"
+            )
+            return
+        }
+
+        _uiState.value = _uiState.value.copy(martingaleSettings = newSettings)
+
+        println("Always Signal mode: ${if (enabled) "ENABLED" else "DISABLED"}")
+    }
+
 
     fun refreshTodayProfit() {
         println("Manual refresh today profit requested")
@@ -1194,8 +1231,8 @@ class DashboardViewModel @Inject constructor(
             onMartingaleResult = { result ->
                 handleMartingaleResult(result)
             },
-            onExecuteNextTrade = { trend, amount, scheduledOrderId ->
-                executeInstantMartingaleTrade(trend, amount, scheduledOrderId)
+            onExecuteNextTrade = { trend, amount, scheduledOrderId, currency ->
+                executeInstantMartingaleTrade(trend, amount, scheduledOrderId, currency)
             },
             getUserSession = {
                 val session = loginRepository.getUserSession()
@@ -1242,8 +1279,8 @@ class DashboardViewModel @Inject constructor(
                 _scheduledOrders.value = orders
                 checkBotAutoStop()
             },
-            onExecuteScheduledTrade = { trend, orderId ->
-                executeScheduledTrade(trend, orderId)
+            onExecuteScheduledTrade = { trend, orderId, martingaleStep -> // ✅ TAMBAH PARAMETER
+                executeScheduledTrade(trend, orderId, martingaleStep)
             },
             onAllSchedulesCompleted = {
                 handleAllSchedulesCompleted()
@@ -1255,6 +1292,8 @@ class DashboardViewModel @Inject constructor(
         )
 
         scheduleManager.loadScheduledOrdersFromStorage()
+
+        scheduleManager.updateCurrency(_uiState.value.currencySettings.selectedCurrency)
 
         assetManager = AssetManager(
             scope = viewModelScope,
@@ -3071,7 +3110,7 @@ class DashboardViewModel @Inject constructor(
 
     // ... (Keep all existing methods for scheduled orders, martingale, etc.) ...
 
-    private fun executeScheduledTrade(trend: String, orderId: String) {
+    private fun executeScheduledTrade(trend: String, orderId: String, martingaleStep: Int = 0) {
         val currentState = _uiState.value
 
         if (currentState.botState != BotState.RUNNING) return
@@ -3095,12 +3134,38 @@ class DashboardViewModel @Inject constructor(
             return
         }
 
+        // ✅ GET CURRENT CURRENCY
+        val currentCurrency = currentState.currencySettings.selectedCurrency
+
+        // ✅ CALCULATE AMOUNT BERDASARKAN MARTINGALE STEP
+        val amount = if (martingaleStep > 0) {
+            try {
+                currentState.martingaleSettings.getMartingaleAmountForStep(martingaleStep, currentCurrency)
+            } catch (e: Exception) {
+                println("❌ Error calculating martingale amount: ${e.message}")
+                currentState.martingaleSettings.baseAmount
+            }
+        } else {
+            currentState.martingaleSettings.baseAmount
+        }
+
+        println("📊 EXECUTING SCHEDULED ORDER:")
+        println("   Order ID: $orderId")
+        println("   Trend: $trend")
+        println("   Martingale Step: $martingaleStep")
+        println("   Amount: ${currentCurrency.formatAmount(amount)}")
+        println("   Currency: ${currentCurrency.code}")
+        println("   Is Always Signal: ${currentState.martingaleSettings.isAlwaysSignal}")
+
         _uiState.value = currentState.copy(
             activeOrderId = orderId,
-            botStatus = "Mengeksekusi order pada ${getCurrentTimeString()} - Pemantauan berkelanjutan aktif"
+            botStatus = if (martingaleStep > 0) {
+                "Eksekusi Always Signal Step $martingaleStep - ${currentCurrency.formatAmount(amount)}"
+            } else {
+                "Mengeksekusi order pada ${getCurrentTimeString()} - Pemantauan berkelanjutan aktif"
+            }
         )
 
-        val baseAmount = currentState.martingaleSettings.baseAmount
         val currentServerTime = serverTimeService.getCurrentServerTimeMillis()
 
         if (ServerTimeService.cachedServerTimeOffset == 0L) {
@@ -3110,20 +3175,22 @@ class DashboardViewModel @Inject constructor(
             return
         }
 
+        // ✅ START MONITORING DENGAN AMOUNT YANG BENAR
         continuousTradeMonitor.startMonitoringScheduledOrder(
             scheduledOrderId = orderId,
             trend = trend,
-            amount = baseAmount,
+            amount = amount, // ✅ GUNAKAN CALCULATED AMOUNT
             assetRic = selectedAsset.ric,
             isDemoAccount = currentState.isDemoAccount,
             martingaleSettings = currentState.martingaleSettings,
             startTimeMillis = currentServerTime
         )
 
+        // ✅ EXECUTE DENGAN AMOUNT YANG BENAR
         tradeManager.executeScheduledTrade(
             assetRic = selectedAsset.ric,
             trend = trend,
-            amount = baseAmount,
+            amount = amount, // ✅ GUNAKAN CALCULATED AMOUNT
             isDemoAccount = currentState.isDemoAccount,
             scheduledOrderId = orderId,
             startTimeMillis = currentServerTime
@@ -3133,7 +3200,8 @@ class DashboardViewModel @Inject constructor(
     private fun executeInstantMartingaleTrade(
         trend: String,
         amount: Long,
-        scheduledOrderId: String
+        scheduledOrderId: String,
+        currency: String  // ✅ REMOVE DEFAULT, ALWAYS REQUIRE EXPLICIT CURRENCY
     ) {
         val currentState = _uiState.value
 
@@ -3143,16 +3211,22 @@ class DashboardViewModel @Inject constructor(
         }
 
         val selectedAsset = currentState.selectedAsset ?: return
+        val currencyType = CurrencyType.fromCode(currency)
+
+        println("📊 MARTINGALE EXECUTION:")
+        println("   Currency: ${currencyType.code}")
+        println("   Amount: ${currencyType.formatAmount(amount)}")
+        println("   Step: ${martingaleManager.getCurrentStep()}")
 
         _uiState.value = currentState.copy(
             activeMartingaleStep = martingaleManager.getCurrentStep(),
             botStatus = "Martingale Instan Langkah ${
-                maxOf(
-                    0,
-                    martingaleManager.getCurrentStep() - 1
-                )
-            } - Eksekusi tanpa delay"
+                maxOf(0, martingaleManager.getCurrentStep() - 1)
+            } - ${currencyType.formatAmount(amount)} (${currencyType.code})"
         )
+
+        // ✅ Always update currency
+        tradeManager.updateCurrency(currencyType)
 
         tradeManager.executeMartingaleTrade(
             assetRic = selectedAsset.ric,
@@ -3163,6 +3237,34 @@ class DashboardViewModel @Inject constructor(
             martingaleStep = martingaleManager.getCurrentStep()
         )
     }
+
+    fun getAlwaysSignalInfo(): Map<String, Any> {
+        val currentState = _uiState.value
+        val isAlwaysSignalMode = currentState.martingaleSettings.isEnabled &&
+                currentState.martingaleSettings.isAlwaysSignal
+
+        return if (isAlwaysSignalMode) {
+            val status = scheduleManager.getAlwaysSignalStatus()
+            mapOf(
+                "mode" to "ALWAYS_SIGNAL",
+                "is_enabled" to true,
+                "description" to "Every scheduled signal executes. Continues martingale until WIN.",
+                "status" to status,
+                "base_amount" to formatAmount(currentState.martingaleSettings.baseAmount),
+                "multiplier" to when (currentState.martingaleSettings.multiplierType) {
+                    MultiplierType.FIXED -> "${currentState.martingaleSettings.multiplierValue}x"
+                    MultiplierType.PERCENTAGE -> "${currentState.martingaleSettings.multiplierValue}%"
+                }
+            )
+        } else {
+            mapOf(
+                "mode" to "STANDARD_MARTINGALE",
+                "is_enabled" to false,
+                "max_steps" to currentState.martingaleSettings.maxSteps
+            )
+        }
+    }
+
 
     private fun handleInstantTradeResult(
         scheduledOrderId: String,
@@ -3207,12 +3309,21 @@ class DashboardViewModel @Inject constructor(
 
             else -> {
                 // ===== SCHEDULE MODE HANDLING =====
-                if (isWin) {
-                    scheduleManager.completeOrder(scheduledOrderId, true)
+                val isAlwaysSignalMode = scheduleManager.isAlwaysSignalMode(currentState.martingaleSettings)
+
+                if (isAlwaysSignalMode) {
+                    // ✅ ALWAYS SIGNAL MODE
+                    scheduleManager.handleAlwaysSignalOrderResult(
+                        scheduledOrderId,
+                        isWin,
+                        currentState.martingaleSettings
+                    )
+
+                    scheduleManager.completeOrder(scheduledOrderId, isWin)
 
                     val updatedOrders = _scheduledOrders.value.map { order ->
                         if (order.id == scheduledOrderId) {
-                            order.copy(isExecuted = true, result = "WIN")
+                            order.copy(isExecuted = true, result = if (isWin) "WIN" else "LOSE")
                         } else order
                     }
                     _scheduledOrders.value = updatedOrders
@@ -3220,55 +3331,85 @@ class DashboardViewModel @Inject constructor(
                     _uiState.value = currentState.copy(
                         activeOrderId = null,
                         activeMartingaleStep = 0,
-                        botStatus = "Order MENANG - Deteksi instan berhasil!"
+                        botStatus = if (isWin) "Always Signal WIN - Reset" else "Always Signal LOSE - Continue on next signal"
                     )
 
-                    // ✅ FIXED: Count win immediately (initial trade or martingale win)
+                    // Update local stats
                     handleTradeResultForLocalStats(
-                        tradeId = "schedule_${scheduledOrderId}_${System.currentTimeMillis()}",
+                        tradeId = "schedule_always_signal_${scheduledOrderId}_${System.currentTimeMillis()}",
                         orderId = scheduledOrderId,
-                        result = "WIN",
-                        isMartingaleAttempt = martingaleManager.isActive(),
-                        martingaleStep = if (martingaleManager.isActive()) martingaleManager.getCurrentStep() else 0,
-                        maxMartingaleSteps = currentState.martingaleSettings.maxSteps
+                        result = if (isWin) "WIN" else "LOSE",
+                        isMartingaleAttempt = false,
+                        martingaleStep = 0,
+                        maxMartingaleSteps = 0
                     )
 
                 } else {
-                    // Initial trade LOST
-                    if (currentState.martingaleSettings.isEnabled) {
-                        // ✅ MARTINGALE ENABLED: Don't count as LOSS yet, start martingale
-                        startInstantMartingaleForLostOrder(scheduledOrderId, "Trade kalah - martingale instan")
-
-                        // ❌ DON'T COUNT AS LOSS HERE - only count when martingale fails at max step
-                        println("📊 Schedule: Initial trade LOST - Starting martingale (NOT counted as LOSS yet)")
-
-                    } else {
-                        // ✅ MARTINGALE DISABLED: Count as immediate LOSS
-                        scheduleManager.completeOrder(scheduledOrderId, false)
+                    // ✅ NORMAL MARTINGALE MODE (FIXED STRUCTURE)
+                    if (isWin) {
+                        scheduleManager.completeOrder(scheduledOrderId, true)
 
                         val updatedOrders = _scheduledOrders.value.map { order ->
                             if (order.id == scheduledOrderId) {
-                                order.copy(isExecuted = true, result = "LOSE")
+                                order.copy(isExecuted = true, result = "WIN")
                             } else order
                         }
                         _scheduledOrders.value = updatedOrders
 
                         _uiState.value = currentState.copy(
                             activeOrderId = null,
-                            botStatus = "Order KALAH - Martingale tidak diaktifkan"
+                            activeMartingaleStep = 0,
+                            botStatus = "Order MENANG"
                         )
 
-                        // ✅ COUNT LOSS: No martingale, count as direct loss
+                        // ✅ FIXED: Count win immediately (initial trade or martingale win)
                         handleTradeResultForLocalStats(
                             tradeId = "schedule_${scheduledOrderId}_${System.currentTimeMillis()}",
                             orderId = scheduledOrderId,
-                            result = "LOSE",
-                            isMartingaleAttempt = false,
-                            martingaleStep = 1,
-                            maxMartingaleSteps = 1
+                            result = "WIN",
+                            isMartingaleAttempt = martingaleManager.isActive(),
+                            martingaleStep = if (martingaleManager.isActive()) martingaleManager.getCurrentStep() else 0,
+                            maxMartingaleSteps = currentState.martingaleSettings.maxSteps
                         )
 
-                        println("📊 Schedule: Direct LOSS - Martingale disabled (counted as LOSS)")
+                    } else {
+                        // Initial trade LOST
+                        if (currentState.martingaleSettings.isEnabled) {
+                            // ✅ MARTINGALE ENABLED: Don't count as LOSS yet, start martingale
+                            startInstantMartingaleForLostOrder(scheduledOrderId, "Trade kalah - martingale instan")
+
+                            // ❌ DON'T COUNT AS LOSS HERE - only count when martingale fails at max step
+                            println("📊 Schedule: Initial trade LOST - Starting martingale (NOT counted as LOSS yet)")
+
+                        } else {
+                            // ✅ MARTINGALE DISABLED: Count as immediate LOSS
+                            scheduleManager.completeOrder(scheduledOrderId, false)
+
+                            val updatedOrders = _scheduledOrders.value.map { order ->
+                                if (order.id == scheduledOrderId) {
+                                    order.copy(isExecuted = true, result = "LOSE")
+                                } else order
+                            }
+                            _scheduledOrders.value = updatedOrders
+
+                            _uiState.value = currentState.copy(
+                                activeOrderId = null,
+                                activeMartingaleStep = 0,
+                                botStatus = "Order KALAH"
+                            )
+
+                            // ✅ COUNT LOSS: No martingale, count as direct loss
+                            handleTradeResultForLocalStats(
+                                tradeId = "schedule_${scheduledOrderId}_${System.currentTimeMillis()}",
+                                orderId = scheduledOrderId,
+                                result = "LOSE",
+                                isMartingaleAttempt = false,
+                                martingaleStep = 1,
+                                maxMartingaleSteps = 1
+                            )
+
+                            println("📊 Schedule: Direct LOSS - Martingale disabled (counted as LOSS)")
+                        }
                     }
                 }
             }
@@ -3287,12 +3428,15 @@ class DashboardViewModel @Inject constructor(
 
         val serverNow = serverTimeService.getCurrentServerTimeMillis()
 
+        // ✅ FIX: Use current currency from settings
+        val currentCurrency = currentState.currencySettings.selectedCurrency
+
         val martingaleOrder = TradeOrder(
             amount = initialTradeAmount,
             createdAt = serverNow,
             dealType = if (currentState.isDemoAccount) "demo" else "real",
             expireAt = serverNow + 60000L,
-            iso = "IDR",
+            iso = currentCurrency.code,  // ✅ FIXED: Use actual currency
             optionType = "turbo",
             ric = selectedAsset.ric,
             trend = trend,
@@ -3313,7 +3457,7 @@ class DashboardViewModel @Inject constructor(
 
         _uiState.value = currentState.copy(
             activeMartingaleStep = 1,
-            botStatus = "Martingale Instan Langkah 1 - Eksekusi tanpa delay"
+            botStatus = "Martingale Instan Langkah 1 - Currency: ${currentCurrency.code}"
         )
     }
 
@@ -3446,15 +3590,14 @@ class DashboardViewModel @Inject constructor(
                     scheduleManager.completeOrder(scheduledOrderId, true)
                     continuousTradeMonitor.stopMonitoringOrder(scheduledOrderId)
 
-                    // ✅ FIX CRITICAL: Generate valid tradeId
                     val validTradeId = result.tradeId ?: "martingale_win_${scheduledOrderId}_${System.currentTimeMillis()}"
 
                     println("📊 MARTINGALE WIN STATS UPDATE:")
                     println("   Order ID: $scheduledOrderId")
                     println("   Trade ID: $validTradeId")
                     println("   Final Step: ${result.step}")
+                    println("   🔧 Resetting activeMartingaleStep to 0")
 
-                    // ✅ CALL WITH VALID TRADE ID
                     handleMartingaleCompletionForLocalStats(
                         orderId = scheduledOrderId,
                         isWin = true,
@@ -3471,17 +3614,21 @@ class DashboardViewModel @Inject constructor(
                     lastTradeResult = tradeResult,
                     botStatus = "Martingale MENANG! Order selesai dengan sukses"
                 )
+
+                println("✅ UI State updated: activeMartingaleStep = ${_uiState.value.activeMartingaleStep}")
             }
 
             result.shouldContinue -> {
-                // ⚠️ INTERMEDIATE LOSS - Don't count yet
+                println("📊 Schedule: Martingale step ${result.step} LOST - Continuing (NOT counted yet)")
+                println("   🔧 Setting activeMartingaleStep to ${result.step}")
+
                 _uiState.value = currentState.copy(
                     activeMartingaleStep = result.step,
                     lastTradeResult = tradeResult,
                     botStatus = "Martingale Langkah ${result.step} - Eksekusi instan sedang berlangsung"
                 )
 
-                println("📊 Schedule: Martingale step ${result.step} LOST - Continuing (NOT counted yet)")
+                println("✅ UI State updated: activeMartingaleStep = ${_uiState.value.activeMartingaleStep}")
             }
 
             result.isMaxReached -> {
@@ -3489,15 +3636,14 @@ class DashboardViewModel @Inject constructor(
                     scheduleManager.completeOrder(scheduledOrderId, false)
                     continuousTradeMonitor.stopMonitoringOrder(scheduledOrderId)
 
-                    // ✅ FIX CRITICAL: Generate valid tradeId
                     val validTradeId = result.tradeId ?: "martingale_fail_${scheduledOrderId}_${System.currentTimeMillis()}"
 
                     println("📊 MARTINGALE FAILED STATS UPDATE:")
                     println("   Order ID: $scheduledOrderId")
                     println("   Trade ID: $validTradeId")
                     println("   Final Step: ${result.step}")
+                    println("   🔧 Resetting activeMartingaleStep to 0")
 
-                    // ✅ CALL WITH VALID TRADE ID
                     handleMartingaleCompletionForLocalStats(
                         orderId = scheduledOrderId,
                         isWin = false,
@@ -3514,6 +3660,8 @@ class DashboardViewModel @Inject constructor(
                     lastTradeResult = tradeResult,
                     botStatus = "Martingale gagal - Maksimum ${result.step} langkah tercapai"
                 )
+
+                println("✅ UI State updated: activeMartingaleStep = ${_uiState.value.activeMartingaleStep}")
             }
         }
     }
@@ -3807,11 +3955,26 @@ class DashboardViewModel @Inject constructor(
             return
         }
 
+        // ✅ TAMBAHAN: Reset Always Signal jika mode bukan SCHEDULE
+        val updatedMartingaleSettings = if (mode != TradingMode.SCHEDULE &&
+            currentState.martingaleSettings.isAlwaysSignal) {
+            // Reset always signal untuk mode non-Schedule
+            currentState.martingaleSettings.copy(isAlwaysSignal = false)
+        } else {
+            currentState.martingaleSettings
+        }
+
         _uiState.value = currentState.copy(
             tradingMode = mode,
-            isTradingModeSelected = true, // ✅ TAMBAH INI
+            isTradingModeSelected = true,
+            martingaleSettings = updatedMartingaleSettings,  // ✅ TAMBAH update martingale settings
             error = null
         )
+
+        // ✅ TAMBAHAN: Log perubahan
+        if (mode != TradingMode.SCHEDULE && updatedMartingaleSettings != currentState.martingaleSettings) {
+            Log.d("DashboardViewModel", "Always Signal disabled - Mode changed to: ${mode.name}")
+        }
     }
 
     fun setMartingaleBaseAmount(amount: Long) {
@@ -3930,14 +4093,17 @@ class DashboardViewModel @Inject constructor(
             state.isFollowModeActive -> "Follow Order mode masih aktif"
             state.isIndicatorModeActive -> "Indicator Order mode masih aktif"
             _scheduledOrders.value.isEmpty() -> "Belum ada order terjadwal"
-            // ✅ FIX: Pass currency to validation
-            state.martingaleSettings.validate(state.currencySettings.selectedCurrency).isFailure ->
+            // ✅ PERBAIKAN: Skip validasi max steps jika Always Signal active
+            state.martingaleSettings.isEnabled &&
+                    !state.martingaleSettings.isAlwaysSignal &&  // ✅ TAMBAH pengecekan ini
+                    state.martingaleSettings.validate(state.currencySettings.selectedCurrency).isFailure ->
                 "Pengaturan martingale tidak valid: ${state.getMartingaleValidationError()}"
             state.stopLossSettings.validate().isFailure -> "Stop loss settings invalid"
             state.stopProfitSettings.validate().isFailure -> "Stop profit settings invalid"
             else -> "Kondisi tidak memenuhi syarat untuk memulai bot"
         }
     }
+
     private fun handleStopLossProfitTriggered(type: String, reason: String) {
         val currentState = _uiState.value
 

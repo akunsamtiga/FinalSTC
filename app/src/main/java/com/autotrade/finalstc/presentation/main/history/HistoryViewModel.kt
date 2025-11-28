@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.autotrade.finalstc.data.repository.TradingHistoryRepository
 import com.autotrade.finalstc.data.local.LanguageManager
 import com.autotrade.finalstc.data.local.SessionManager
+import com.autotrade.finalstc.presentation.main.dashboard.CurrencyType
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -55,17 +56,27 @@ class HistoryViewModel @Inject constructor(
     private val _currentLanguage = MutableStateFlow("id")
     val currentLanguage: StateFlow<String> = _currentLanguage.asStateFlow()
 
-    private val _currentCurrency = MutableStateFlow("IDR")
-    val currentCurrency: StateFlow<String> = _currentCurrency.asStateFlow()
+    private val _currentCurrency = MutableStateFlow(CurrencyType.IDR)
+    val currentCurrency: StateFlow<CurrencyType> = _currentCurrency.asStateFlow()
 
     init {
         loadLanguage()
         loadCurrency()
         observeLanguageChanges()
-
-        // ✅ IMPROVED: Preload assets when ViewModel is created
+        observeCurrencyChanges()
         preloadAssets()
     }
+
+    private fun observeCurrencyChanges() {
+        viewModelScope.launch {
+            sessionManager.currencyFlow.collect { newCurrencyIso ->
+                val currencyType = CurrencyType.fromCode(newCurrencyIso)
+                _currentCurrency.value = currencyType
+                Log.d(TAG, "💰 Currency changed to: ${currencyType.code}")
+            }
+        }
+    }
+
 
     private fun loadLanguage() {
         _currentLanguage.value = languageManager.getLanguage()
@@ -81,12 +92,20 @@ class HistoryViewModel @Inject constructor(
     }
 
     private fun loadCurrency() {
-        val currency = sessionManager.getCurrency()
-        _currentCurrency.value = currency
-        Log.d(TAG, "💰 Loaded currency: $currency")
+        val currencyIso = sessionManager.getCurrencyIso()
+        val currencyType = CurrencyType.fromCode(currencyIso)
+        _currentCurrency.value = currencyType
+        Log.d(TAG, "💰 Loaded currency: ${currencyType.code}")
     }
 
-    // ✅ NEW: Preload assets to populate cache
+
+    // ✅ UBAH: Method untuk update currency dari luar
+    fun updateCurrency(currencyType: CurrencyType) {
+        _currentCurrency.value = currencyType
+        sessionManager.saveCurrencyIso(currencyType.code)
+        Log.d(TAG, "💰 Currency updated to: ${currencyType.code}")
+    }
+
     private fun preloadAssets() {
         viewModelScope.launch {
             try {

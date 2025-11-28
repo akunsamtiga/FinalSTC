@@ -8,7 +8,12 @@ import com.autotrade.finalstc.data.model.UserSession
 import com.autotrade.finalstc.presentation.main.dashboard.ScheduledOrder
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -48,6 +53,11 @@ class SessionManager @Inject constructor(
         EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
         EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
     )
+
+
+    private val _currencyFlow = MutableSharedFlow<String>(replay = 1)
+    val currencyFlow: SharedFlow<String> = _currencyFlow.asSharedFlow()
+
 
     fun saveUserSession(userSession: UserSession) {
         sharedPreferences.edit().apply {
@@ -147,7 +157,14 @@ class SessionManager @Inject constructor(
             putString(KEY_CURRENCY_ISO, iso)
             apply()
         }
+
+        // âœ… EMIT perubahan currency (non-suspending)
+        kotlinx.coroutines.GlobalScope.launch {
+            _currencyFlow.emit(iso)
+        }
     }
+
+
 
     fun getCurrencyIso(): String {
         return sharedPreferences.getString(KEY_CURRENCY_ISO, "IDR") ?: "IDR"
@@ -159,7 +176,21 @@ class SessionManager @Inject constructor(
             putString(KEY_CURRENCY_ISO, iso)
             apply()
         }
+
+        // âœ… EMIT perubahan currency
+        kotlinx.coroutines.GlobalScope.launch {
+            _currencyFlow.emit(iso)
+        }
     }
+
+    // âœ… TAMBAH: Method untuk emit initial value
+    fun emitCurrentCurrency() {
+        kotlinx.coroutines.GlobalScope.launch {
+            val currentIso = getCurrencyIso()
+            _currencyFlow.emit(currentIso)
+        }
+    }
+
 
     fun logout() {
         val (savedEmail, savedPassword, rememberMe) = getSavedCredentials()

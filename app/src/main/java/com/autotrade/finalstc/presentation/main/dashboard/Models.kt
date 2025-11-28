@@ -68,12 +68,14 @@ data class MartingaleState(
     val multiplierType: MultiplierType = MultiplierType.FIXED,
     val baseAmount: Long = 1_400_000L,
     val multiplierValue: Double = 2.5,
+    val isAlwaysSignal: Boolean = false
 ) {
     fun validate(currency: CurrencyType = CurrencyType.IDR): Result<Unit> {
         return try {
             when {
-                maxSteps < 1 -> Result.failure(IllegalArgumentException("Max steps must be at least 1"))
-                maxSteps > 10 -> Result.failure(IllegalArgumentException("Max steps cannot exceed 10"))
+                // ✅ SKIP maxSteps validation jika Always Signal mode
+                !isAlwaysSignal && maxSteps < 1 -> Result.failure(IllegalArgumentException("Max steps must be at least 1"))
+                !isAlwaysSignal && maxSteps > 10 -> Result.failure(IllegalArgumentException("Max steps cannot exceed 10"))
 
                 baseAmount < currency.minAmountInCents -> Result.failure(
                     IllegalArgumentException(
@@ -95,21 +97,26 @@ data class MartingaleState(
                     Result.failure(IllegalArgumentException("Percentage too high"))
 
                 else -> {
-                    try {
-                        val testSequence = getAmountSequence()
-                        val testTotalRisk = testSequence.sum()
+                    // ✅ SKIP sequence validation jika Always Signal
+                    if (isAlwaysSignal) {
+                        Result.success(Unit)
+                    } else {
+                        try {
+                            val testSequence = getAmountSequence()
+                            val testTotalRisk = testSequence.sum()
 
-                        when {
-                            testSequence.size < maxSteps + 1 ->
-                                Result.failure(ArithmeticException("Calculation overflow at step ${testSequence.size + 1}"))
-                            testTotalRisk > 1000000000000000000L ->
-                                Result.failure(IllegalArgumentException("Total risk exceeds maximum"))
-                            testSequence.last() > 5000000000000000000L ->
-                                Result.failure(IllegalArgumentException("Final step amount exceeds maximum"))
-                            else -> Result.success(Unit)
+                            when {
+                                testSequence.size < maxSteps + 1 ->
+                                    Result.failure(ArithmeticException("Calculation overflow at step ${testSequence.size + 1}"))
+                                testTotalRisk > 1000000000000000000L ->
+                                    Result.failure(IllegalArgumentException("Total risk exceeds maximum"))
+                                testSequence.last() > 5000000000000000000L ->
+                                    Result.failure(IllegalArgumentException("Final step amount exceeds maximum"))
+                                else -> Result.success(Unit)
+                            }
+                        } catch (e: ArithmeticException) {
+                            Result.failure(e)
                         }
-                    } catch (e: ArithmeticException) {
-                        Result.failure(e)
                     }
                 }
             }
@@ -119,8 +126,16 @@ data class MartingaleState(
     }
 
     fun getAmountForStep(step: Int): Long {
-        if (step < 1 || step > maxSteps + 1) {
-            throw IllegalArgumentException("Step must be between 1 and ${maxSteps + 1}")
+        // ✅ Always Signal: allow unlimited steps
+        if (isAlwaysSignal) {
+            if (step < 1) {
+                throw IllegalArgumentException("Step must be at least 1 for Always Signal mode")
+            }
+            // Calculate without max step limit
+        } else {
+            if (step < 1 || step > maxSteps + 1) {
+                throw IllegalArgumentException("Step must be between 1 and ${maxSteps + 1}")
+            }
         }
 
         return try {
@@ -163,6 +178,11 @@ data class MartingaleState(
     }
 
     fun getAmountSequence(): List<Long> {
+        // ✅ Return empty list jika Always Signal (unlimited)
+        if (isAlwaysSignal) {
+            return emptyList()
+        }
+
         return try {
             (1..maxSteps + 1).map { step -> getAmountForStep(step) }
         } catch (e: ArithmeticException) {
@@ -178,9 +198,16 @@ data class MartingaleState(
         }
     }
 
-    fun getMartingaleAmountForStep(martingaleStep: Int): Long {
-        if (martingaleStep < 1 || martingaleStep > maxSteps) {
-            throw IllegalArgumentException("Martingale step must be between 1 and $maxSteps")
+    fun getMartingaleAmountForStep(martingaleStep: Int, currency: CurrencyType = CurrencyType.IDR): Long {
+        // ✅ Always Signal: allow unlimited steps
+        if (isAlwaysSignal) {
+            if (martingaleStep < 1) {
+                throw IllegalArgumentException("Martingale step must be at least 1")
+            }
+        } else {
+            if (martingaleStep < 1 || martingaleStep > maxSteps) {
+                throw IllegalArgumentException("Martingale step must be between 1 and $maxSteps")
+            }
         }
 
         val rawAmount = when (multiplierType) {
@@ -201,28 +228,36 @@ data class MartingaleState(
             }
         }
 
-        val adjustedAmount = roundToNearestValidAmount(rawAmount)
-        if (!isValidTradingAmount(adjustedAmount)) {
-            println("Adjusted martingale step $martingaleStep amount to $adjustedAmount to fit broker rules")
+        val adjustedAmount = roundToNearestValidAmount(rawAmount, currency)
+
+        if (!isValidTradingAmount(adjustedAmount, currency)) {
+            println("⚠️ Martingale step $martingaleStep amount adjusted: ${currency.formatAmount(adjustedAmount)}")
         }
 
         return adjustedAmount
     }
 
-    private fun roundToNearestValidAmount(amount: Long): Long {
-        val minTradeAmount = 1_000L
-        return (amount / minTradeAmount) * minTradeAmount
+    // ✅ NEW: Currency-aware rounding function
+    private fun roundToNearestValidAmount(amount: Long, currency: CurrencyType): Long {
+        // For currencies without decimals (IDR, JPY, etc.), round to nearest 1000
+        // For currencies with decimals (USD, EUR, etc.), keep exact value
+        val minRoundUnit = if (currency.decimalPlaces == 0) 1_000L else 1L
+        return (amount / minRoundUnit) * minRoundUnit
     }
 
     fun getFormattedSequence(): String {
         return try {
-            getAmountSequence().mapIndexed { index, amount ->
-                val stepLabel = when (index) {
-                    0 -> "Initial"
-                    else -> "Martingale ${index}"
-                }
-                "$stepLabel: ${formatCompactAmount(amount)}"
-            }.joinToString(" → ")
+            if (isAlwaysSignal) {
+                "Always Signal: Continue until WIN"
+            } else {
+                getAmountSequence().mapIndexed { index, amount ->
+                    val stepLabel = when (index) {
+                        0 -> "Initial"
+                        else -> "Martingale ${index}"
+                    }
+                    "$stepLabel: ${formatCompactAmount(amount)}"
+                }.joinToString(" → ")
+            }
         } catch (e: ArithmeticException) {
             "Calculation overflow"
         }
@@ -230,15 +265,22 @@ data class MartingaleState(
 
     fun getTotalRisk(): Long {
         return try {
-            getAmountSequence().sum()
+            if (isAlwaysSignal) {
+                Long.MAX_VALUE // Unlimited risk
+            } else {
+                getAmountSequence().sum()
+            }
         } catch (e: ArithmeticException) {
             Long.MAX_VALUE
         }
     }
 
+
     fun getFormattedTotalRisk(): String {
         val totalRisk = getTotalRisk()
-        return if (totalRisk == Long.MAX_VALUE) {
+        return if (isAlwaysSignal) {
+            "Unlimited (Always Signal)"
+        } else if (totalRisk == Long.MAX_VALUE) {
             "Overflow"
         } else {
             formatCompactAmount(totalRisk)
@@ -248,8 +290,9 @@ data class MartingaleState(
     fun validate(): Result<Unit> {
         return try {
             when {
-                maxSteps < 1 -> Result.failure(IllegalArgumentException("Max steps must be at least 1"))
-                maxSteps > 10 -> Result.failure(IllegalArgumentException("Max steps cannot exceed 10"))
+                // ✅ SKIP maxSteps validation jika Always Signal mode
+                !isAlwaysSignal && maxSteps < 1 -> Result.failure(IllegalArgumentException("Max steps must be at least 1"))
+                !isAlwaysSignal && maxSteps > 10 -> Result.failure(IllegalArgumentException("Max steps cannot exceed 10"))
 
                 baseAmount < 1_400_000L -> Result.failure(IllegalArgumentException("Base amount must be at least 1,400,000 IDR"))
                 baseAmount > 100_000_000_000L -> Result.failure(IllegalArgumentException("Base amount too high"))
@@ -265,21 +308,26 @@ data class MartingaleState(
                     Result.failure(IllegalArgumentException("Percentage too high"))
 
                 else -> {
-                    try {
-                        val testSequence = getAmountSequence()
-                        val testTotalRisk = testSequence.sum()
+                    // ✅ SKIP sequence validation jika Always Signal
+                    if (isAlwaysSignal) {
+                        Result.success(Unit)
+                    } else {
+                        try {
+                            val testSequence = getAmountSequence()
+                            val testTotalRisk = testSequence.sum()
 
-                        when {
-                            testSequence.size < maxSteps + 1 ->
-                                Result.failure(ArithmeticException("Calculation overflow at step ${testSequence.size + 1}"))
-                            testTotalRisk > 1000000000000000000L ->
-                                Result.failure(IllegalArgumentException("Total risk exceeds IDR"))
-                            testSequence.last() > 5000000000000000000L ->
-                                Result.failure(IllegalArgumentException("Final step amount exceeds IDR"))
-                            else -> Result.success(Unit)
+                            when {
+                                testSequence.size < maxSteps + 1 ->
+                                    Result.failure(ArithmeticException("Calculation overflow at step ${testSequence.size + 1}"))
+                                testTotalRisk > 1000000000000000000L ->
+                                    Result.failure(IllegalArgumentException("Total risk exceeds IDR"))
+                                testSequence.last() > 5000000000000000000L ->
+                                    Result.failure(IllegalArgumentException("Final step amount exceeds IDR"))
+                                else -> Result.success(Unit)
+                            }
+                        } catch (e: ArithmeticException) {
+                            Result.failure(e)
                         }
-                    } catch (e: ArithmeticException) {
-                        Result.failure(e)
                     }
                 }
             }
@@ -289,6 +337,11 @@ data class MartingaleState(
     }
 
     fun canCalculateAllSteps(): Boolean {
+        // ✅ Always Signal: always return true (unlimited)
+        if (isAlwaysSignal) {
+            return true
+        }
+
         return try {
             getAmountSequence().size == maxSteps + 1
         } catch (e: Exception) {
@@ -805,9 +858,9 @@ fun formatIndonesianCompact(amount: Long): String {
     }
 }
 
-fun isValidTradingAmount(amount: Long): Boolean {
+fun isValidTradingAmount(amount: Long, currency: CurrencyType = CurrencyType.IDR): Boolean {
     return try {
-        amount >= 1_400_000L && amount <= 100_000_000_000L && amount > 0
+        amount >= currency.minAmountInCents && amount > 0
     } catch (e: Exception) {
         false
     }

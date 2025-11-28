@@ -36,6 +36,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.UUID
 import android.util.Log
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.border
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -757,226 +758,79 @@ fun RegisterScreen(
             }
         }
 
-        Dialog(
-            onDismissRequest = { },
-            properties = DialogProperties(
-                dismissOnBackPress = false,
-                dismissOnClickOutside = false
-            )
-        ) {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth(0.95f)
-                    .wrapContentHeight(),
-                shape = RoundedCornerShape(28.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = GoogleColors.White
-                ),
-                elevation = CardDefaults.cardElevation(
-                    defaultElevation = 16.dp,
-                    pressedElevation = 20.dp
-                )
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(36.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Card(
-                            modifier = Modifier.size(40.dp),
-                            shape = RoundedCornerShape(20.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = GoogleColors.Green.copy(alpha = 0.1f)
-                            ),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.CheckCircle,
-                                    contentDescription = "Success",
-                                    modifier = Modifier.size(24.dp),
-                                    tint = GoogleColors.Green
-                                )
-                            }
-                        }
+        ModernSuccessDialog(
+            onLoginClick = {
+                Log.d("RegisterScreen", "Login STC button clicked")
+                Log.d("RegisterScreen", "Using extracted data:")
+                Log.d("RegisterScreen", "  AuthToken: ${registrationAuthToken?.take(20)}...")
+                Log.d("RegisterScreen", "  DeviceId: $registrationDeviceId")
+                Log.d("RegisterScreen", "  Email: $registrationEmail")
 
-                        Spacer(modifier = Modifier.width(16.dp))
+                if (registrationAuthToken.isNullOrEmpty()) {
+                    Log.w("RegisterScreen", "AuthToken is empty, trying CookieManager fallback")
 
-                        Text(
-                            text = "Registrasi Berhasil!",
-                            fontSize = 26.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = GoogleColors.DarkGray,
-                            textAlign = TextAlign.Center,
-                            letterSpacing = (-0.5).sp
-                        )
-                    }
+                    try {
+                        val cookieManager = android.webkit.CookieManager.getInstance()
+                        val cookies = cookieManager.getCookie("https://stockity.id")
 
-                    Spacer(modifier = Modifier.height(20.dp))
+                        Log.d("RegisterScreen", "Cookies from CookieManager: $cookies")
 
-                    Text(
-                        text = "Selamat! Akun Anda telah berhasil dibuat.",
-                        fontSize = 17.sp,
-                        color = GoogleColors.DarkGray,
-                        textAlign = TextAlign.Center,
-                        lineHeight = 26.sp,
-                        fontWeight = FontWeight.Normal
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Text(
-                        text = "Apa yang ingin Anda lakukan selanjutnya?",
-                        fontSize = 15.sp,
-                        color = GoogleColors.MediumGray,
-                        textAlign = TextAlign.Center,
-                        lineHeight = 22.sp,
-                        fontWeight = FontWeight.Normal
-                    )
-
-                    Spacer(modifier = Modifier.height(40.dp))
-
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Button(
-                            onClick = {
-                                Log.d("RegisterScreen", "Login STC button clicked")
-                                Log.d("RegisterScreen", "Using extracted data:")
-                                Log.d("RegisterScreen", "  AuthToken: ${registrationAuthToken?.take(20)}...")
-                                Log.d("RegisterScreen", "  DeviceId: $registrationDeviceId")
-                                Log.d("RegisterScreen", "  Email: $registrationEmail")
-
-                                if (registrationAuthToken.isNullOrEmpty()) {
-                                    Log.w("RegisterScreen", "AuthToken is empty, trying CookieManager fallback")
-
-                                    try {
-                                        val cookieManager = android.webkit.CookieManager.getInstance()
-                                        val cookies = cookieManager.getCookie("https://stockity.id")
-
-                                        Log.d("RegisterScreen", "Cookies from CookieManager: $cookies")
-
-                                        if (cookies != null) {
-                                            val cookieArray = cookies.split(";")
-                                            for (cookie in cookieArray) {
-                                                val cookiePair = cookie.trim().split("=")
-                                                if (cookiePair.size >= 2) {
-                                                    when (cookiePair[0]) {
-                                                        "authtoken" -> {
-                                                            registrationAuthToken = cookiePair[1]
-                                                            Log.d("RegisterScreen", "AuthToken from CookieManager: ${cookiePair[1].take(20)}...")
-                                                        }
-                                                        "device_id" -> {
-                                                            registrationDeviceId = cookiePair[1]
-                                                            Log.d("RegisterScreen", "DeviceId from CookieManager: ${cookiePair[1]}")
-                                                        }
-                                                        "email" -> {
-                                                            registrationEmail = cookiePair[1]
-                                                            Log.d("RegisterScreen", "Email from CookieManager: ${cookiePair[1]}")
-                                                        }
-                                                    }
-                                                }
-                                            }
+                        if (cookies != null) {
+                            val cookieArray = cookies.split(";")
+                            for (cookie in cookieArray) {
+                                val cookiePair = cookie.trim().split("=")
+                                if (cookiePair.size >= 2) {
+                                    when (cookiePair[0]) {
+                                        "authtoken" -> {
+                                            registrationAuthToken = cookiePair[1]
+                                            Log.d("RegisterScreen", "AuthToken from CookieManager: ${cookiePair[1].take(20)}...")
                                         }
-                                    } catch (e: Exception) {
-                                        Log.e("RegisterScreen", "Error extracting from CookieManager: ${e.message}", e)
+                                        "device_id" -> {
+                                            registrationDeviceId = cookiePair[1]
+                                            Log.d("RegisterScreen", "DeviceId from CookieManager: ${cookiePair[1]}")
+                                        }
+                                        "email" -> {
+                                            registrationEmail = cookiePair[1]
+                                            Log.d("RegisterScreen", "Email from CookieManager: ${cookiePair[1]}")
+                                        }
                                     }
                                 }
-
-                                if (registrationAuthToken.isNullOrEmpty()) {
-                                    Log.e("RegisterScreen", "AuthToken is still empty after fallback!")
-                                    showSuccessDialog = false
-                                    onBackClick()
-                                } else {
-                                    showSuccessDialog = false
-                                    showSavingDialog = true
-
-                                    val authToken = registrationAuthToken!!
-                                    val deviceId = registrationDeviceId ?: UUID.randomUUID().toString().replace("-", "")
-                                    val email = registrationEmail ?: ""
-
-                                    Log.d("RegisterScreen", "Saving to whitelist with:")
-                                    Log.d("RegisterScreen", "  AuthToken: ${authToken.take(20)}...")
-                                    Log.d("RegisterScreen", "  DeviceId: $deviceId")
-                                    Log.d("RegisterScreen", "  Email: $email")
-
-                                    viewModel.saveUserToWhitelistAndLogin(
-                                        authToken,
-                                        deviceId,
-                                        email
-                                    )
-                                }
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(52.dp),
-                            shape = RoundedCornerShape(16.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = GoogleColors.Blue,
-                                contentColor = GoogleColors.White
-                            ),
-                            elevation = ButtonDefaults.buttonElevation(
-                                defaultElevation = 3.dp,
-                                pressedElevation = 8.dp
-                            ),
-                            border = ButtonDefaults.outlinedButtonBorder.copy(
-                                width = 0.8.dp,
-                                brush = SolidColor(GoogleColors.White)
-                            ),
-                        ) {
-                            Text(
-                                text = "Login STC Autotrade",
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                letterSpacing = 0.1.sp
-                            )
+                            }
                         }
-
-                        OutlinedButton(
-                            onClick = {
-                                Log.d("RegisterScreen", "Continue trading button clicked")
-                                showSuccessDialog = false
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(52.dp),
-                            shape = RoundedCornerShape(16.dp),
-                            border = ButtonDefaults.outlinedButtonBorder.copy(
-                                width = 0.8.dp,
-                                brush = SolidColor(GoogleColors.MediumGray.copy(alpha = 0.3f))
-                            ),
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                containerColor = GoogleColors.White,
-                                contentColor = GoogleColors.DarkGray
-                            ),
-                            elevation = ButtonDefaults.buttonElevation(
-                                defaultElevation = 0.dp,
-                                pressedElevation = 2.dp
-                            )
-                        ) {
-                            Text(
-                                text = "Lanjut Trading",
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Medium,
-                                letterSpacing = 0.1.sp
-                            )
-                        }
+                    } catch (e: Exception) {
+                        Log.e("RegisterScreen", "Error extracting from CookieManager: ${e.message}", e)
                     }
                 }
+
+                if (registrationAuthToken.isNullOrEmpty()) {
+                    Log.e("RegisterScreen", "AuthToken is still empty after fallback!")
+                    showSuccessDialog = false
+                    onBackClick()
+                } else {
+                    showSuccessDialog = false
+                    showSavingDialog = true
+
+                    val authToken = registrationAuthToken!!
+                    val deviceId = registrationDeviceId ?: UUID.randomUUID().toString().replace("-", "")
+                    val email = registrationEmail ?: ""
+
+                    Log.d("RegisterScreen", "Saving to whitelist with:")
+                    Log.d("RegisterScreen", "  AuthToken: ${authToken.take(20)}...")
+                    Log.d("RegisterScreen", "  DeviceId: $deviceId")
+                    Log.d("RegisterScreen", "  Email: $email")
+
+                    viewModel.saveUserToWhitelistAndLogin(
+                        authToken,
+                        deviceId,
+                        email
+                    )
+                }
+            },
+            onContinueClick = {
+                Log.d("RegisterScreen", "Continue trading button clicked")
+                showSuccessDialog = false
             }
-        }
+        )
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -1176,6 +1030,290 @@ fun RegisterScreen(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun ModernSuccessDialog(
+    onLoginClick: () -> Unit,
+    onContinueClick: () -> Unit
+) {
+    var isVisible by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        delay(100)
+        isVisible = true
+    }
+
+    val scale by animateFloatAsState(
+        targetValue = if (isVisible) 1f else 0.8f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "scaleAnimation"
+    )
+
+    val alpha by animateFloatAsState(
+        targetValue = if (isVisible) 1f else 0f,
+        animationSpec = tween(durationMillis = 400),
+        label = "alphaAnimation"
+    )
+
+    Dialog(
+        onDismissRequest = { },
+        properties = DialogProperties(
+            dismissOnBackPress = false,
+            dismissOnClickOutside = false,
+            usePlatformDefaultWidth = false
+        )
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.6f * alpha))
+                .graphicsLayer {
+                    this.alpha = alpha
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth(0.9f)
+                    .wrapContentHeight()
+                    .graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                    },
+                shape = RoundedCornerShape(32.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = Color.White
+                ),
+                elevation = CardDefaults.cardElevation(
+                    defaultElevation = 24.dp
+                )
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    // Success Icon with Animation
+                    SuccessIconAnimated()
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    // Title
+                    Text(
+                        text = "Selamat! 🎉",
+                        fontSize = 32.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = GoogleColors.DarkGray,
+                        textAlign = TextAlign.Center,
+                        letterSpacing = (-0.5).sp
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Subtitle
+                    Text(
+                        text = "Registrasi Berhasil",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = GoogleColors.Green,
+                        textAlign = TextAlign.Center
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Description
+                    Text(
+                        text = "Akun Anda telah berhasil dibuat dan siap digunakan. Pilih langkah selanjutnya untuk melanjutkan.",
+                        fontSize = 15.sp,
+                        color = GoogleColors.MediumGray,
+                        textAlign = TextAlign.Center,
+                        lineHeight = 22.sp
+                    )
+
+                    Spacer(modifier = Modifier.height(32.dp))
+
+                    // Action Buttons
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        // Primary Button - Login
+                        Button(
+                            onClick = onLoginClick,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(56.dp),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = GoogleColors.Blue
+                            ),
+                            elevation = ButtonDefaults.buttonElevation(
+                                defaultElevation = 4.dp,
+                                pressedElevation = 8.dp
+                            )
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.CheckCircle,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp),
+                                    tint = Color.White
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text(
+                                    text = "Login STC Autotrade",
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color.White
+                                )
+                            }
+                        }
+
+                        // Secondary Button - Continue Trading
+                        OutlinedButton(
+                            onClick = onContinueClick,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(56.dp),
+                            shape = RoundedCornerShape(16.dp),
+                            border = BorderStroke(1.5.dp, GoogleColors.Blue.copy(alpha = 0.3f)),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = GoogleColors.Blue
+                            )
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.TrendingUp,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text(
+                                    text = "Lanjut Trading",
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Info text
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Info,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp),
+                            tint = GoogleColors.MediumGray
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Anda dapat login kapan saja nanti",
+                            fontSize = 12.sp,
+                            color = GoogleColors.MediumGray,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun SuccessIconAnimated() {
+    val infiniteTransition = rememberInfiniteTransition(label = "successIcon")
+
+    val scale by infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1000, easing = EaseInOutCubic),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "iconScale"
+    )
+
+    val rotation by infiniteTransition.animateFloat(
+        initialValue = -5f,
+        targetValue = 5f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 2000, easing = EaseInOutCubic),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "iconRotation"
+    )
+
+    Box(
+        modifier = Modifier
+            .size(120.dp)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+                rotationZ = rotation
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        // Outer circle with gradient effect
+        Box(
+            modifier = Modifier
+                .size(120.dp)
+                .background(
+                    brush = androidx.compose.ui.graphics.Brush.radialGradient(
+                        colors = listOf(
+                            GoogleColors.Green.copy(alpha = 0.2f),
+                            GoogleColors.Green.copy(alpha = 0.05f),
+                            Color.Transparent
+                        )
+                    ),
+                    shape = androidx.compose.foundation.shape.CircleShape
+                )
+        )
+
+        // Middle circle
+        Box(
+            modifier = Modifier
+                .size(90.dp)
+                .background(
+                    color = GoogleColors.Green.copy(alpha = 0.15f),
+                    shape = androidx.compose.foundation.shape.CircleShape
+                )
+        )
+
+        // Inner circle with icon
+        Box(
+            modifier = Modifier
+                .size(70.dp)
+                .background(
+                    color = GoogleColors.Green,
+                    shape = androidx.compose.foundation.shape.CircleShape
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.CheckCircle,
+                contentDescription = "Success",
+                modifier = Modifier.size(40.dp),
+                tint = Color.White
+            )
         }
     }
 }

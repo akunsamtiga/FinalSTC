@@ -77,6 +77,16 @@ data class DashboardUiState(
             !isMultiMomentumModeActive
 
     fun canStartBot(): Boolean {
+        val martingaleValid = if (martingaleSettings.isEnabled && martingaleSettings.isAlwaysSignal) {
+            // ✅ Always Signal mode: Skip maxSteps validation
+            martingaleSettings.baseAmount >= currencySettings.selectedCurrency.minAmountInCents &&
+                    martingaleSettings.baseAmount <= 100_000_000_000L
+        } else {
+            // Regular martingale: Full validation
+            martingaleSettings.validate(currencySettings.selectedCurrency).isSuccess &&
+                    getMartingaleValidationError() == null
+        }
+
         return botState == BotState.STOPPED &&
                 !isFollowModeActive &&
                 !isIndicatorModeActive &&
@@ -84,11 +94,10 @@ data class DashboardUiState(
                 !isMultiMomentumModeActive &&
                 selectedAsset != null &&
                 isWebSocketConnected &&
-                martingaleSettings.validate(currencySettings.selectedCurrency).isSuccess &&
+                martingaleValid &&  // ✅ Use conditional validation
                 currencySettings.validate().isSuccess &&
                 stopLossSettings.validate().isSuccess &&
-                stopProfitSettings.validate().isSuccess &&
-                getMartingaleValidationError() == null
+                stopProfitSettings.validate().isSuccess
     }
 
     fun canStartFollowMode(): Boolean {
@@ -205,6 +214,18 @@ data class DashboardUiState(
     }
 
     fun getMartingaleValidationError(): String? {
+        // ✅ Skip validation jika Always Signal mode
+        if (martingaleSettings.isEnabled && martingaleSettings.isAlwaysSignal) {
+            return when {
+                martingaleSettings.baseAmount < currencySettings.selectedCurrency.minAmountInCents ->
+                    "Base amount terlalu kecil untuk ${currencySettings.selectedCurrency.code}"
+                martingaleSettings.baseAmount > 100_000_000_000L ->
+                    "Base amount terlalu besar"
+                else -> null
+            }
+        }
+
+        // Regular validation untuk mode non-Always Signal
         return try {
             val validationResult = martingaleSettings.validate(currencySettings.selectedCurrency)
             if (validationResult.isFailure) {

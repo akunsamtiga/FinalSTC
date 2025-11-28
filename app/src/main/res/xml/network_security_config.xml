@@ -1,6 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
+    <!-- ✅ Izinkan HTTP dan HTTPS untuk stockity.id -->
     <domain-config cleartextTrafficPermitted="true">
         <domain includeSubdomains="true">stockity.id</domain>
+        <domain includeSubdomains="true">api.stockity.id</domain>
     </domain-config>
+
+    <!-- ✅ Tambahkan trust untuk semua certificate (development only) -->
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </base-config>
 </network-security-config>

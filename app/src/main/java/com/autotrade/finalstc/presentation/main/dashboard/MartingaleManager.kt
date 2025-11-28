@@ -19,9 +19,9 @@ import kotlinx.coroutines.CancellationException
 class MartingaleManager(
     private val scope: CoroutineScope,
     private val onMartingaleResult: (MartingaleResult) -> Unit,
-    private val onExecuteNextTrade: (String, Long, String) -> Unit,
     private val getUserSession: suspend () -> UserSession?,
     private val webSocketManager: WebSocketManager? = null,
+    private val onExecuteNextTrade: (String, Long, String, String) -> Unit,
     private val serverTimeService: ServerTimeService? = null,
     private val onStepUpdate: ((String, Int) -> Unit)? = null
 ) {
@@ -73,16 +73,20 @@ class MartingaleManager(
         scheduledOrderId: String,
         initialStep: Int = 1
     ) {
-        println("Starting martingale with currency: ${currentCurrency.code}")
+        println("Starting martingale with currency: ${initialTrade.iso}")
         println("Starting martingale for order: $scheduledOrderId (step=$initialStep) - Ultra Fast Mode")
 
-        val validation = martingaleSettings.validate()
+        // ✅ FIX: Validate dengan currency yang benar
+        val tradeCurrency = CurrencyType.fromCode(initialTrade.iso)
+        val validation = martingaleSettings.validate(tradeCurrency)  // ✅ TAMBAHKAN INI
+
         if (validation.isFailure) {
             println("Invalid martingale settings: ${validation.exceptionOrNull()?.message}")
             return
         }
 
         currentMartingaleSettings = martingaleSettings
+
 
         currentMartingaleOrder = MartingaleOrder(
             originalTrade = initialTrade,
@@ -96,7 +100,8 @@ class MartingaleManager(
             startTime = System.currentTimeMillis(),
             scheduledOrderId = scheduledOrderId,
             multiplierType = martingaleSettings.multiplierType,
-            multiplierValue = martingaleSettings.multiplierValue
+            multiplierValue = martingaleSettings.multiplierValue,
+            currency = initialTrade.iso
         )
 
         resetExecutionTracking()
@@ -130,8 +135,9 @@ class MartingaleManager(
             return
         }
 
+        // ✅ FIX: Pass currency to getMartingaleAmountForStep
         val stepAmount = try {
-            settings.getMartingaleAmountForStep(martingaleStep)
+            settings.getMartingaleAmountForStep(martingaleStep, currentCurrency)
         } catch (e: IllegalArgumentException) {
             println("Invalid martingale step $martingaleStep: ${e.message}")
             return
@@ -140,8 +146,8 @@ class MartingaleManager(
             return
         }
 
-        println("Executing martingale step $martingaleStep - Amount: ${formatAmount(stepAmount)} (Ultra Fast)")
-        println("Multiplier calculation: base(${formatAmount(settings.baseAmount)}) * multiplier^$martingaleStep = ${formatAmount(stepAmount)}")
+        println("✅ Executing martingale step $martingaleStep - Amount: ${currentCurrency.formatAmount(stepAmount)} (${currentCurrency.code})")
+        println("   Multiplier calculation: base(${currentCurrency.formatAmount(settings.baseAmount)}) * multiplier^$martingaleStep = ${currentCurrency.formatAmount(stepAmount)}")
 
         currentMartingaleOrder = currentOrder.copy(currentStep = martingaleStep)
 
@@ -178,7 +184,7 @@ class MartingaleManager(
         }
 
         println("Sending martingale trade order for step $martingaleStep - Amount: ${formatAmount(stepAmount)}")
-        onExecuteNextTrade(currentOrder.trend, stepAmount, currentOrder.scheduledOrderId)
+        onExecuteNextTrade(currentOrder.trend, stepAmount, currentOrder.scheduledOrderId, currentOrder.currency)
     }
 
     private fun calculateExpireTime(): Long {
@@ -762,7 +768,8 @@ data class MartingaleOrder(
     val startTime: Long = System.currentTimeMillis(),
     val scheduledOrderId: String,
     val multiplierType: MultiplierType = MultiplierType.FIXED,
-    val multiplierValue: Double = 2.0
+    val multiplierValue: Double = 2.0,
+    val currency: String = "IDR"
 )
 
 data class MartingaleResult(

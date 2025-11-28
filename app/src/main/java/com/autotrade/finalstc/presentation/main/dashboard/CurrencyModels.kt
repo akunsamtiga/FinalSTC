@@ -331,6 +331,14 @@ enum class CurrencyType(
         locale = Locale("da", "DK"),
         minAmountInCents = 700L,
         decimalPlaces = 2
+    ),
+    KZT(
+        code = "KZT",
+        symbol = "₸",
+        flag = "🇰🇿",
+        locale = Locale("kk", "KZ"),
+        minAmountInCents = 45_000L,
+        decimalPlaces = 2
     );
 
     fun formatAmount(amountInCents: Long): String {
@@ -430,7 +438,7 @@ enum class CurrencyType(
             AUD, NZD -> "Oceania"
             CAD, MXN, BRL, ARS, CLP, COP -> "Americas"
             AED, SAR, TRY, EGP, ZAR, NGN -> "Middle East & Africa"
-            RUB, PLN, CZK, HUF -> "Eastern Europe"
+            RUB, KZT, PLN, CZK, HUF -> "Eastern Europe"
             SEK, NOK, DKK -> "Scandinavia"
         }
     }

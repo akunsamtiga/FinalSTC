@@ -16,16 +16,21 @@ data class UserProfileData(
     val nickname: String?,
     val phone: String?,
     @SerializedName("email_verified")
-    val emailVerified: Boolean,
+    val emailVerified: Boolean = false,
     @SerializedName("phone_verified")
-    val phoneVerified: Boolean,
+    val phoneVerified: Boolean = false,
     val gender: String?,
     val country: String?,
     val birthday: String?,
     @SerializedName("registered_at")
     val registeredAt: String?,
     @SerializedName("registration_country_iso")
-    val registrationCountryIso: String?
+    val registrationCountryIso: String?,
+    val avatar: String?,
+    @SerializedName("personal_data_locked")
+    val personalDataLocked: Boolean = false,
+    @SerializedName("docs_verified")
+    val docsVerified: Boolean = false
 ) {
     fun getFullName(): String {
         val first = firstName?.trim() ?: ""

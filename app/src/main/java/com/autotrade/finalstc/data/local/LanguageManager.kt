@@ -51,12 +51,80 @@ class LanguageManager @Inject constructor(
         val country = getCountry()
         return when(lang) {
             "id" -> "🇮🇩 Indonesia"
-            "en" -> "🇬🇧 $country"
-            "es" -> "🇪🇸 $country"
-            "vi" -> "🇻🇳 $country"
-            "tr" -> "🇹🇷 Türkiye"
-            "hi" -> "🇮🇳 India"
-            "ms" -> "🇲🇾 Malaysia"
+            "en" -> when(country) {
+                "NG" -> "🇳🇬 Nigeria"
+                "ZA" -> "🇿🇦 South Africa"
+                "KE" -> "🇰🇪 Kenya"
+                "GH" -> "🇬🇭 Ghana"
+                "UG" -> "🇺🇬 Uganda"
+                "TZ" -> "🇹🇿 Tanzania"
+                "ET" -> "🇪🇹 Ethiopia"
+                "PH" -> "🇵🇭 Philippines"
+                "SG" -> "🇸🇬 Singapore"
+                "HK" -> "🇭🇰 Hong Kong"
+                "GB" -> "🇬🇧 United Kingdom"
+                "UA" -> "🇺🇦 Ukraine"
+                "PL" -> "🇵🇱 Poland"
+                "RO" -> "🇷🇴 Romania"
+                "CZ" -> "🇨🇿 Czech Republic"
+                else -> "🇬🇧 $country"
+            }
+            "es" -> when(country) {
+                "MX" -> "🇲🇽 México"
+                "AR" -> "🇦🇷 Argentina"
+                "CL" -> "🇨🇱 Chile"
+                "CO" -> "🇨🇴 Colombia"
+                "PE" -> "🇵🇪 Perú"
+                "VE" -> "🇻🇪 Venezuela"
+                "CR" -> "🇨🇷 Costa Rica"
+                "EC" -> "🇪🇨 Ecuador"
+                "UY" -> "🇺🇾 Uruguay"
+                "PY" -> "🇵🇾 Paraguay"
+                "BO" -> "🇧🇴 Bolivia"
+                "SV" -> "🇸🇻 El Salvador"
+                "GT" -> "🇬🇹 Guatemala"
+                "HN" -> "🇭🇳 Honduras"
+                "PA" -> "🇵🇦 Panamá"
+                "DO" -> "🇩🇴 República Dominicana"
+                "CU" -> "🇨🇺 Cuba"
+                else -> "🇪🇸 $country"
+            }
+            "vi" -> when(country) {
+                "VN" -> "🇻🇳 Việt Nam"
+                "LA" -> "🇱🇦 Laos"
+                "TH" -> "🇹🇭 Thailand"
+                "KH" -> "🇰🇭 Cambodia"
+                else -> "🇻🇳 $country"
+            }
+            "tr" -> when(country) {
+                "TR" -> "🇹🇷 Türkiye"
+                "CY" -> "🇨🇾 Cyprus"
+                else -> "🇹🇷 Türkiye"
+            }
+            "hi" -> when(country) {
+                "IN" -> "🇮🇳 India"
+                "NP" -> "🇳🇵 Nepal"
+                "FJ" -> "🇫🇯 Fiji"
+                else -> "🇮🇳 India"
+            }
+            "ms" -> when(country) {
+                "MY" -> "🇲🇾 Malaysia"
+                "BN" -> "🇧🇳 Brunei"
+                else -> "🇲🇾 Malaysia"
+            }
+            "bn" -> when(country) {
+                "BD" -> "🇧🇩 Bangladesh"
+                "PK" -> "🇵🇰 Pakistan"
+                else -> "🇧🇩 Bangladesh"
+            }
+            "ru" -> when(country) {
+                "RU" -> "🇷🇺 Russia"
+                "KZ" -> "🇰🇿 Kazakhstan"
+                "BY" -> "🇧🇾 Belarus"
+                "UA" -> "🇺🇦 Ukraine"
+                "KG" -> "🇰🇬 Kyrgyzstan"
+                else -> "🇷🇺 $country"
+            }
             else -> "🇮🇩 Indonesia"
         }
     }
@@ -91,11 +159,20 @@ object LanguageData {
             flag = "🇬🇧",
             countries = listOf(
                 Country("NG", "Nigeria", "🇳🇬"),
-                Country("PH", "Philippines", "🇵🇭"),
                 Country("ZA", "South Africa", "🇿🇦"),
                 Country("KE", "Kenya", "🇰🇪"),
+                Country("GH", "Ghana", "🇬🇭"),
+                Country("UG", "Uganda", "🇺🇬"),
+                Country("TZ", "Tanzania", "🇹🇿"),
+                Country("ET", "Ethiopia", "🇪🇹"),
+                Country("PH", "Philippines", "🇵🇭"),
+                Country("SG", "Singapore", "🇸🇬"),
+                Country("HK", "Hong Kong", "🇭🇰"),
                 Country("GB", "United Kingdom", "🇬🇧"),
-                Country("UA", "Ukraine", "🇺🇦")
+                Country("UA", "Ukraine", "🇺🇦"),
+                Country("PL", "Poland", "🇵🇱"),
+                Country("RO", "Romania", "🇷🇴"),
+                Country("CZ", "Czech Republic", "🇨🇿")
             )
         ),
         LanguageGroup(
@@ -104,20 +181,22 @@ object LanguageData {
             flag = "🇪🇸",
             countries = listOf(
                 Country("MX", "México", "🇲🇽"),
+                Country("AR", "Argentina", "🇦🇷"),
                 Country("CL", "Chile", "🇨🇱"),
                 Country("CO", "Colombia", "🇨🇴"),
+                Country("PE", "Perú", "🇵🇪"),
+                Country("VE", "Venezuela", "🇻🇪"),
                 Country("CR", "Costa Rica", "🇨🇷"),
-                Country("DO", "República Dominicana", "🇩🇴"),
                 Country("EC", "Ecuador", "🇪🇨"),
+                Country("UY", "Uruguay", "🇺🇾"),
+                Country("PY", "Paraguay", "🇵🇾"),
+                Country("BO", "Bolivia", "🇧🇴"),
                 Country("SV", "El Salvador", "🇸🇻"),
                 Country("GT", "Guatemala", "🇬🇹"),
                 Country("HN", "Honduras", "🇭🇳"),
                 Country("PA", "Panamá", "🇵🇦"),
-                Country("PY", "Paraguay", "🇵🇾"),
-                Country("PE", "Perú", "🇵🇪"),
-                Country("UY", "Uruguay", "🇺🇾"),
-                Country("VE", "Venezuela", "🇻🇪"),
-                Country("BR", "Brasil", "🇧🇷")
+                Country("DO", "República Dominicana", "🇩🇴"),
+                Country("CU", "Cuba", "🇨🇺")
             )
         ),
         LanguageGroup(
@@ -127,7 +206,8 @@ object LanguageData {
             countries = listOf(
                 Country("VN", "Việt Nam", "🇻🇳"),
                 Country("LA", "Laos", "🇱🇦"),
-                Country("TH", "Thailand", "🇹🇭")
+                Country("TH", "Thailand", "🇹🇭"),
+                Country("KH", "Cambodia", "🇰🇭")
             )
         ),
         LanguageGroup(
@@ -135,7 +215,8 @@ object LanguageData {
             name = "Türkçe",
             flag = "🇹🇷",
             countries = listOf(
-                Country("TR", "Türkiye", "🇹🇷")
+                Country("TR", "Türkiye", "🇹🇷"),
+                Country("CY", "Cyprus", "🇨🇾")
             )
         ),
         LanguageGroup(
@@ -143,7 +224,9 @@ object LanguageData {
             name = "हिन्दी",
             flag = "🇮🇳",
             countries = listOf(
-                Country("IN", "India", "🇮🇳")
+                Country("IN", "India", "🇮🇳"),
+                Country("NP", "Nepal", "🇳🇵"),
+                Country("FJ", "Fiji", "🇫🇯")
             )
         ),
         LanguageGroup(
@@ -151,7 +234,29 @@ object LanguageData {
             name = "Bahasa Melayu",
             flag = "🇲🇾",
             countries = listOf(
-                Country("MY", "Malaysia", "🇲🇾")
+                Country("MY", "Malaysia", "🇲🇾"),
+                Country("BN", "Brunei", "🇧🇳")
+            )
+        ),
+        LanguageGroup(
+            code = "bn",
+            name = "বাংলা",
+            flag = "🇧🇩",
+            countries = listOf(
+                Country("BD", "Bangladesh", "🇧🇩"),
+                Country("PK", "Pakistan", "🇵🇰")
+            )
+        ),
+        LanguageGroup(
+            code = "ru",
+            name = "Русский",
+            flag = "🇷🇺",
+            countries = listOf(
+                Country("RU", "Russia", "🇷🇺"),
+                Country("KZ", "Kazakhstan", "🇰🇿"),
+                Country("BY", "Belarus", "🇧🇾"),
+                Country("UA", "Ukraine", "🇺🇦"),
+                Country("KG", "Kyrgyzstan", "🇰🇬")
             )
         )
     )

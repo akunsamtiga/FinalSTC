@@ -1330,7 +1330,7 @@ private fun StatsUserCardWithActions(
                                         }
                                     },
                                     onClick = {
-                                        onQuickEditAddedBy("id_terdaftar@stockity.id")
+                                        onQuickEditAddedBy("ID Terdaftar")
                                         showAddedByMenu = false
                                     }
                                 )
@@ -1354,7 +1354,7 @@ private fun StatsUserCardWithActions(
                                         }
                                     },
                                     onClick = {
-                                        onQuickEditAddedBy("id_tidak_terdaftar@stockity.id")
+                                        onQuickEditAddedBy("ID Tidak Terdaftar")
                                         showAddedByMenu = false
                                     }
                                 )

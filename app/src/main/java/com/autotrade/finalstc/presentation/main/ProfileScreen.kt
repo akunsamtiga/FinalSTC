@@ -45,6 +45,7 @@ import kotlinx.coroutines.launch
 import com.autotrade.finalstc.presentation.login.components.LanguageSelectorDialog
 import android.content.Intent
 import android.net.Uri
+import android.util.Log
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.ui.platform.LocalContext
@@ -52,6 +53,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.window.Dialog
+import com.autotrade.finalstc.data.model.UserProfileData
+import com.autotrade.finalstc.data.repository.ProfileRepository
 
 private val DarkBackground = Color(0xFF1B1B1B)
 private val DarkSurface = Color(0xFF1F1F1F)
@@ -69,8 +72,15 @@ private val DangerRed = Color(0xFFE53935)
 @HiltViewModel
 class ProfileViewModel @Inject constructor(
     private val firebaseRepository: FirebaseRepository,
-    private val languageManager: LanguageManager
+    private val languageManager: LanguageManager,
+    private val profileRepository: ProfileRepository
 ) : ViewModel() {
+
+    private val _userProfile = MutableStateFlow<UserProfileData?>(null)
+    val userProfile: StateFlow<UserProfileData?> = _userProfile.asStateFlow()
+
+    private val _isLoadingProfile = MutableStateFlow(false)
+    val isLoadingProfile: StateFlow<Boolean> = _isLoadingProfile.asStateFlow()
 
     private val _isAdmin = MutableStateFlow(false)
     val isAdmin: StateFlow<Boolean> = _isAdmin.asStateFlow()
@@ -92,6 +102,21 @@ class ProfileViewModel @Inject constructor(
         object Loading : DeleteAccountState()
         data class Success(val message: String) : DeleteAccountState()
         data class Error(val message: String) : DeleteAccountState()
+    }
+
+    fun loadUserProfile() {
+        viewModelScope.launch {
+            _isLoadingProfile.value = true
+            profileRepository.getUserProfile()
+                .onSuccess { profile ->
+                    _userProfile.value = profile
+                    _isLoadingProfile.value = false
+                }
+                .onFailure { error ->
+                    Log.e("ProfileViewModel", "Failed to load profile: ${error.message}")
+                    _isLoadingProfile.value = false
+                }
+        }
     }
 
     fun checkAdminStatus(email: String) {
@@ -170,9 +195,13 @@ fun ProfileScreen(
     val dashboardUiState by dashboardViewModel.uiState.collectAsStateWithLifecycle()
     val currentCurrency = dashboardUiState.currencySettings.selectedCurrency
 
+    val userProfile by profileViewModel.userProfile.collectAsStateWithLifecycle()
+    val isLoadingProfile by profileViewModel.isLoadingProfile.collectAsStateWithLifecycle()
+
     LaunchedEffect(userSession?.email) {
         userSession?.email?.let { email ->
             profileViewModel.checkAdminStatus(email)
+            profileViewModel.loadUserProfile()
         }
     }
 
@@ -512,45 +541,201 @@ fun ProfileScreen(
                         iconColor = StatusBlue
                     ) {
                         userSession?.let { session ->
-                            ProfileDetailItem(
-                                icon = Icons.Outlined.Badge,
-                                label = StringsManager.getFullName(lang),
-                                value = extractNameFromEmail(session.email),
-                                iconColor = StatusBlue
-                            )
-                            Divider(
-                                color = BorderColor,
-                                thickness = 1.dp,
-                                modifier = Modifier.padding(vertical = 8.dp)
-                            )
-                            ProfileDetailItem(
-                                icon = Icons.Outlined.Fingerprint,
-                                label = StringsManager.getUserId(lang),
-                                value = session.userId,
-                                iconColor = WifiGreen
-                            )
-                            Divider(
-                                color = BorderColor,
-                                thickness = 1.dp,
-                                modifier = Modifier.padding(vertical = 8.dp)
-                            )
-                            ProfileDetailItem(
-                                icon = Icons.Outlined.Email,
-                                label = StringsManager.getEmailAddress(lang),
-                                value = session.email,
-                                iconColor = AccentSecondary
-                            )
-                            Divider(
-                                color = BorderColor,
-                                thickness = 1.dp,
-                                modifier = Modifier.padding(vertical = 8.dp)
-                            )
-                            ProfileDetailItem(
-                                icon = Icons.Outlined.Public,
-                                label = StringsManager.getTimezone(lang),
-                                value = session.userTimezone,
-                                iconColor = AccentWarning
-                            )
+                            if (isLoadingProfile) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(200.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    CircularProgressIndicator(
+                                        color = StatusBlue,
+                                        strokeWidth = 2.dp
+                                    )
+                                }
+                            } else {
+                                // Full Name
+                                ProfileDetailItem(
+                                    icon = Icons.Outlined.Badge,
+                                    label = StringsManager.getFullName(lang),
+                                    value = userProfile?.getFullName() ?: extractNameFromEmail(session.email),
+                                    iconColor = StatusBlue
+                                )
+
+                                Divider(color = BorderColor, thickness = 1.dp, modifier = Modifier.padding(vertical = 8.dp))
+
+                                // User ID
+                                ProfileDetailItem(
+                                    icon = Icons.Outlined.Fingerprint,
+                                    label = StringsManager.getUserId(lang),
+                                    value = session.userId,
+                                    iconColor = WifiGreen
+                                )
+
+                                Divider(color = BorderColor, thickness = 1.dp, modifier = Modifier.padding(vertical = 8.dp))
+
+                                // Email
+                                ProfileDetailItem(
+                                    icon = Icons.Outlined.Email,
+                                    label = StringsManager.getEmailAddress(lang),
+                                    value = session.email,
+                                    iconColor = AccentSecondary
+                                )
+
+                                // Email Verified
+                                userProfile?.let { profile ->
+                                    Divider(color = BorderColor, thickness = 1.dp, modifier = Modifier.padding(vertical = 8.dp))
+                                    ProfileDetailItem(
+                                        icon = Icons.Outlined.VerifiedUser,
+                                        label = when(lang) {
+                                            "id" -> "Status Email"
+                                            "en" -> "Email Status"
+                                            "es" -> "Estado de Email"
+                                            "vi" -> "Trạng thái Email"
+                                            "tr" -> "E-posta Durumu"
+                                            "hi" -> "ईमेल स्थिति"
+                                            "ms" -> "Status Email"
+                                            else -> "Email Status"
+                                        },
+                                        value = getVerifiedStatus(profile.emailVerified, lang),
+                                        iconColor = if (profile.emailVerified) WifiGreen else AccentWarning
+                                    )
+                                }
+
+                                // Phone Number
+                                userProfile?.phone?.let { phone ->
+                                    if (phone.isNotEmpty()) {
+                                        Divider(color = BorderColor, thickness = 1.dp, modifier = Modifier.padding(vertical = 8.dp))
+                                        ProfileDetailItem(
+                                            icon = Icons.Outlined.Phone,
+                                            label = when(lang) {
+                                                "id" -> "Nomor Telepon"
+                                                "en" -> "Phone Number"
+                                                "es" -> "Número de Teléfono"
+                                                "vi" -> "Số Điện Thoại"
+                                                "tr" -> "Telefon Numarası"
+                                                "hi" -> "फ़ोन नंबर"
+                                                "ms" -> "Nombor Telefon"
+                                                else -> "Phone Number"
+                                            },
+                                            value = phone,
+                                            iconColor = StatusBlue
+                                        )
+                                    }
+                                }
+
+                                // Phone Verified
+                                userProfile?.let { profile ->
+                                    if (!profile.phone.isNullOrEmpty()) {
+                                        Divider(color = BorderColor, thickness = 1.dp, modifier = Modifier.padding(vertical = 8.dp))
+                                        ProfileDetailItem(
+                                            icon = Icons.Outlined.PhoneAndroid,
+                                            label = when(lang) {
+                                                "id" -> "Status Telepon"
+                                                "en" -> "Phone Status"
+                                                "es" -> "Estado de Teléfono"
+                                                "vi" -> "Trạng thái Điện thoại"
+                                                "tr" -> "Telefon Durumu"
+                                                "hi" -> "फ़ोन स्थिति"
+                                                "ms" -> "Status Telefon"
+                                                else -> "Phone Status"
+                                            },
+                                            value = getVerifiedStatus(profile.phoneVerified, lang),
+                                            iconColor = if (profile.phoneVerified) WifiGreen else AccentWarning
+                                        )
+                                    }
+                                }
+
+                                // Gender
+                                userProfile?.gender?.let { gender ->
+                                    Divider(color = BorderColor, thickness = 1.dp, modifier = Modifier.padding(vertical = 8.dp))
+                                    ProfileDetailItem(
+                                        icon = Icons.Outlined.Person,
+                                        label = when(lang) {
+                                            "id" -> "Jenis Kelamin"
+                                            "en" -> "Gender"
+                                            "es" -> "Género"
+                                            "vi" -> "Giới tính"
+                                            "tr" -> "Cinsiyet"
+                                            "hi" -> "लिंग"
+                                            "ms" -> "Jantina"
+                                            else -> "Gender"
+                                        },
+                                        value = getGenderDisplay(gender, lang),
+                                        iconColor = AccentSecondary
+                                    )
+                                }
+
+                                // Country
+                                userProfile?.country?.let { country ->
+                                    Divider(color = BorderColor, thickness = 1.dp, modifier = Modifier.padding(vertical = 8.dp))
+                                    ProfileDetailItem(
+                                        icon = Icons.Outlined.Flag,
+                                        label = when(lang) {
+                                            "id" -> "Negara"
+                                            "en" -> "Country"
+                                            "es" -> "País"
+                                            "vi" -> "Quốc gia"
+                                            "tr" -> "Ülke"
+                                            "hi" -> "देश"
+                                            "ms" -> "Negara"
+                                            else -> "Country"
+                                        },
+                                        value = getCountryDisplayName(country),
+                                        iconColor = StatusBlue
+                                    )
+                                }
+
+                                // Birthday
+                                userProfile?.birthday?.let { birthday ->
+                                    Divider(color = BorderColor, thickness = 1.dp, modifier = Modifier.padding(vertical = 8.dp))
+                                    ProfileDetailItem(
+                                        icon = Icons.Outlined.Cake,
+                                        label = when(lang) {
+                                            "id" -> "Tanggal Lahir"
+                                            "en" -> "Birthday"
+                                            "es" -> "Fecha de Nacimiento"
+                                            "vi" -> "Ngày sinh"
+                                            "tr" -> "Doğum Tarihi"
+                                            "hi" -> "जन्म तिथि"
+                                            "ms" -> "Tarikh Lahir"
+                                            else -> "Birthday"
+                                        },
+                                        value = formatDate(birthday),
+                                        iconColor = AccentWarning
+                                    )
+                                }
+
+                                // Registered At
+                                userProfile?.registeredAt?.let { registeredAt ->
+                                    Divider(color = BorderColor, thickness = 1.dp, modifier = Modifier.padding(vertical = 8.dp))
+                                    ProfileDetailItem(
+                                        icon = Icons.Outlined.CalendarToday,
+                                        label = when(lang) {
+                                            "id" -> "Terdaftar Sejak"
+                                            "en" -> "Registered Since"
+                                            "es" -> "Registrado desde"
+                                            "vi" -> "Đăng ký từ"
+                                            "tr" -> "Kayıt Tarihi"
+                                            "hi" -> "पंजीकृत तिथि"
+                                            "ms" -> "Didaftarkan Sejak"
+                                            else -> "Registered Since"
+                                        },
+                                        value = formatDate(registeredAt),
+                                        iconColor = WifiGreen
+                                    )
+                                }
+
+                                Divider(color = BorderColor, thickness = 1.dp, modifier = Modifier.padding(vertical = 8.dp))
+
+                                // Timezone
+                                ProfileDetailItem(
+                                    icon = Icons.Outlined.Public,
+                                    label = StringsManager.getTimezone(lang),
+                                    value = session.userTimezone,
+                                    iconColor = AccentWarning
+                                )
+                            }
                         }
                     }
 
@@ -589,7 +774,7 @@ fun ProfileScreen(
                                 iconColor = WifiGreen
                             )
 
-                            // ✅ Tombol Hapus Akun dipindahkan ke sini
+                            // ✓ Tombol Hapus Akun dipindahkan ke sini
                             Divider(
                                 color = BorderColor,
                                 thickness = 1.dp,
@@ -636,6 +821,7 @@ fun ProfileScreen(
                         }
                     }
 
+                    // Update tombol bahasa dengan versi yang lebih bersih
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -678,32 +864,14 @@ fun ProfileScreen(
                                     Spacer(modifier = Modifier.width(12.dp))
                                     Column {
                                         Text(
-                                            text = when(lang) {
-                                                "id" -> "Bahasa"
-                                                "en" -> "Language"
-                                                "es" -> "Idioma"
-                                                "vi" -> "Ngôn Ngữ"
-                                                "tr" -> "Dil"
-                                                "hi" -> "भाषा"
-                                                "ms" -> "Bahasa"
-                                                else -> "Language"
-                                            },
+                                            text = StringsManager.getSelectLanguage(lang),
                                             fontSize = 16.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = TextPrimary,
                                             letterSpacing = 0.5.sp
                                         )
                                         Text(
-                                            text = when(lang) {
-                                                "id" -> "Bahasa Indonesia"
-                                                "en" -> "English"
-                                                "es" -> "Español"
-                                                "vi" -> "Tiếng Việt"
-                                                "tr" -> "Türkçe"
-                                                "hi" -> "हिन्दी"
-                                                "ms" -> "Bahasa Melayu"
-                                                else -> "Language"
-                                            },
+                                            text = getLanguageDisplayName(lang),
                                             fontSize = 13.sp,
                                             color = TextSecondary,
                                             modifier = Modifier.padding(top = 2.dp)
@@ -714,37 +882,7 @@ fun ProfileScreen(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
-                                        text = when (currentCountry) {
-                                            "ID" -> "🇮🇩"
-                                            "NG" -> "🇳🇬"
-                                            "PH" -> "🇵🇭"
-                                            "ZA" -> "🇿🇦"
-                                            "KE" -> "🇰🇪"
-                                            "GB" -> "🇬🇧"
-                                            "UA" -> "🇺🇦"
-                                            "MX" -> "🇲🇽"
-                                            "CL" -> "🇨🇱"
-                                            "CO" -> "🇨🇴"
-                                            "CR" -> "🇨🇷"
-                                            "DO" -> "🇩🇴"
-                                            "EC" -> "🇪🇨"
-                                            "SV" -> "🇸🇻"
-                                            "GT" -> "🇬🇹"
-                                            "HN" -> "🇭🇳"
-                                            "PA" -> "🇵🇦"
-                                            "PY" -> "🇵🇾"
-                                            "PE" -> "🇵🇪"
-                                            "UY" -> "🇺🇾"
-                                            "VE" -> "🇻🇪"
-                                            "BR" -> "🇧🇷"
-                                            "VN" -> "🇻🇳"
-                                            "LA" -> "🇱🇦"
-                                            "TH" -> "🇹🇭"
-                                            "TR" -> "🇹🇷"
-                                            "IN" -> "🇮🇳"
-                                            "MY" -> "🇲🇾"
-                                            else -> "🌐"
-                                        },
+                                        text = getCountryFlag(currentCountry),
                                         fontSize = 24.sp
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
@@ -865,7 +1003,7 @@ fun ProfileScreen(
         }
     }
 
-    // Logout Dialog
+// Logout Dialog
     if (showLogoutDialog) {
         AlertDialog(
             onDismissRequest = { showLogoutDialog = false },
@@ -1550,4 +1688,207 @@ private fun getAndroidVersionName(): String {
         else -> "Android ${Build.VERSION.RELEASE}"
     }
     return "$versionName (API ${Build.VERSION.SDK_INT})"
+}
+
+// Tambahkan helper function di bagian atas file (setelah private val declarations)
+private fun getCountryFlag(countryCode: String): String {
+    return when(countryCode) {
+        "ID" -> "🇮🇩"
+        "NG" -> "🇳🇬"
+        "ZA" -> "🇿🇦"
+        "KE" -> "🇰🇪"
+        "GH" -> "🇬🇭"
+        "UG" -> "🇺🇬"
+        "TZ" -> "🇹🇿"
+        "ET" -> "🇪🇹"
+        "PH" -> "🇵🇭"
+        "SG" -> "🇸🇬"
+        "HK" -> "🇭🇰"
+        "GB" -> "🇬🇧"
+        "UA" -> "🇺🇦"
+        "PL" -> "🇵🇱"
+        "RO" -> "🇷🇴"
+        "CZ" -> "🇨🇿"
+        "MX" -> "🇲🇽"
+        "AR" -> "🇦🇷"
+        "CL" -> "🇨🇱"
+        "CO" -> "🇨🇴"
+        "PE" -> "🇵🇪"
+        "VE" -> "🇻🇪"
+        "CR" -> "🇨🇷"
+        "EC" -> "🇪🇨"
+        "UY" -> "🇺🇾"
+        "PY" -> "🇵🇾"
+        "BO" -> "🇧🇴"
+        "SV" -> "🇸🇻"
+        "GT" -> "🇬🇹"
+        "HN" -> "🇭🇳"
+        "PA" -> "🇵🇦"
+        "DO" -> "🇩🇴"
+        "CU" -> "🇨🇺"
+        "VN" -> "🇻🇳"
+        "LA" -> "🇱🇦"
+        "TH" -> "🇹🇭"
+        "KH" -> "🇰🇭"
+        "TR" -> "🇹🇷"
+        "CY" -> "🇨🇾"
+        "IN" -> "🇮🇳"
+        "NP" -> "🇳🇵"
+        "FJ" -> "🇫🇯"
+        "MY" -> "🇲🇾"
+        "BN" -> "🇧🇳"
+        "BD" -> "🇧🇩"
+        "PK" -> "🇵🇰"
+        "BR" -> "🇧🇷"
+        "RU" -> "🇷🇺"
+        "KZ" -> "🇰🇿"
+        "BY" -> "🇧🇾"
+        "KG" -> "🇰🇬"
+        else -> "🌐"
+    }
+}
+private fun getLanguageDisplayName(lang: String): String {
+    return when (lang) {
+        "id" -> "Bahasa Indonesia"
+        "en" -> "English"
+        "es" -> "Español"
+        "vi" -> "Tiếng Việt"
+        "tr" -> "Türkçe"
+        "hi" -> "हिन्दी"
+        "ms" -> "Bahasa Melayu"
+        "bn" -> "বাংলা"
+        "ru" -> "Русский"
+        else -> "Language"
+    }
+}
+
+private fun getCountryDisplayName(countryCode: String): String {
+    return when (countryCode) {
+        "ID" -> "Indonesia"
+        "NG" -> "Nigeria"
+        "ZA" -> "South Africa"
+        "KE" -> "Kenya"
+        "GH" -> "Ghana"
+        "UG" -> "Uganda"
+        "TZ" -> "Tanzania"
+        "ET" -> "Ethiopia"
+        "PH" -> "Philippines"
+        "SG" -> "Singapore"
+        "HK" -> "Hong Kong"
+        "GB" -> "United Kingdom"
+        "UA" -> "Ukraine"
+        "PL" -> "Poland"
+        "RO" -> "Romania"
+        "CZ" -> "Czech Republic"
+        "MX" -> "México"
+        "AR" -> "Argentina"
+        "CL" -> "Chile"
+        "CO" -> "Colombia"
+        "PE" -> "Perú"
+        "VE" -> "Venezuela"
+        "CR" -> "Costa Rica"
+        "EC" -> "Ecuador"
+        "UY" -> "Uruguay"
+        "PY" -> "Paraguay"
+        "BO" -> "Bolivia"
+        "SV" -> "El Salvador"
+        "GT" -> "Guatemala"
+        "HN" -> "Honduras"
+        "PA" -> "Panamá"
+        "DO" -> "República Dominicana"
+        "CU" -> "Cuba"
+        "VN" -> "Việt Nam"
+        "LA" -> "Laos"
+        "TH" -> "Thailand"
+        "KH" -> "Cambodia"
+        "TR" -> "Türkiye"
+        "CY" -> "Cyprus"
+        "IN" -> "India"
+        "NP" -> "Nepal"
+        "FJ" -> "Fiji"
+        "MY" -> "Malaysia"
+        "BN" -> "Brunei"
+        "BD" -> "Bangladesh"
+        "PK" -> "Pakistan"
+        "BR" -> "Brazil"
+        "RU" -> "Russia"
+        "KZ" -> "Kazakhstan"
+        "BY" -> "Belarus"
+        "KG" -> "Kyrgyzstan"
+        else -> countryCode
+    }
+}
+
+private fun formatDate(dateString: String?): String {
+    if (dateString.isNullOrEmpty()) return "-"
+
+    return try {
+        val inputFormat = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'", java.util.Locale.getDefault())
+        inputFormat.timeZone = java.util.TimeZone.getTimeZone("UTC")
+        val date = inputFormat.parse(dateString)
+
+        val outputFormat = java.text.SimpleDateFormat("dd MMM yyyy", java.util.Locale.getDefault())
+        outputFormat.format(date ?: return "-")
+    } catch (e: Exception) {
+        try {
+            val simpleFormat = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+            val date = simpleFormat.parse(dateString)
+            val outputFormat = java.text.SimpleDateFormat("dd MMM yyyy", java.util.Locale.getDefault())
+            outputFormat.format(date ?: return "-")
+        } catch (e: Exception) {
+            dateString
+        }
+    }
+}
+
+private fun getGenderDisplay(gender: String?, lang: String): String {
+    return when (gender?.lowercase()) {
+        "male" -> when(lang) {
+            "id" -> "Laki-laki"
+            "en" -> "Male"
+            "es" -> "Masculino"
+            "vi" -> "Nam"
+            "tr" -> "Erkek"
+            "hi" -> "पुरुष"
+            "ms" -> "Lelaki"
+            else -> "Male"
+        }
+        "female" -> when(lang) {
+            "id" -> "Perempuan"
+            "en" -> "Female"
+            "es" -> "Femenino"
+            "vi" -> "Nữ"
+            "tr" -> "Kadın"
+            "hi" -> "महिला"
+            "ms" -> "Perempuan"
+            else -> "Female"
+        }
+        else -> "-"
+    }
+}
+
+private fun getVerifiedStatus(isVerified: Boolean, lang: String): String {
+    return if (isVerified) {
+        when(lang) {
+            "id" -> "Terverifikasi"
+            "en" -> "Verified"
+            "es" -> "Verificado"
+            "vi" -> "Đã xác minh"
+            "tr" -> "Doğrulandı"
+            "hi" -> "सत्यापित"
+            "ms" -> "Disahkan"
+            else -> "Verified"
+        }
+    } else {
+        when(lang) {
+            "id" -> "Belum Terverifikasi"
+            "en" -> "Not Verified"
+            "es" -> "No Verificado"
+            "vi" -> "Chưa xác minh"
+            "tr" -> "Doğrulanmadı"
+            "hi" -> "सत्यापित नहीं"
+            "ms" -> "Tidak Disahkan"
+            else -> "Not Verified"
+        }
+    }
 }

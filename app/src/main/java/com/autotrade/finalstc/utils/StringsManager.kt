@@ -2,7 +2,6 @@ package com.autotrade.finalstc.utils
 
 object StringsManager {
 
-    // Login Screen Strings
     fun getLoginTitle(lang: String) = when(lang) {
         "id" -> "Login"
         "en" -> "Login"
@@ -11,6 +10,8 @@ object StringsManager {
         "tr" -> "Giriş"
         "hi" -> "लॉगिन"
         "ms" -> "Log Masuk"
+        "bn" -> "লগইন"
+        "ru" -> "Вход"
         else -> "Login"
     }
 
@@ -22,6 +23,8 @@ object StringsManager {
         "tr" -> "E-posta"
         "hi" -> "ईमेल"
         "ms" -> "E-mel"
+        "bn" -> "ইমেল"
+        "ru" -> "Электронная почта"
         else -> "Email"
     }
 
@@ -33,6 +36,8 @@ object StringsManager {
         "tr" -> "Şifre"
         "hi" -> "पासवर्ड"
         "ms" -> "Kata Laluan"
+        "bn" -> "পাসওয়ার্ড"
+        "ru" -> "Пароль"
         else -> "Password"
     }
 
@@ -44,6 +49,8 @@ object StringsManager {
         "tr" -> "Beni hatırla"
         "hi" -> "मुझे याद रखें"
         "ms" -> "Ingat saya"
+        "bn" -> "আমাকে মনে রাখুন"
+        "ru" -> "Запомнить меня"
         else -> "Ingat saya"
     }
 
@@ -55,6 +62,8 @@ object StringsManager {
         "tr" -> "Giriş Yap"
         "hi" -> "साइन इन करें"
         "ms" -> "Log Masuk"
+        "bn" -> "সাইন ইন"
+        "ru" -> "Войти"
         else -> "Masuk"
     }
 
@@ -66,6 +75,8 @@ object StringsManager {
         "tr" -> "Hesap Oluştur"
         "hi" -> "खाता बनाएं"
         "ms" -> "Daftar Akaun"
+        "bn" -> "অ্যাকাউন্ট তৈরি করুন"
+        "ru" -> "Создать аккаунт"
         else -> "Daftar Akun"
     }
 
@@ -77,6 +88,8 @@ object StringsManager {
         "tr" -> "Yardıma İhtiyacınız Var mı?"
         "hi" -> "मदद चाहिए?"
         "ms" -> "Perlukan Bantuan?"
+        "bn" -> "সাহায্য প্রয়োজন?"
+        "ru" -> "Нужна помощь?"
         else -> "Butuh Bantuan?"
     }
 
@@ -88,6 +101,8 @@ object StringsManager {
         "tr" -> "veya"
         "hi" -> "या"
         "ms" -> "atau"
+        "bn" -> "অথবা"
+        "ru" -> "или"
         else -> "atau"
     }
 
@@ -100,6 +115,8 @@ object StringsManager {
         "tr" -> "E-posta boş olamaz"
         "hi" -> "ईमेल खाली नहीं हो सकता"
         "ms" -> "E-mel tidak boleh kosong"
+        "bn" -> "ইমেল খালি থাকতে পারে না"
+        "ru" -> "Email не может быть пустым"
         else -> "Email tidak boleh kosong"
     }
 
@@ -111,6 +128,8 @@ object StringsManager {
         "tr" -> "Şifre boş olamaz"
         "hi" -> "पासवर्ड खाली नहीं हो सकता"
         "ms" -> "Kata laluan tidak boleh kosong"
+        "bn" -> "পাসওয়ার্ড খালি থাকতে পারে না"
+        "ru" -> "Пароль не может быть пустым"
         else -> "Password tidak boleh kosong"
     }
 
@@ -122,6 +141,8 @@ object StringsManager {
         "tr" -> "Geçersiz e-posta formatı"
         "hi" -> "अमान्य ईमेल प्रारूप"
         "ms" -> "Format e-mel tidak sah"
+        "bn" -> "অবৈধ ইমেল ফরম্যাট"
+        "ru" -> "Неверный формат email"
         else -> "Format email tidak valid"
     }
 
@@ -133,6 +154,8 @@ object StringsManager {
         "tr" -> "Şifre en az 6 karakter olmalıdır"
         "hi" -> "पासवर्ड कम से कम 6 अक्षर का होना चाहिए"
         "ms" -> "Kata laluan mestilah sekurang-kurangnya 6 aksara"
+        "bn" -> "পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে"
+        "ru" -> "Пароль должен содержать минимум 6 символов"
         else -> "Password minimal 6 karakter"
     }
 
@@ -145,6 +168,8 @@ object StringsManager {
         "tr" -> "Yükleniyor..."
         "hi" -> "लोड हो रहा है..."
         "ms" -> "Memuatkan..."
+        "bn" -> "লোড হচ্ছে..."
+        "ru" -> "Загрузка..."
         else -> "Sedang memuat..."
     }
 
@@ -156,6 +181,8 @@ object StringsManager {
         "tr" -> "Stockity sunucusuna bağlanılıyor..."
         "hi" -> "Stockity सर्वर से कनेक्ट हो रहा है..."
         "ms" -> "Menghubungi pelayan Stockity..."
+        "bn" -> "Stockity সার্ভারে সংযোগ করা হচ্ছে..."
+        "ru" -> "Подключение к серверу Stockity..."
         else -> "Menghubungi server Stockity..."
     }
 
@@ -167,6 +194,8 @@ object StringsManager {
         "tr" -> "Stockity ile kimlik doğrulanıyor..."
         "hi" -> "Stockity के साथ प्रमाणित हो रहा है..."
         "ms" -> "Mengesahkan dengan Stockity..."
+        "bn" -> "Stockity এর সাথে প্রমাণীকরণ করা হচ্ছে..."
+        "ru" -> "Аутентификация в Stockity..."
         else -> "Melakukan autentikasi Stockity..."
     }
 
@@ -178,6 +207,8 @@ object StringsManager {
         "tr" -> "Uygulama erişimi kontrol ediliyor..."
         "hi" -> "ऐप एक्सेस की जांच हो रही है..."
         "ms" -> "Memeriksa akses aplikasi..."
+        "bn" -> "অ্যাপ অ্যাক্সেস পরীক্ষা করা হচ্ছে..."
+        "ru" -> "Проверка доступа к приложению..."
         else -> "Memeriksa akses aplikasi..."
     }
 
@@ -189,6 +220,8 @@ object StringsManager {
         "tr" -> "Giriş başarılı!"
         "hi" -> "लॉगिन सफल!"
         "ms" -> "Log masuk berjaya!"
+        "bn" -> "লগইন সফল!"
+        "ru" -> "Вход выполнен успешно!"
         else -> "Login berhasil!"
     }
 
@@ -200,6 +233,8 @@ object StringsManager {
         "tr" -> "Şifreyi göster"
         "hi" -> "पासवर्ड दिखाएं"
         "ms" -> "Tunjukkan kata laluan"
+        "bn" -> "পাসওয়ার্ড দেখান"
+        "ru" -> "Показать пароль"
         else -> "Tampilkan password"
     }
 
@@ -211,6 +246,8 @@ object StringsManager {
         "tr" -> "Şifreyi gizle"
         "hi" -> "पासवर्ड छुपाएं"
         "ms" -> "Sembunyikan kata laluan"
+        "bn" -> "পাসওয়ার্ড লুকান"
+        "ru" -> "Скрыть пароль"
         else -> "Sembunyikan password"
     }
 
@@ -222,6 +259,8 @@ object StringsManager {
         "tr" -> "Dil Seçin"
         "hi" -> "भाषा चुनें"
         "ms" -> "Pilih Bahasa"
+        "bn" -> "ভাষা নির্বাচন করুন"
+        "ru" -> "Выберите язык"
         else -> "Pilih Bahasa"
     }
 
@@ -233,17 +272,21 @@ object StringsManager {
         "tr" -> "Ülke Seçin"
         "hi" -> "देश चुनें"
         "ms" -> "Pilih Negara"
+        "bn" -> "দেশ নির্বাচন করুন"
+        "ru" -> "Выберите страну"
         else -> "Pilih Negara"
     }
 
     fun getTradingHistory(lang: String) = when(lang) {
         "id" -> "Riwayat Trading"
-        "en" -> "Trading Trading"
+        "en" -> "Trading History"
         "es" -> "Historial de Trading"
         "vi" -> "Lịch Sử Giao Dịch"
         "tr" -> "İşlem Geçmişi"
         "hi" -> "ट्रेडिंग इतिहास"
         "ms" -> "Sejarah Dagangan"
+        "bn" -> "ট্রেডিং ইতিহাস"
+        "ru" -> "История торговли"
         else -> "Riwayat Trading"
     }
 
@@ -255,6 +298,8 @@ object StringsManager {
         "tr" -> "Demo"
         "hi" -> "डेमो"
         "ms" -> "Demo"
+        "bn" -> "ডেমো"
+        "ru" -> "Демо"
         else -> "Demo"
     }
 
@@ -266,6 +311,8 @@ object StringsManager {
         "tr" -> "Gerçek"
         "hi" -> "असली"
         "ms" -> "Sebenar"
+        "bn" -> "আসল"
+        "ru" -> "Реальный"
         else -> "Real"
     }
 
@@ -277,6 +324,8 @@ object StringsManager {
         "tr" -> "BU HAFTA"
         "hi" -> "इस सप्ताह"
         "ms" -> "MINGGU INI"
+        "bn" -> "এই সপ্তাহ"
+        "ru" -> "НА ЭТОЙ НЕДЕЛЕ"
         else -> "MINGGU INI"
     }
 
@@ -288,6 +337,8 @@ object StringsManager {
         "tr" -> "Filtre"
         "hi" -> "फ़िल्टर"
         "ms" -> "Tapis"
+        "bn" -> "ফিল্টার"
+        "ru" -> "Фильтр"
         else -> "Filter"
     }
 
@@ -299,6 +350,8 @@ object StringsManager {
         "tr" -> "Hesap Değiştir"
         "hi" -> "खाता बदलें"
         "ms" -> "Tukar Akaun"
+        "bn" -> "অ্যাকাউন্ট পরিবর্তন করুন"
+        "ru" -> "Переключить аккаунт"
         else -> "Tukar Akun"
     }
 
@@ -310,6 +363,8 @@ object StringsManager {
         "tr" -> "Bu Hafta Performansı"
         "hi" -> "इस सप्ताह का प्रदर्शन"
         "ms" -> "Prestasi Minggu Ini"
+        "bn" -> "এই সপ্তাহের পারফরম্যান্স"
+        "ru" -> "Производительность недели"
         else -> "Performa Minggu Ini"
     }
 
@@ -321,6 +376,8 @@ object StringsManager {
         "tr" -> "Kazanma Oranı"
         "hi" -> "जीत दर"
         "ms" -> "Kadar Menang"
+        "bn" -> "জয় হার"
+        "ru" -> "Процент побед"
         else -> "Win Rate"
     }
 
@@ -332,6 +389,8 @@ object StringsManager {
         "tr" -> "Toplam K/Z"
         "hi" -> "कुल लाभ/हानि"
         "ms" -> "Jumlah K&R"
+        "bn" -> "মোট লাভ/ক্ষতি"
+        "ru" -> "Общая П/У"
         else -> "Total P&L"
     }
 
@@ -343,6 +402,8 @@ object StringsManager {
         "tr" -> "işlem"
         "hi" -> "ट्रेड"
         "ms" -> "dagangan"
+        "bn" -> "ট্রেড"
+        "ru" -> "сделок"
         else -> "trades"
     }
 
@@ -354,6 +415,8 @@ object StringsManager {
         "tr" -> "Bu hafta işlem yok"
         "hi" -> "इस सप्ताह कोई ट्रेड नहीं"
         "ms" -> "Tiada dagangan minggu ini"
+        "bn" -> "এই সপ্তাহে কোনো ট্রেড নেই"
+        "ru" -> "На этой неделе сделок нет"
         else -> "Tidak ada trading minggu ini"
     }
 
@@ -365,6 +428,8 @@ object StringsManager {
         "tr" -> "Toplam"
         "hi" -> "कुल"
         "ms" -> "Jumlah"
+        "bn" -> "মোট"
+        "ru" -> "Всего"
         else -> "Total"
     }
 
@@ -376,6 +441,8 @@ object StringsManager {
         "tr" -> "Tüm K/Z"
         "hi" -> "सभी लाभ/हानि"
         "ms" -> "Semua K&R"
+        "bn" -> "সব লাভ/ক্ষতি"
+        "ru" -> "Все П/У"
         else -> "Semua P&L"
     }
 
@@ -387,6 +454,8 @@ object StringsManager {
         "tr" -> "Miktar"
         "hi" -> "राशि"
         "ms" -> "Jumlah"
+        "bn" -> "পরিমাণ"
+        "ru" -> "Сумма"
         else -> "Jumlah"
     }
 
@@ -398,6 +467,8 @@ object StringsManager {
         "tr" -> "Yön"
         "hi" -> "दिशा"
         "ms" -> "Arah"
+        "bn" -> "দিক"
+        "ru" -> "Направление"
         else -> "Arah"
     }
 
@@ -409,6 +480,8 @@ object StringsManager {
         "tr" -> "Açılış"
         "hi" -> "खुला"
         "ms" -> "Buka"
+        "bn" -> "খোলা"
+        "ru" -> "Открыть"
         else -> "Buka"
     }
 
@@ -420,6 +493,8 @@ object StringsManager {
         "tr" -> "Kapanış"
         "hi" -> "बंद"
         "ms" -> "Tutup"
+        "bn" -> "বন্ধ"
+        "ru" -> "Закрыть"
         else -> "Tutup"
     }
 
@@ -431,6 +506,8 @@ object StringsManager {
         "tr" -> "Ödeme"
         "hi" -> "भुगतान"
         "ms" -> "Bayaran"
+        "bn" -> "প্রদান"
+        "ru" -> "Выплата"
         else -> "Payout"
     }
 
@@ -442,6 +519,8 @@ object StringsManager {
         "tr" -> "İşlem geçmişi yükleniyor..."
         "hi" -> "ट्रेडिंग इतिहास लोड हो रहा है..."
         "ms" -> "Memuatkan sejarah dagangan..."
+        "bn" -> "ট্রেডিং ইতিহাস লোড হচ্ছে..."
+        "ru" -> "Загрузка истории торговли..."
         else -> "Memuat riwayat trading..."
     }
 
@@ -453,6 +532,8 @@ object StringsManager {
         "tr" -> "Bir şeyler yanlış gitti"
         "hi" -> "कुछ गलत हो गया"
         "ms" -> "Sesuatu tidak kena"
+        "bn" -> "কিছু ভুল হয়েছে"
+        "ru" -> "Что-то пошло не так"
         else -> "Terjadi kesalahan"
     }
 
@@ -464,6 +545,8 @@ object StringsManager {
         "tr" -> "Kapat"
         "hi" -> "बंद करें"
         "ms" -> "Tutup"
+        "bn" -> "বন্ধ করুন"
+        "ru" -> "Закрыть"
         else -> "Tutup"
     }
 
@@ -473,8 +556,10 @@ object StringsManager {
         "es" -> "Reintentar"
         "vi" -> "Thử Lại"
         "tr" -> "Tekrar Dene"
-        "hi" -> "पुन: प्रयास करें"
+        "hi" -> "पुनः प्रयास करें"
         "ms" -> "Cuba Lagi"
+        "bn" -> "আবার চেষ্টা করুন"
+        "ru" -> "Повторить"
         else -> "Coba Lagi"
     }
 
@@ -486,6 +571,8 @@ object StringsManager {
         "tr" -> "İşlem geçmişi yok"
         "hi" -> "कोई ट्रेडिंग इतिहास नहीं"
         "ms" -> "Tiada sejarah dagangan"
+        "bn" -> "কোনো ট্রেডিং ইতিহাস নেই"
+        "ru" -> "История торговли отсутствует"
         else -> "Tidak ada riwayat trading"
     }
 
@@ -497,6 +584,8 @@ object StringsManager {
         "tr" -> "Geçmişinizi görmek için işlem yapmaya başlayın"
         "hi" -> "अपना इतिहास देखने के लिए ट्रेडिंग शुरू करें"
         "ms" -> "Mula berdagang untuk melihat sejarah anda di sini"
+        "bn" -> "এখানে আপনার ইতিহাস দেখতে ট্রেডিং শুরু করুন"
+        "ru" -> "Начните торговать, чтобы увидеть историю здесь"
         else -> "Mulai trading untuk melihat riwayat di sini"
     }
 
@@ -508,6 +597,8 @@ object StringsManager {
         "tr" -> "Son 7 günde işlem bulunamadı"
         "hi" -> "पिछले 7 दिनों में कोई ट्रेड नहीं मिला"
         "ms" -> "Tiada dagangan dijumpai dalam 7 hari terakhir"
+        "bn" -> "গত ৭ দিনে কোনো ট্রেড পাওয়া যায়নি"
+        "ru" -> "За последние 7 дней сделок не найдено"
         else -> "Tidak ditemukan trading dalam 7 hari terakhir"
     }
 
@@ -519,6 +610,8 @@ object StringsManager {
         "tr" -> "Daha fazla işlem görmek için filtreyi değiştirmeyi deneyin"
         "hi" -> "अधिक ट्रेड देखने के लिए फ़िल्टर बदलने का प्रयास करें"
         "ms" -> "Cuba tukar penapis untuk melihat lebih banyak dagangan"
+        "bn" -> "আরও ট্রেড দেখতে ফিল্টার পরিবর্তন করার চেষ্টা করুন"
+        "ru" -> "Попробуйте изменить фильтр, чтобы увидеть больше сделок"
         else -> "Coba ubah filter untuk melihat lebih banyak trading"
     }
 
@@ -530,6 +623,8 @@ object StringsManager {
         "tr" -> "İşlemleri Filtrele"
         "hi" -> "ट्रेड फ़िल्टर करें"
         "ms" -> "Tapis Dagangan"
+        "bn" -> "ট্রেড ফিল্টার করুন"
+        "ru" -> "Фильтровать сделки"
         else -> "Filter Trading"
     }
 
@@ -541,6 +636,8 @@ object StringsManager {
         "tr" -> "Tüm İşlemler"
         "hi" -> "सभी ट्रेड"
         "ms" -> "Semua Dagangan"
+        "bn" -> "সব ট্রেড"
+        "ru" -> "Все сделки"
         else -> "Semua Trading"
     }
 
@@ -552,6 +649,8 @@ object StringsManager {
         "tr" -> "Kazanılan İşlemler"
         "hi" -> "जीते गए ट्रेड"
         "ms" -> "Dagangan Menang"
+        "bn" -> "জিতে যাওয়া ট্রেড"
+        "ru" -> "Выигранные сделки"
         else -> "Trading Menang"
     }
 
@@ -563,6 +662,8 @@ object StringsManager {
         "tr" -> "Kaybedilen İşlemler"
         "hi" -> "हारे गए ट्रेड"
         "ms" -> "Dagangan Kalah"
+        "bn" -> "হারানো ট্রেড"
+        "ru" -> "Проигранные сделки"
         else -> "Trading Kalah"
     }
 
@@ -574,6 +675,8 @@ object StringsManager {
         "tr" -> "Açık İşlemler"
         "hi" -> "खुले ट्रेड"
         "ms" -> "Dagangan Terbuka"
+        "bn" -> "খোলা ট্রেড"
+        "ru" -> "Открытые сделки"
         else -> "Trading Terbuka"
     }
 
@@ -585,6 +688,8 @@ object StringsManager {
         "tr" -> "Kazanılan işlem yok"
         "hi" -> "कोई जीता हुआ ट्रेड नहीं"
         "ms" -> "Tiada dagangan menang"
+        "bn" -> "কোনো জয়ী ট্রেড নেই"
+        "ru" -> "Нет выигранных сделок"
         else -> "Tidak ada trading menang"
     }
 
@@ -596,6 +701,8 @@ object StringsManager {
         "tr" -> "Kaybedilen işlem yok"
         "hi" -> "कोई हारा हुआ ट्रेड नहीं"
         "ms" -> "Tiada dagangan kalah"
+        "bn" -> "কোনো হারানো ট্রেড নেই"
+        "ru" -> "Нет проигранных сделок"
         else -> "Tidak ada trading kalah"
     }
 
@@ -607,6 +714,8 @@ object StringsManager {
         "tr" -> "Açık işlem yok"
         "hi" -> "कोई खुला ट्रेड नहीं"
         "ms" -> "Tiada dagangan terbuka"
+        "bn" -> "কোনো খোলা ট্রেড নেই"
+        "ru" -> "Нет открытых сделок"
         else -> "Tidak ada trading terbuka"
     }
 
@@ -618,6 +727,8 @@ object StringsManager {
         "tr" -> "BUGÜNKÜ KAR"
         "hi" -> "आज का लाभ"
         "ms" -> "KEUNTUNGAN HARI INI"
+        "bn" -> "আজকের লাভ"
+        "ru" -> "ПРИБЫЛЬ СЕГОДНЯ"
         else -> "PROFIT HARI INI"
     }
 
@@ -629,6 +740,8 @@ object StringsManager {
         "tr" -> "Veriler yenileniyor..."
         "hi" -> "डेटा रीफ़्रेश हो रहा है..."
         "ms" -> "Menyegarkan data..."
+        "bn" -> "ডেটা রিফ্রেশ হচ্ছে..."
+        "ru" -> "Обновление данных..."
         else -> "Memperbarui data..."
     }
 
@@ -640,6 +753,8 @@ object StringsManager {
         "tr" -> "Hesaplanıyor..."
         "hi" -> "गणना हो रही है..."
         "ms" -> "Mengira..."
+        "bn" -> "গণনা করা হচ্ছে..."
+        "ru" -> "Вычисление..."
         else -> "Menghitung..."
     }
 
@@ -651,6 +766,8 @@ object StringsManager {
         "tr" -> "Yenilemek için dokunun"
         "hi" -> "रीफ़्रेश करने के लिए टैप करें"
         "ms" -> "Ketik untuk menyegarkan"
+        "bn" -> "রিফ্রেশ করতে ট্যাপ করুন"
+        "ru" -> "Нажмите для обновления"
         else -> "Ketuk untuk memperbarui"
     }
 
@@ -662,6 +779,8 @@ object StringsManager {
         "tr" -> "Yeniden hesaplamak için basılı tutun"
         "hi" -> "पुनर्गणना के लिए लंबे समय तक दबाएं"
         "ms" -> "Tekan lama untuk mengira semula"
+        "bn" -> "পুনর্গণনার জন্য দীর্ঘ চাপুন"
+        "ru" -> "Удерживайте для пересчета"
         else -> "Tekan lama untuk kalkulasi ulang"
     }
 
@@ -674,6 +793,8 @@ object StringsManager {
         "tr" -> "Bot Kontrolü"
         "hi" -> "बॉट नियंत्रण"
         "ms" -> "Kawalan Bot"
+        "bn" -> "বট নিয়ন্ত্রণ"
+        "ru" -> "Управление ботом"
         else -> "Kontrol Bot"
     }
 
@@ -685,6 +806,8 @@ object StringsManager {
         "tr" -> "Çalışıyor"
         "hi" -> "चल रहा है"
         "ms" -> "Berjalan"
+        "bn" -> "চলছে"
+        "ru" -> "Работает"
         else -> "Berjalan"
     }
 
@@ -696,6 +819,8 @@ object StringsManager {
         "tr" -> "Duraklatıldı"
         "hi" -> "रोका गया"
         "ms" -> "Dijeda"
+        "bn" -> "বিরতি"
+        "ru" -> "Приостановлен"
         else -> "Dijeda"
     }
 
@@ -707,6 +832,8 @@ object StringsManager {
         "tr" -> "Durduruldu"
         "hi" -> "बंद"
         "ms" -> "Berhenti"
+        "bn" -> "থামানো"
+        "ru" -> "Остановлен"
         else -> "Berhenti"
     }
 
@@ -718,6 +845,8 @@ object StringsManager {
         "tr" -> "Duraklat"
         "hi" -> "रोकें"
         "ms" -> "Jeda"
+        "bn" -> "বিরতি দিন"
+        "ru" -> "Пауза"
         else -> "Jeda"
     }
 
@@ -729,6 +858,8 @@ object StringsManager {
         "tr" -> "Devam Et"
         "hi" -> "फिर से शुरू करें"
         "ms" -> "Sambung"
+        "bn" -> "পুনরায় শুরু করুন"
+        "ru" -> "Возобновить"
         else -> "Lanjutkan"
     }
 
@@ -740,6 +871,8 @@ object StringsManager {
         "tr" -> "Durdur"
         "hi" -> "बंद करें"
         "ms" -> "Hentikan"
+        "bn" -> "থামান"
+        "ru" -> "Остановить"
         else -> "Hentikan"
     }
 
@@ -751,6 +884,8 @@ object StringsManager {
         "tr" -> "Piyasa verileri analiz ediliyor"
         "hi" -> "बाजार डेटा का विश्लेषण"
         "ms" -> "Menganalisis data pasaran"
+        "bn" -> "বাজারের ডেটা বিশ্লেষণ করা হচ্ছে"
+        "ru" -> "Анализ рыночных данных"
         else -> "Menganalisis data pasar"
     }
 
@@ -762,6 +897,8 @@ object StringsManager {
         "tr" -> "Fırsatlar için ticaret sinyalleri izleniyor"
         "hi" -> "अवसरों के लिए ट्रेडिंग संकेतों की निगरानी"
         "ms" -> "Memantau isyarat dagangan untuk peluang"
+        "bn" -> "সুযোগের জন্য ট্রেডিং সিগন্যাল পর্যবেক্ষণ করা হচ্ছে"
+        "ru" -> "Мониторинг торговых сигналов для поиска возможностей"
         else -> "Memantau sinyal trading untuk peluang trading"
     }
 
@@ -773,6 +910,8 @@ object StringsManager {
         "tr" -> "Aktif"
         "hi" -> "सक्रिय"
         "ms" -> "Aktif"
+        "bn" -> "সক্রিয়"
+        "ru" -> "Активен"
         else -> "Aktif"
     }
 
@@ -784,6 +923,8 @@ object StringsManager {
         "tr" -> "Pasif"
         "hi" -> "निष्क्रिय"
         "ms" -> "Tidak Aktif"
+        "bn" -> "নিষ্ক্রিয়"
+        "ru" -> "Неактивен"
         else -> "Tidak Aktif"
     }
 
@@ -796,6 +937,8 @@ object StringsManager {
         "tr" -> "Zarar Durdur & Kar"
         "hi" -> "स्टॉप लॉस और प्रॉफिट"
         "ms" -> "Stop Loss & Keuntungan"
+        "bn" -> "স্টপ লস এবং লাভ"
+        "ru" -> "Стоп-лосс и прибыль"
         else -> "Stop Loss & Profit"
     }
 
@@ -807,6 +950,8 @@ object StringsManager {
         "tr" -> "Oturumu Sıfırla"
         "hi" -> "सत्र रीसेट करें"
         "ms" -> "Set Semula Sesi"
+        "bn" -> "সেশন রিসেট করুন"
+        "ru" -> "Сбросить сессию"
         else -> "Reset Sesi"
     }
 
@@ -818,6 +963,8 @@ object StringsManager {
         "tr" -> "Net Kar"
         "hi" -> "शुद्ध लाभ"
         "ms" -> "Keuntungan Bersih"
+        "bn" -> "নেট লাভ"
+        "ru" -> "Чистая прибыль"
         else -> "Profit Bersih"
     }
 
@@ -829,6 +976,8 @@ object StringsManager {
         "tr" -> "Toplam Zarar"
         "hi" -> "कुल हानि"
         "ms" -> "Jumlah Kerugian"
+        "bn" -> "মোট ক্ষতি"
+        "ru" -> "Общий убыток"
         else -> "Total Rugi"
     }
 
@@ -840,6 +989,8 @@ object StringsManager {
         "tr" -> "Zarar Durdur"
         "hi" -> "स्टॉप लॉस"
         "ms" -> "Had Kerugian"
+        "bn" -> "স্টপ লস"
+        "ru" -> "Стоп-лосс"
         else -> "Batas Rugi"
     }
 
@@ -851,6 +1002,8 @@ object StringsManager {
         "tr" -> "Hedef Kar"
         "hi" -> "लक्ष्य लाभ"
         "ms" -> "Sasaran Keuntungan"
+        "bn" -> "লক্ষ্য লাভ"
+        "ru" -> "Целевая прибыль"
         else -> "Target Profit"
     }
 
@@ -862,6 +1015,8 @@ object StringsManager {
         "tr" -> "Zarar Durdur Ayarları"
         "hi" -> "स्टॉप लॉस सेटिंग्स"
         "ms" -> "Tetapan Stop Loss"
+        "bn" -> "স্টপ লস সেটিংস"
+        "ru" -> "Настройки стоп-лосса"
         else -> "Pengaturan Stop Loss"
     }
 
@@ -873,6 +1028,8 @@ object StringsManager {
         "tr" -> "Hedef Kar Ayarları"
         "hi" -> "लक्ष्य लाभ सेटिंग्स"
         "ms" -> "Tetapan Sasaran Keuntungan"
+        "bn" -> "লক্ষ্য লাভ সেটিংস"
+        "ru" -> "Настройки целевой прибыли"
         else -> "Pengaturan Target Profit"
     }
 
@@ -884,6 +1041,8 @@ object StringsManager {
         "tr" -> "Maksimum Zarar Tutarı"
         "hi" -> "अधिकतम हानि राशि"
         "ms" -> "Jumlah Kerugian Maksimum"
+        "bn" -> "সর্বাধিক ক্ষতির পরিমাণ"
+        "ru" -> "Максимальная сумма убытка"
         else -> "Jumlah Kerugian Maksimal"
     }
 
@@ -895,6 +1054,8 @@ object StringsManager {
         "tr" -> "Hedef Kar Tutarı"
         "hi" -> "लक्ष्य लाभ राशि"
         "ms" -> "Jumlah Sasaran Keuntungan"
+        "bn" -> "লক্ষ্য লাভের পরিমাণ"
+        "ru" -> "Целевая сумма прибыли"
         else -> "Jumlah Target Profit"
     }
 
@@ -906,6 +1067,8 @@ object StringsManager {
         "tr" -> "örn: 500000, 1M, 5M"
         "hi" -> "उदा: 500000, 1M, 5M"
         "ms" -> "cth: 500000, 1M, 5M"
+        "bn" -> "যেমন: 500000, 1M, 5M"
+        "ru" -> "напр: 500000, 1M, 5M"
         else -> "cth: 500000, 1M, 5M"
     }
 
@@ -917,6 +1080,8 @@ object StringsManager {
         "tr" -> "Mevcut Maksimum Zarar:"
         "hi" -> "वर्तमान अधिकतम हानि:"
         "ms" -> "Had Kerugian Semasa:"
+        "bn" -> "বর্তমান সর্বাধিক ক্ষতি:"
+        "ru" -> "Текущий макс. убыток:"
         else -> "Batas Kerugian Saat Ini:"
     }
 
@@ -928,6 +1093,8 @@ object StringsManager {
         "tr" -> "Mevcut Hedef Kar:"
         "hi" -> "वर्तमान लक्ष्य लाभ:"
         "ms" -> "Sasaran Keuntungan Semasa:"
+        "bn" -> "বর্তমান লক্ষ্য লাভ:"
+        "ru" -> "Текущая целевая прибыль:"
         else -> "Target Profit Saat Ini:"
     }
 
@@ -939,6 +1106,8 @@ object StringsManager {
         "tr" -> "Format: 1M = 1 Milyon, 500K = 500 Bin • Onaylamak için Enter'a basın"
         "hi" -> "प्रारूप: 1M = 1 मिलियन, 500K = 500 हजार • पुष्टि के लिए Enter दबाएं"
         "ms" -> "Format: 1M = 1 Juta, 500K = 500 Ribu • Tekan Enter untuk pengesahan"
+        "bn" -> "ফরম্যাট: 1M = 1 মিলিয়ন, 500K = 500 হাজার • নিশ্চিত করতে Enter চাপুন"
+        "ru" -> "Формат: 1M = 1 млн, 500K = 500 тыс • Нажмите Enter для подтверждения"
         else -> "Format: 1M = 1 Juta, 500K = 500 Ribu • Tekan Enter untuk konfirmasi"
     }
 
@@ -951,6 +1120,8 @@ object StringsManager {
         "tr" -> "İşlem Ayarları"
         "hi" -> "ट्रेडिंग सेटिंग्स"
         "ms" -> "Tetapan Dagangan"
+        "bn" -> "ট্রেডিং সেটিংস"
+        "ru" -> "Настройки торговли"
         else -> "Pengaturan Trading"
     }
 
@@ -962,6 +1133,8 @@ object StringsManager {
         "tr" -> "Hesap Yapılandırması"
         "hi" -> "खाता विन्यास"
         "ms" -> "Konfigurasi Akaun"
+        "bn" -> "অ্যাকাউন্ট কনফিগারেশন"
+        "ru" -> "Конфигурация аккаунта"
         else -> "Konfigurasi Akun"
     }
 
@@ -973,6 +1146,8 @@ object StringsManager {
         "tr" -> "Demo Hesap"
         "hi" -> "डेमो खाता"
         "ms" -> "Akaun Demo"
+        "bn" -> "ডেমো অ্যাকাউন্ট"
+        "ru" -> "Демо-счет"
         else -> "Akun Demo"
     }
 
@@ -984,6 +1159,8 @@ object StringsManager {
         "tr" -> "Gerçek Hesap"
         "hi" -> "असली खाता"
         "ms" -> "Akaun Sebenar"
+        "bn" -> "আসল অ্যাকাউন্ট"
+        "ru" -> "Реальный счет"
         else -> "Akun Real"
     }
 
@@ -995,9 +1172,10 @@ object StringsManager {
         "tr" -> "Otomatik Süre"
         "hi" -> "ऑटो अवधि"
         "ms" -> "Tempoh Auto"
+        "bn" -> "স্বয়ংক্রিয় সময়কাল"
+        "ru" -> "Авто продолжительность"
         else -> "Durasi Otomatis"
     }
-
     fun getOneMinute(lang: String) = when(lang) {
         "id" -> "1 Menit"
         "en" -> "1 Minute"
@@ -1006,9 +1184,10 @@ object StringsManager {
         "tr" -> "1 Dakika"
         "hi" -> "1 मिनट"
         "ms" -> "1 Minit"
+        "bn" -> "১ মিনিট"
+        "ru" -> "1 минута"
         else -> "1 Menit"
     }
-
     fun getCurrencySelection(lang: String) = when(lang) {
         "id" -> "Pilihan Mata Uang"
         "en" -> "Currency Selection"
@@ -1017,9 +1196,10 @@ object StringsManager {
         "tr" -> "Para Birimi Seçimi"
         "hi" -> "मुद्रा चयन"
         "ms" -> "Pemilihan Mata Wang"
+        "bn" -> "মুদ্রা নির্বাচন"
+        "ru" -> "Выбор валюты"
         else -> "Pilihan Mata Uang"
     }
-
     fun getTradeAmount(lang: String) = when(lang) {
         "id" -> "Jumlah Trading"
         "en" -> "Trade Amount"
@@ -1028,9 +1208,10 @@ object StringsManager {
         "tr" -> "İşlem Tutarı"
         "hi" -> "ट्रेड राशि"
         "ms" -> "Jumlah Dagangan"
+        "bn" -> "ট্রেড পরিমাণ"
+        "ru" -> "Сумма сделки"
         else -> "Jumlah Trading"
     }
-
     fun getMinimum(lang: String) = when(lang) {
         "id" -> "Min"
         "en" -> "Min"
@@ -1039,9 +1220,10 @@ object StringsManager {
         "tr" -> "Min"
         "hi" -> "न्यूनतम"
         "ms" -> "Min"
+        "bn" -> "সর্বনিম্ন"
+        "ru" -> "Мин"
         else -> "Min"
     }
-
     fun getQuick(lang: String) = when(lang) {
         "id" -> "Cepat"
         "en" -> "Quick"
@@ -1050,9 +1232,10 @@ object StringsManager {
         "tr" -> "Hızlı"
         "hi" -> "त्वरित"
         "ms" -> "Pantas"
+        "bn" -> "দ্রুত"
+        "ru" -> "Быстро"
         else -> "Cepat"
     }
-
     fun getMartingaleStrategy(lang: String) = when(lang) {
         "id" -> "Strategi Martingale"
         "en" -> "Martingale Strategy"
@@ -1061,9 +1244,10 @@ object StringsManager {
         "tr" -> "Martingale Stratejisi"
         "hi" -> "मार्टिंगेल रणनीति"
         "ms" -> "Strategi Martingale"
+        "bn" -> "মার্টিনগেল কৌশল"
+        "ru" -> "Стратегия Мартингейла"
         else -> "Strategi Martingale"
     }
-
     fun getMartingale(lang: String) = when(lang) {
         "id" -> "MARTINGALE"
         "en" -> "MARTINGALE"
@@ -1072,9 +1256,10 @@ object StringsManager {
         "tr" -> "MARTINGALE"
         "hi" -> "मार्टिंगेल"
         "ms" -> "MARTINGALE"
+        "bn" -> "মার্টিনগেল"
+        "ru" -> "МАРТИНГЕЙЛ"
         else -> "MARTINGALE"
     }
-
     fun getMaxSteps(lang: String) = when(lang) {
         "id" -> "Kompensasi"
         "en" -> "Max Steps"
@@ -1083,9 +1268,10 @@ object StringsManager {
         "tr" -> "Maksimum Adım"
         "hi" -> "अधिकतम कदम"
         "ms" -> "Kompensasi"
+        "bn" -> "সর্বাধিক পদক্ষেপ"
+        "ru" -> "Макс. шаги"
         else -> "Kompensasi Maks"
     }
-
     fun getSettings(lang: String) = when(lang) {
         "id" -> "Pengaturan"
         "en" -> "Settings"
@@ -1094,10 +1280,11 @@ object StringsManager {
         "tr" -> "Ayarlar"
         "hi" -> "सेटिंग्स"
         "ms" -> "Tetapan"
+        "bn" -> "সেটিংস"
+        "ru" -> "Настройки"
         else -> "Pengaturan"
     }
 
-    // Digital Clock & Asset Strings
     fun getAssets(lang: String) = when(lang) {
         "id" -> "Pilih Aset"
         "en" -> "Select Asset"
@@ -1106,6 +1293,8 @@ object StringsManager {
         "tr" -> "Varlık Seç"
         "hi" -> "संपत्ति चुनें"
         "ms" -> "Pilih Aset"
+        "bn" -> "সম্পদ নির্বাচন করুন"
+        "ru" -> "Выбрать актив"
         else -> "Pilih Aset"
     }
 
@@ -1117,6 +1306,8 @@ object StringsManager {
         "tr" -> "Varlık Ekle"
         "hi" -> "संपत्ति जोड़ें"
         "ms" -> "Tambah Aset"
+        "bn" -> "সম্পদ যোগ করুন"
+        "ru" -> "Добавить актив"
         else -> "Tambah Aset"
     }
 
@@ -1128,6 +1319,8 @@ object StringsManager {
         "tr" -> "İstatistikler"
         "hi" -> "सांख्यिकी"
         "ms" -> "Statistik"
+        "bn" -> "পরিসংখ্যান"
+        "ru" -> "Статистика"
         else -> "Statistik"
     }
 
@@ -1139,6 +1332,8 @@ object StringsManager {
         "tr" -> "Kazanç"
         "hi" -> "जीत"
         "ms" -> "Menang"
+        "bn" -> "জয়"
+        "ru" -> "Выигрыш"
         else -> "Menang"
     }
 
@@ -1150,6 +1345,8 @@ object StringsManager {
         "tr" -> "Berabere"
         "hi" -> "ड्रॉ"
         "ms" -> "Seri"
+        "bn" -> "ড্র"
+        "ru" -> "Ничья"
         else -> "Seri"
     }
 
@@ -1161,6 +1358,8 @@ object StringsManager {
         "tr" -> "Kayıp"
         "hi" -> "हार"
         "ms" -> "Kalah"
+        "bn" -> "পরাজয়"
+        "ru" -> "Проигрыш"
         else -> "Kalah"
     }
 
@@ -1172,6 +1371,8 @@ object StringsManager {
         "tr" -> "Saati Göster"
         "hi" -> "घड़ी दिखाएं"
         "ms" -> "Tunjukkan Jam"
+        "bn" -> "ঘড়ি দেখান"
+        "ru" -> "Показать часы"
         else -> "Tampilkan Jam"
     }
 
@@ -1183,6 +1384,8 @@ object StringsManager {
         "tr" -> "İstatistikleri Göster"
         "hi" -> "सांख्यिकी दिखाएं"
         "ms" -> "Tunjukkan Statistik"
+        "bn" -> "পরিসংখ্যান দেখান"
+        "ru" -> "Показать статистику"
         else -> "Tampilkan Statistik"
     }
 
@@ -1194,6 +1397,8 @@ object StringsManager {
         "tr" -> "Varlık Seç"
         "hi" -> "संपत्ति चुनें"
         "ms" -> "Pilih Aset"
+        "bn" -> "সম্পদ নির্বাচন করুন"
+        "ru" -> "Выбрать актив"
         else -> "Pilih Aset"
     }
 
@@ -1205,6 +1410,8 @@ object StringsManager {
         "tr" -> "Mevcut varlıklardan seçin"
         "hi" -> "उपलब्ध संपत्तियों में से चुनें"
         "ms" -> "Pilih dari aset yang tersedia"
+        "bn" -> "উপলব্ধ সম্পদ থেকে নির্বাচন করুন"
+        "ru" -> "Выберите из доступных активов"
         else -> "Pilih dari aset yang tersedia"
     }
 
@@ -1216,6 +1423,8 @@ object StringsManager {
         "tr" -> "Yenile"
         "hi" -> "रीफ्रेश करें"
         "ms" -> "Muat Semula"
+        "bn" -> "রিফ্রেশ করুন"
+        "ru" -> "Обновить"
         else -> "Muat Ulang"
     }
 
@@ -1227,6 +1436,8 @@ object StringsManager {
         "tr" -> "Varlıklar Yükleniyor"
         "hi" -> "संपत्ति लोड हो रही है"
         "ms" -> "Memuatkan Aset"
+        "bn" -> "সম্পদ লোড হচ্ছে"
+        "ru" -> "Загрузка активов"
         else -> "Memuat Aset"
     }
 
@@ -1238,6 +1449,8 @@ object StringsManager {
         "tr" -> "Varlıklarınızı alırken lütfen bekleyin"
         "hi" -> "कृपया प्रतीक्षा करें जबकि हम आपकी संपत्ति प्राप्त करते हैं"
         "ms" -> "Sila tunggu semasa kami mengambil aset anda"
+        "bn" -> "অনুগ্রহ করে অপেক্ষা করুন যখন আমরা আপনার সম্পদ আনছি"
+        "ru" -> "Пожалуйста, подождите, пока мы загружаем ваши активы"
         else -> "Mohon tunggu saat kami mengambil aset Anda"
     }
 
@@ -1249,6 +1462,8 @@ object StringsManager {
         "tr" -> "Kullanılabilir Varlık Yok"
         "hi" -> "कोई संपत्ति उपलब्ध नहीं"
         "ms" -> "Tiada Aset Tersedia"
+        "bn" -> "কোনো সম্পদ উপলব্ধ নেই"
+        "ru" -> "Нет доступных активов"
         else -> "Tidak Ada Aset Tersedia"
     }
 
@@ -1260,6 +1475,8 @@ object StringsManager {
         "tr" -> "Şu anda gösterilecek varlık yok.\nVarlık listesini yeniden yüklemek için yenilemeyi deneyin."
         "hi" -> "इस समय प्रदर्शित करने के लिए कोई संपत्ति नहीं है।\nसंपत्ति सूची पुनः लोड करने के लिए रीफ्रेश करने का प्रयास करें।"
         "ms" -> "Tiada aset untuk dipaparkan pada masa ini.\nCuba muat semula untuk memuatkan senarai aset."
+        "bn" -> "এই মুহূর্তে প্রদর্শনের জন্য কোনো সম্পদ নেই।\nসম্পদ তালিকা পুনরায় লোড করতে রিফ্রেশ করার চেষ্টা করুন।"
+        "ru" -> "В настоящее время нет активов для отображения.\nПопробуйте обновить, чтобы перезагрузить список активов."
         else -> "Tidak ada aset untuk ditampilkan saat ini.\nCoba muat ulang untuk memuat daftar aset."
     }
 
@@ -1271,6 +1488,8 @@ object StringsManager {
         "tr" -> "Varlıkları Yenile"
         "hi" -> "संपत्ति रीफ्रेश करें"
         "ms" -> "Muat Semula Aset"
+        "bn" -> "সম্পদ রিফ্রেশ করুন"
+        "ru" -> "Обновить активы"
         else -> "Muat Ulang Aset"
     }
 
@@ -1282,6 +1501,8 @@ object StringsManager {
         "tr" -> "kâr"
         "hi" -> "लाभ"
         "ms" -> "keuntungan"
+        "bn" -> "লাভ"
+        "ru" -> "прибыль"
         else -> "profit"
     }
 
@@ -1293,6 +1514,8 @@ object StringsManager {
         "tr" -> "Şu Anki Saat"
         "hi" -> "वर्तमान समय"
         "ms" -> "Masa Sekarang"
+        "bn" -> "বর্তমান সময়"
+        "ru" -> "Текущее время"
         else -> "Waktu Saat Ini"
     }
 
@@ -1304,6 +1527,8 @@ object StringsManager {
         "tr" -> "Sunucu Saati"
         "hi" -> "सर्वर समय"
         "ms" -> "Masa Pelayan"
+        "bn" -> "সার্ভার সময়"
+        "ru" -> "Время сервера"
         else -> "Waktu Server"
     }
 
@@ -1315,10 +1540,10 @@ object StringsManager {
         "tr" -> "Yerel Saat"
         "hi" -> "स्थानीय समय"
         "ms" -> "Masa Tempatan"
+        "bn" -> "স্থানীয় সময়"
+        "ru" -> "Местное время"
         else -> "Waktu Lokal"
     }
-
-    // Tambahkan fungsi-fungsi berikut ke StringsManager.kt
 
     // Profile Screen Strings
     fun getProfileInformation(lang: String) = when(lang) {
@@ -1329,6 +1554,8 @@ object StringsManager {
         "tr" -> "Profil Bilgileri"
         "hi" -> "प्रोफ़ाइल जानकारी"
         "ms" -> "Maklumat Profil"
+        "bn" -> "প্রোফাইল তথ্য"
+        "ru" -> "Информация о профиле"
         else -> "Informasi Profil"
     }
 
@@ -1340,6 +1567,8 @@ object StringsManager {
         "tr" -> "Tam İsim"
         "hi" -> "पूरा नाम"
         "ms" -> "Nama Penuh"
+        "bn" -> "সম্পূর্ণ নাম"
+        "ru" -> "Полное имя"
         else -> "Nama Lengkap"
     }
 
@@ -1351,6 +1580,8 @@ object StringsManager {
         "tr" -> "Kullanıcı ID"
         "hi" -> "यूज़र आईडी"
         "ms" -> "ID Pengguna"
+        "bn" -> "ব্যবহারকারী আইডি"
+        "ru" -> "ID пользователя"
         else -> "ID Pengguna"
     }
 
@@ -1362,6 +1593,8 @@ object StringsManager {
         "tr" -> "E-posta Adresi"
         "hi" -> "ईमेल पता"
         "ms" -> "Alamat E-mel"
+        "bn" -> "ইমেইল ঠিকানা"
+        "ru" -> "Адрес электронной почты"
         else -> "Alamat Email"
     }
 
@@ -1373,6 +1606,8 @@ object StringsManager {
         "tr" -> "Zaman Dilimi"
         "hi" -> "समय क्षेत्र"
         "ms" -> "Zon Masa"
+        "bn" -> "সময় অঞ্চল"
+        "ru" -> "Часовой пояс"
         else -> "Zona Waktu"
     }
 
@@ -1384,6 +1619,8 @@ object StringsManager {
         "tr" -> "Cihaz Bilgileri"
         "hi" -> "डिवाइस जानकारी"
         "ms" -> "Maklumat Peranti"
+        "bn" -> "ডিভাইস তথ্য"
+        "ru" -> "Информация об устройстве"
         else -> "Informasi Perangkat"
     }
 
@@ -1395,6 +1632,8 @@ object StringsManager {
         "tr" -> "Cihaz ID"
         "hi" -> "डिवाइस आईडी"
         "ms" -> "ID Peranti"
+        "bn" -> "ডিভাইস আইডি"
+        "ru" -> "ID устройства"
         else -> "ID Perangkat"
     }
 
@@ -1406,6 +1645,8 @@ object StringsManager {
         "tr" -> "Tarayıcı"
         "hi" -> "ब्राउज़र"
         "ms" -> "Pelayar"
+        "bn" -> "ব্রাউজার"
+        "ru" -> "Браузер"
         else -> "Browser"
     }
 
@@ -1417,6 +1658,8 @@ object StringsManager {
         "tr" -> "Güvenlik Durumu"
         "hi" -> "सुरक्षा स्थिति"
         "ms" -> "Status Keselamatan"
+        "bn" -> "নিরাপত্তা অবস্থা"
+        "ru" -> "Статус безопасности"
         else -> "Status Keamanan"
     }
 
@@ -1428,6 +1671,8 @@ object StringsManager {
         "tr" -> "Doğrulandı"
         "hi" -> "सत्यापित"
         "ms" -> "Disahkan"
+        "bn" -> "যাচাইকৃত"
+        "ru" -> "Подтверждено"
         else -> "Terverifikasi"
     }
 
@@ -1439,6 +1684,8 @@ object StringsManager {
         "tr" -> "Hesaptan Çıkış Yap"
         "hi" -> "खाते से लॉगआउट करें"
         "ms" -> "Log Keluar dari Akaun"
+        "bn" -> "অ্যাকাউন্ট থেকে লগআউট"
+        "ru" -> "Выйти из аккаунта"
         else -> "Keluar dari Akun"
     }
 
@@ -1450,6 +1697,8 @@ object StringsManager {
         "tr" -> "Çıkış Onayı"
         "hi" -> "लॉगआउट पुष्टि"
         "ms" -> "Pengesahan Log Keluar"
+        "bn" -> "লগআউট নিশ্চিতকরণ"
+        "ru" -> "Подтверждение выхода"
         else -> "Konfirmasi Keluar"
     }
 
@@ -1461,6 +1710,8 @@ object StringsManager {
         "tr" -> "Stockity hesabınızdan çıkmak istediğinizden emin misiniz?"
         "hi" -> "क्या आप वाकई अपने Stockity खाते से लॉगआउट करना चाहते हैं?"
         "ms" -> "Adakah anda pasti mahu log keluar dari akaun Stockity anda?"
+        "bn" -> "আপনি কি নিশ্চিত যে আপনি আপনার Stockity অ্যাকাউন্ট থেকে লগআউট করতে চান?"
+        "ru" -> "Вы уверены, что хотите выйти из вашего аккаунта Stockity?"
         else -> "Apakah Anda yakin ingin keluar dari akun Stockity?"
     }
 
@@ -1472,6 +1723,8 @@ object StringsManager {
         "tr" -> "Hesabınıza erişmek için tekrar giriş yapmanız gerekiyor."
         "hi" -> "अपने खाते तक पहुंचने के लिए आपको फिर से लॉगिन करना होगा।"
         "ms" -> "Anda perlu log masuk semula untuk mengakses akaun anda."
+        "bn" -> "আপনার অ্যাকাউন্ট অ্যাক্সেস করতে আপনাকে আবার লগইন করতে হবে।"
+        "ru" -> "Вам нужно снова войти в систему, чтобы получить доступ к вашему аккаунту."
         else -> "Anda perlu login kembali untuk mengakses akun."
     }
 
@@ -1483,6 +1736,8 @@ object StringsManager {
         "tr" -> "Evet, Çıkış Yap"
         "hi" -> "हां, लॉगआउट करें"
         "ms" -> "Ya, Log Keluar"
+        "bn" -> "হ্যাঁ, লগআউট"
+        "ru" -> "Да, выйти"
         else -> "Ya, Keluar"
     }
 
@@ -1494,6 +1749,8 @@ object StringsManager {
         "tr" -> "İptal"
         "hi" -> "रद्द करें"
         "ms" -> "Batal"
+        "bn" -> "বাতিল"
+        "ru" -> "Отмена"
         else -> "Batal"
     }
 
@@ -1505,6 +1762,8 @@ object StringsManager {
         "tr" -> "Süper Admin Hesabı"
         "hi" -> "सुपर एडमिन खाता"
         "ms" -> "Akaun Super Admin"
+        "bn" -> "সুপার অ্যাডমিন অ্যাকাউন্ট"
+        "ru" -> "Аккаунт супер-администратора"
         else -> "Akun Super Admin"
     }
 
@@ -1516,6 +1775,8 @@ object StringsManager {
         "tr" -> "Admin Hesabı"
         "hi" -> "एडमिन खाता"
         "ms" -> "Akaun Admin"
+        "bn" -> "অ্যাডমিন অ্যাকাউন্ট"
+        "ru" -> "Аккаунт администратора"
         else -> "Akun Admin"
     }
 
@@ -1527,6 +1788,8 @@ object StringsManager {
         "tr" -> "Stockity Hesabı"
         "hi" -> "Stockity खाता"
         "ms" -> "Akaun Stockity"
+        "bn" -> "Stockity অ্যাকাউন্ট"
+        "ru" -> "Аккаунт Stockity"
         else -> "Akun Stockity"
     }
 
@@ -1538,6 +1801,8 @@ object StringsManager {
         "tr" -> "Çevrimiçi"
         "hi" -> "ऑनलाइन"
         "ms" -> "Dalam Talian"
+        "bn" -> "অনলাইন"
+        "ru" -> "Онлайн"
         else -> "Online"
     }
 
@@ -1549,6 +1814,8 @@ object StringsManager {
         "tr" -> "Portföy"
         "hi" -> "पोर्टफोलियो"
         "ms" -> "Portfolio"
+        "bn" -> "পোর্টফোলিও"
+        "ru" -> "Портфель"
         else -> "Portfolio"
     }
 
@@ -1560,6 +1827,8 @@ object StringsManager {
         "tr" -> "Aktif"
         "hi" -> "सक्रिय"
         "ms" -> "Aktif"
+        "bn" -> "সক্রিয়"
+        "ru" -> "Активный"
         else -> "Aktif"
     }
 
@@ -1571,6 +1840,8 @@ object StringsManager {
         "tr" -> "Süper Admin Paneli"
         "hi" -> "सुपर एडमिन पैनल"
         "ms" -> "Panel Super Admin"
+        "bn" -> "সুপার অ্যাডমিন প্যানেল"
+        "ru" -> "Панель супер-администратора"
         else -> "Panel Super Admin"
     }
 
@@ -1582,6 +1853,8 @@ object StringsManager {
         "tr" -> "Admin Paneli"
         "hi" -> "एडमिन पैनल"
         "ms" -> "Panel Admin"
+        "bn" -> "অ্যাডমিন প্যানেল"
+        "ru" -> "Панель администратора"
         else -> "Panel Admin"
     }
 
@@ -1593,6 +1866,8 @@ object StringsManager {
         "tr" -> "Modu Seçin"
         "hi" -> "मोड चुनें"
         "ms" -> "Pilih Mod"
+        "bn" -> "মোড নির্বাচন করুন"
+        "ru" -> "Выбрать режим"
         else -> "Pilih Mode"
     }
 
@@ -1604,6 +1879,8 @@ object StringsManager {
         "tr" -> "Fastrade FTT Modu"
         "hi" -> "Fastrade FTT मोड"
         "ms" -> "Mod Fastrade FTT"
+        "bn" -> "Fastrade FTT মোড"
+        "ru" -> "Режим Fastrade FTT"
         else -> "Mode Fastrade FTT"
     }
 
@@ -1615,6 +1892,8 @@ object StringsManager {
         "tr" -> "Analiz Stratejisi Modu"
         "hi" -> "विश्लेषण रणनीति मोड"
         "ms" -> "Mod Strategi Analisis"
+        "bn" -> "বিশ্লেষণ কৌশল মোড"
+        "ru" -> "Режим стратегии анализа"
         else -> "Mode Strategi Analisis"
     }
 
@@ -1626,6 +1905,8 @@ object StringsManager {
         "tr" -> "Fastrade CTC Modu"
         "hi" -> "Fastrade CTC मोड"
         "ms" -> "Mod Fastrade CTC"
+        "bn" -> "Fastrade CTC মোড"
+        "ru" -> "Режим Fastrade CTC"
         else -> "Mode Fastrade CTC"
     }
 
@@ -1637,6 +1918,8 @@ object StringsManager {
         "tr" -> "Modu Seçin"
         "hi" -> "मोड चुनें"
         "ms" -> "Pilih Mod"
+        "bn" -> "মোড নির্বাচন করুন"
+        "ru" -> "Выбрать режим"
         else -> "Pilih Mode"
     }
 
@@ -1648,10 +1931,9 @@ object StringsManager {
         "tr" -> "Planlanmış Siparişler"
         "hi" -> "निर्धारित आदेश"
         "ms" -> "Pesanan Terjadwal"
+        "bn" -> "নির্ধারিত অর্ডার"
         else -> "Pesan Terjadwal"
-    }
-
-    fun getFollowCandle(lang: String) = when(lang) {
+    }fun getFollowCandle(lang: String) = when(lang) {
         "id" -> "Ikuti Lilin"
         "en" -> "Follow Candle"
         "es" -> "Seguir Vela"
@@ -1659,10 +1941,9 @@ object StringsManager {
         "tr" -> "Mum Takip Et"
         "hi" -> "मोमबत्ती का पालन करें"
         "ms" -> "Ikut Lilin"
+        "bn" -> "মোমবাতি অনুসরণ করুন"
         else -> "Ikuti Lilin"
-    }
-
-    fun getIndicatorAnalysis(lang: String) = when(lang) {
+    }fun getIndicatorAnalysis(lang: String) = when(lang) {
         "id" -> "Analisis Indikator"
         "en" -> "Indicator Analysis"
         "es" -> "Análisis de Indicadores"
@@ -1670,10 +1951,9 @@ object StringsManager {
         "tr" -> "Gösterge Analizi"
         "hi" -> "संकेतक विश्लेषण"
         "ms" -> "Analisis Penunjuk"
+        "bn" -> "সূচক বিশ্লেষণ"
         else -> "Analisis Indikator"
-    }
-
-    fun getCTCUltraFast(lang: String) = when(lang) {
+    }fun getCTCUltraFast(lang: String) = when(lang) {
         "id" -> "CTC Ultra-Cepat"
         "en" -> "CTC Ultra-Fast"
         "es" -> "CTC Ultra-Rápido"
@@ -1681,10 +1961,9 @@ object StringsManager {
         "tr" -> "CTC Ultra-Hızlı"
         "hi" -> "CTC अल्ट्रा-फास्ट"
         "ms" -> "CTC Ultra-Pantas"
+        "bn" -> "CTC অতি-দ্রুত"
         else -> "CTC Ultra-Cepat"
-    }
-
-    fun getReadyForSignals(lang: String) = when(lang) {
+    }fun getReadyForSignals(lang: String) = when(lang) {
         "id" -> "Siap untuk sinyal"
         "en" -> "Ready for signals"
         "es" -> "Listo para señales"
@@ -1692,10 +1971,9 @@ object StringsManager {
         "tr" -> "Sinyallere Hazır"
         "hi" -> "सिग्नल के लिए तैयार"
         "ms" -> "Sedia untuk isyarat"
+        "bn" -> "সংকেতের জন্য প্রস্তুত"
         else -> "Siap untuk sinyal"
-    }
-
-    fun getReadyForAnalysis(lang: String) = when(lang) {
+    }fun getReadyForAnalysis(lang: String) = when(lang) {
         "id" -> "Siap untuk analisis"
         "en" -> "Ready for analysis"
         "es" -> "Listo para análisis"
@@ -1703,10 +1981,9 @@ object StringsManager {
         "tr" -> "Analiz İçin Hazır"
         "hi" -> "विश्लेषण के लिए तैयार"
         "ms" -> "Sedia untuk analisis"
+        "bn" -> "বিশ্লেষণের জন্য প্রস্তুত"
         else -> "Siap untuk analisis"
-    }
-
-    fun getReadyForExecution(lang: String) = when(lang) {
+    }fun getReadyForExecution(lang: String) = when(lang) {
         "id" -> "Siap untuk eksekusi"
         "en" -> "Ready for execution"
         "es" -> "Listo para ejecución"
@@ -1714,10 +1991,9 @@ object StringsManager {
         "tr" -> "Yürütme İçin Hazır"
         "hi" -> "निष्पादन के लिए तैयार"
         "ms" -> "Sedia untuk pelaksanaan"
+        "bn" -> "সম্পাদনের জন্য প্রস্তুত"
         else -> "Siap untuk eksekusi"
-    }
-
-    fun getMonitoringSignals(lang: String) = when(lang) {
+    }fun getMonitoringSignals(lang: String) = when(lang) {
         "id" -> "Memantau sinyal trading"
         "en" -> "Monitoring trading signals"
         "es" -> "Monitoreando señales de trading"
@@ -1725,10 +2001,9 @@ object StringsManager {
         "tr" -> "Trading sinyalleri izleniyor"
         "hi" -> "ट्रेडिंग सिग्नल की निगरानी"
         "ms" -> "Memantau isyarat perdagangan"
+        "bn" -> "ট্রেডিং সিগন্যাল পর্যবেক্ষণ করা হচ্ছে"
         else -> "Memantau sinyal trading"
-    }
-
-    fun getAnalyzingMarket(lang: String) = when(lang) {
+    }fun getAnalyzingMarket(lang: String) = when(lang) {
         "id" -> "Menganalisis data pasar"
         "en" -> "Analyzing market data"
         "es" -> "Analizando datos de mercado"
@@ -1736,10 +2011,9 @@ object StringsManager {
         "tr" -> "Piyasa verileri analiz ediliyor"
         "hi" -> "बाजार डेटा का विश्लेषण"
         "ms" -> "Menganalisis data pasaran"
+        "bn" -> "বাজার ডেটা বিশ্লেষণ করা হচ্ছে"
         else -> "Menganalisis data pasar"
-    }
-
-    fun getTotalSignals(lang: String) = when(lang) {
+    }fun getTotalSignals(lang: String) = when(lang) {
         "id" -> "Total Sinyal"
         "en" -> "Total Signals"
         "es" -> "Señales Totales"
@@ -1747,10 +2021,9 @@ object StringsManager {
         "tr" -> "Toplam Sinyaller"
         "hi" -> "कुल संकेत"
         "ms" -> "Jumlah Isyarat"
+        "bn" -> "মোট সংকেত"
         else -> "Total Sinyal"
-    }
-
-    fun getTotalOrders(lang: String) = when(lang) {
+    }fun getTotalOrders(lang: String) = when(lang) {
         "id" -> "Total Pesanan"
         "en" -> "Total Orders"
         "es" -> "Órdenes Totales"
@@ -1758,10 +2031,9 @@ object StringsManager {
         "tr" -> "Toplam Siparişler"
         "hi" -> "कुल आदेश"
         "ms" -> "Jumlah Pesanan"
+        "bn" -> "মোট অর্ডার"
         else -> "Total Pesanan"
-    }
-
-    fun getExecuted(lang: String) = when(lang) {
+    }fun getExecuted(lang: String) = when(lang) {
         "id" -> "Dieksekusi"
         "en" -> "Executed"
         "es" -> "Ejecutado"
@@ -1769,10 +2041,9 @@ object StringsManager {
         "tr" -> "Yürütüldü"
         "hi" -> "निष्पादित"
         "ms" -> "Dilaksanakan"
+        "bn" -> "সম্পাদিত"
         else -> "Dieksekusi"
-    }
-
-    fun getPending(lang: String) = when(lang) {
+    }fun getPending(lang: String) = when(lang) {
         "id" -> "Tertunda"
         "en" -> "Pending"
         "es" -> "Pendiente"
@@ -1780,10 +2051,9 @@ object StringsManager {
         "tr" -> "Beklemede"
         "hi" -> "लंबित"
         "ms" -> "Tertunda"
+        "bn" -> "মুলতুবি"
         else -> "Tertunda"
-    }
-
-    fun getBuySignals(lang: String) = when(lang) {
+    }fun getBuySignals(lang: String) = when(lang) {
         "id" -> "Sinyal Beli"
         "en" -> "Buy Signals"
         "es" -> "Señales de Compra"
@@ -1791,10 +2061,9 @@ object StringsManager {
         "tr" -> "Satın Alma Sinyalleri"
         "hi" -> "खरीद सिग्नल"
         "ms" -> "Isyarat Beli"
+        "bn" -> "ক্রয় সংকেত"
         else -> "Sinyal Beli"
-    }
-
-    fun getSellSignals(lang: String) = when(lang) {
+    }fun getSellSignals(lang: String) = when(lang) {
         "id" -> "Sinyal Jual"
         "en" -> "Sell Signals"
         "es" -> "Señales de Venta"
@@ -1802,10 +2071,9 @@ object StringsManager {
         "tr" -> "Satış Sinyalleri"
         "hi" -> "बेचने के संकेत"
         "ms" -> "Isyarat Jual"
+        "bn" -> "বিক্রয় সংকেত"
         else -> "Sinyal Jual"
-    }
-
-    fun getHighConfidence(lang: String) = when(lang) {
+    }fun getHighConfidence(lang: String) = when(lang) {
         "id" -> "Kepercayaan Tinggi"
         "en" -> "High Confidence"
         "es" -> "Alta Confianza"
@@ -1813,10 +2081,9 @@ object StringsManager {
         "tr" -> "Yüksek Güven"
         "hi" -> "उच्च आत्मविश्वास"
         "ms" -> "Keyakinan Tinggi"
+        "bn" -> "উচ্চ আত্মবিশ্বাস"
         else -> "Kepercayaan Tinggi"
-    }
-
-    fun getActiveTargets(lang: String) = when(lang) {
+    }fun getActiveTargets(lang: String) = when(lang) {
         "id" -> "Target Aktif"
         "en" -> "Active Targets"
         "es" -> "Objetivos Activos"
@@ -1824,10 +2091,9 @@ object StringsManager {
         "tr" -> "Aktif Hedefler"
         "hi" -> "सक्रिय लक्ष्य"
         "ms" -> "Sasaran Aktif"
+        "bn" -> "সক্রিয় লক্ষ্য"
         else -> "Target Aktif"
-    }
-
-    fun getStartTrading(lang: String) = when(lang) {
+    }fun getStartTrading(lang: String) = when(lang) {
         "id" -> "Mulai Trading"
         "en" -> "Start Trading"
         "es" -> "Comenzar a Operar"
@@ -1835,10 +2101,9 @@ object StringsManager {
         "tr" -> "İşleme Başla"
         "hi" -> "ट्रेडिंग शुरू करें"
         "ms" -> "Mula Berdagang"
+        "bn" -> "ট্রেডিং শুরু করুন"
         else -> "Mulai Trading"
-    }
-
-    fun getStopTrading(lang: String) = when(lang) {
+    }fun getStopTrading(lang: String) = when(lang) {
         "id" -> "Hentikan Trading"
         "en" -> "Stop Trading"
         "es" -> "Detener Operación"
@@ -1846,10 +2111,9 @@ object StringsManager {
         "tr" -> "İşlemi Durdur"
         "hi" -> "ट्रेडिंग बंद करें"
         "ms" -> "Hentikan Perdagangan"
+        "bn" -> "ট্রেডিং বন্ধ করুন"
         else -> "Hentikan Trading"
-    }
-
-    fun getModeChanged(lang: String) = when(lang) {
+    }fun getModeChanged(lang: String) = when(lang) {
         "id" -> "Mode trading telah diubah"
         "en" -> "Trading mode has been changed"
         "es" -> "El modo de trading ha sido cambiado"
@@ -1857,10 +2121,9 @@ object StringsManager {
         "tr" -> "İşlem modu değiştirildi"
         "hi" -> "ट्रेडिंग मोड बदल दिया गया है"
         "ms" -> "Mod perdagangan telah diubah"
+        "bn" -> "ট্রেডিং মোড পরিবর্তন করা হয়েছে"
         else -> "Mode trading telah diubah"
-    }
-
-    fun getCannotSwitchMode(lang: String) = when(lang) {
+    }fun getCannotSwitchMode(lang: String) = when(lang) {
         "id" -> "Tidak dapat mengganti mode saat bot sedang berjalan"
         "en" -> "Cannot switch mode while bot is running"
         "es" -> "No se puede cambiar el modo mientras el bot está ejecutándose"
@@ -1868,10 +2131,9 @@ object StringsManager {
         "tr" -> "Bot çalışırken modu değiştiremezsiniz"
         "hi" -> "बॉट चल रहा है तो मोड नहीं बदल सकते"
         "ms" -> "Tidak boleh tukar mod semasa bot berjalan"
+        "bn" -> "বট চলার সময় মোড পরিবর্তন করা যাবে না"
         else -> "Tidak dapat mengganti mode saat bot sedang berjalan"
-    }
-
-    fun getInactiveStatus(lang: String) = when(lang) {
+    }fun getInactiveStatus(lang: String) = when(lang) {
         "id" -> "Tidak Aktif"
         "en" -> "Inactive"
         "es" -> "Inactivo"
@@ -1879,10 +2141,9 @@ object StringsManager {
         "tr" -> "Pasif"
         "hi" -> "निष्क्रिय"
         "ms" -> "Tidak Aktif"
+        "bn" -> "নিষ্ক্রিয়"
         else -> "Tidak Aktif"
-    }
-
-    fun getActiveStatus(lang: String) = when(lang) {
+    }fun getActiveStatus(lang: String) = when(lang) {
         "id" -> "Aktif"
         "en" -> "Active"
         "es" -> "Activo"
@@ -1890,10 +2151,9 @@ object StringsManager {
         "tr" -> "Aktif"
         "hi" -> "सक्रिय"
         "ms" -> "Aktif"
+        "bn" -> "সক্রিয়"
         else -> "Aktif"
-    }
-
-    fun getAdjustToYourTradingStyle(lang: String) = when(lang) {
+    }fun getAdjustToYourTradingStyle(lang: String) = when(lang) {
         "id" -> "Sesuaikan dengan gaya bermain trading anda"
         "en" -> "Adjust to your trading style"
         "es" -> "Ajusta a tu estilo de trading"
@@ -1901,10 +2161,9 @@ object StringsManager {
         "tr" -> "Trading stilinize göre ayarlayın"
         "hi" -> "अपनी ट्रेडिंग शैली के अनुसार समायोजित करें"
         "ms" -> "Sesuaikan dengan gaya trading anda"
+        "bn" -> "আপনার ট্রেডিং শৈলী অনুযায়ী সামঞ্জস্য করুন"
         else -> "Sesuaikan dengan gaya bermain trading anda"
-    }
-
-    fun getCurrencyLabel(lang: String): String {
+    }fun getCurrencyLabel(lang: String): String {
         return when(lang) {
             "id" -> "Mata Uang"
             "en" -> "Currency"
@@ -1913,11 +2172,10 @@ object StringsManager {
             "tr" -> "Para Birimi"
             "hi" -> "मुद्रा"
             "ms" -> "Mata Wang"
+            "bn" -> "মুদ্রা"
             else -> "Currency"
         }
-    }
-
-    fun getAccountInformation(lang: String): String {
+    }fun getAccountInformation(lang: String): String {
         return when(lang) {
             "id" -> "Informasi Akun"
             "en" -> "Account Information"
@@ -1926,15 +2184,14 @@ object StringsManager {
             "tr" -> "Hesap Bilgileri"
             "hi" -> "खाता जानकारी"
             "ms" -> "Maklumat Akaun"
+            "bn" -> "অ্যাকাউন্ট তথ্য"
             else -> "Account Information"
         }
-    }
-
-    fun getBalance(language: String) = when(language) {
+    }fun getBalance(language: String) = when(language) {
         "id" -> "Saldo"
+        "bn" -> "ব্যালেন্স"
         else -> "Balance"
-    }
-    fun getEntry(language: String): String {
+    }fun getEntry(language: String): String {
         return when (language) {
             "id" -> "Masuk"
             "en" -> "Entry"
@@ -1943,11 +2200,10 @@ object StringsManager {
             "tr" -> "Giriş"
             "hi" -> "प्रवेश"
             "ms" -> "Masuk"
+            "bn" -> "প্রবেশ"
             else -> "Entry"
         }
-    }
-
-    fun getExit(language: String): String {
+    }fun getExit(language: String): String {
         return when (language) {
             "id" -> "Keluar"
             "en" -> "Exit"
@@ -1956,22 +2212,20 @@ object StringsManager {
             "tr" -> "Çıkış"
             "hi" -> "निकास"
             "ms" -> "Keluar"
+            "bn" -> "প্রস্থান"
             else -> "Exit"
         }
-    }
-
-    fun getDemoBalance(language: String) = when(language) {
+    }fun getDemoBalance(language: String) = when(language) {
         "id" -> "Saldo Demo"
+        "bn" -> "ডেমো ব্যালেন্স"
         else -> "Demo Balance"
-    }
-
-    fun getRealBalance(language: String) = when(language) {
+    }fun getRealBalance(language: String) = when(language) {
         "id" -> "Saldo Real"
+        "bn" -> "প্রকৃত ব্যালেন্স"
         else -> "Real Balance"
-    }
-
-    fun getRefreshBalance(language: String) = when(language) {
+    }fun getRefreshBalance(language: String) = when(language) {
         "id" -> "Perbarui Saldo"
+        "bn" -> "ব্যালেন্স রিফ্রেশ করুন"
         else -> "Refresh Balance"
     }
 
@@ -1979,6 +2233,8 @@ object StringsManager {
         return when (lang) {
             "id" -> "Hari Ini"
             "en" -> "Today"
+            "bn" -> "আজ"
+            "ru" -> "Сегодня"
             else -> "Today"
         }
     }
@@ -1987,7 +2243,126 @@ object StringsManager {
         return when (lang) {
             "id" -> "Tidak ada trade hari ini"
             "en" -> "No trades today"
+            "bn" -> "আজ কোনো ট্রেড নেই"
+            "ru" -> "Сегодня нет сделок"
             else -> "No trades today"
         }
+    }
+
+    fun getTodayPerformance(lang: String): String {
+        return when (lang) {
+            "id" -> "Performa Hari Ini"
+            "en" -> "Today's Performance"
+            "zh" -> "今日表现"
+            "hi" -> "आज का प्रदर्शन"
+            "ar" -> "أداء اليوم"
+            "pt" -> "Desempenho de Hoje"
+            "bn" -> "আজকের পারফরম্যান্স"
+            "ru" -> "Сегодняшние результаты"
+            "ja" -> "今日のパフォーマンス"
+            "es" -> "Rendimiento de Hoy"
+            "fr" -> "Performance d'Aujourd'hui"
+            "de" -> "Heutige Leistung"
+            "ko" -> "오늘의 실적"
+            "vi" -> "Hiệu Suất Hôm Nay"
+            "th" -> "ผลการดำเนินงานวันนี้"
+            "tr" -> "Bugünün Performansı"
+            "it" -> "Prestazioni di Oggi"
+            "pl" -> "Dzisiejsza Wydajność"
+            "uk" -> "Сьогоднішня продуктивність"
+            "nl" -> "Prestaties van Vandaag"
+            "ms" -> "Prestasi Hari Ini"
+            else -> "Today's Performance"
+        }
+    }
+
+    fun getVerifyingAccess(lang: String) = when(lang) {
+        "id" -> "Memverifikasi Akses"
+        "en" -> "Verifying Access"
+        "es" -> "Verificando Acceso"
+        "vi" -> "Xác Minh Truy Cập"
+        "tr" -> "Erişim Doğrulanıyor"
+        "hi" -> "पहुंच सत्यापित करना"
+        "ms" -> "Mengesahkan Akses"
+        "ru" -> "Проверка Доступа"
+        else -> "Verifying Access"
+    }
+
+    fun getPleaseWaitMoment(lang: String) = when(lang) {
+        "id" -> "Mohon tunggu sebentar..."
+        "en" -> "Please wait a moment..."
+        "es" -> "Por favor espera un momento..."
+        "vi" -> "Vui lòng đợi một chút..."
+        "tr" -> "Lütfen bir dakika bekleyin..."
+        "hi" -> "कृपया एक पल प्रतीक्षा करें..."
+        "ms" -> "Sila tunggu sebentar..."
+        "ru" -> "Пожалуйста, подождите..."
+        else -> "Please wait a moment..."
+    }
+
+    fun getCheckingAccountStatus(lang: String) = when(lang) {
+        "id" -> "Memeriksa Status Akun"
+        "en" -> "Checking Account Status"
+        "es" -> "Verificando Estado de Cuenta"
+        "vi" -> "Kiểm Tra Trạng Thái Tài Khoản"
+        "tr" -> "Hesap Durumu Kontrol Ediliyor"
+        "hi" -> "खाता स्थिति जाँच रहा है"
+        "ms" -> "Memeriksa Status Akaun"
+        "ru" -> "Проверка Статуса Аккаунта"
+        else -> "Checking Account Status"
+    }
+
+    fun getValidatingCredentials(lang: String) = when(lang) {
+        "id" -> "Sistem sedang memvalidasi kredensial Anda"
+        "en" -> "System is validating your credentials"
+        "es" -> "El sistema está validando tus credenciales"
+        "vi" -> "Hệ thống đang xác thực thông tin của bạn"
+        "tr" -> "Sistem kimlik bilgilerinizi doğruluyor"
+        "hi" -> "सिस्टम आपकी साख को सत्यापित कर रहा है"
+        "ms" -> "Sistem sedang mengesahkan kelayakan anda"
+        "ru" -> "Система проверяет ваши учетные данные"
+        else -> "System is validating your credentials"
+    }
+
+    fun getPersonalInformation(lang: String) = when(lang) {
+        "id" -> "Informasi Personal"
+        "en" -> "Personal Information"
+        else -> "Personal Information"
+    }
+
+    fun getGender(lang: String) = when(lang) {
+        "id" -> "Jenis Kelamin"
+        "en" -> "Gender"
+        else -> "Gender"
+    }
+
+    fun getCountry(lang: String) = when(lang) {
+        "id" -> "Negara"
+        "en" -> "Country"
+        else -> "Country"
+    }
+
+    fun getBirthday(lang: String) = when(lang) {
+        "id" -> "Tanggal Lahir"
+        "en" -> "Birthday"
+        else -> "Birthday"
+    }
+
+    fun getDepositStatus(lang: String) = when(lang) {
+        "id" -> "Status Deposit"
+        "en" -> "Deposit Status"
+        else -> "Deposit Status"
+    }
+
+    fun getHasDeposited(lang: String) = when(lang) {
+        "id" -> "Sudah Deposit"
+        "en" -> "Has Deposited"
+        else -> "Has Deposited"
+    }
+
+    fun getNoDeposit(lang: String) = when(lang) {
+        "id" -> "Belum Deposit"
+        "en" -> "No Deposit"
+        else -> "No Deposit"
     }
 }

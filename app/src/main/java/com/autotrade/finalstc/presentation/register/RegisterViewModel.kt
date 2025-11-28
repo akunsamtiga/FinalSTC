@@ -111,7 +111,7 @@ class RegisterViewModel @Inject constructor(
                 )
 
                 if (!response.isSuccessful || response.body()?.data == null) {
-                    val errorMsg = "Gagal mengambil data profil pengguna (${response.code()})"
+                    val errorMsg = "Terjadi kesalahan saat memproses akun  (${response.code()})"
                     Log.e(TAG, errorMsg)
                     _uiState.value = _uiState.value.copy(
                         isSavingToWhitelist = false,

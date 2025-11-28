@@ -38,6 +38,7 @@ import coil.request.ImageRequest
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.layout.ContentScale
 import coil.request.CachePolicy
+import com.autotrade.finalstc.presentation.main.dashboard.CurrencyType
 import com.autotrade.finalstc.presentation.main.dashboard.DashboardColors
 import com.autotrade.finalstc.presentation.theme.ThemeViewModel
 
@@ -75,7 +76,7 @@ fun HistoryScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val historyList by viewModel.historyList.collectAsStateWithLifecycle()
     val lang by viewModel.currentLanguage.collectAsStateWithLifecycle()
-    val currency by viewModel.currentCurrency.collectAsStateWithLifecycle()
+    val currentCurrency by viewModel.currentCurrency.collectAsStateWithLifecycle()
 
     var selectedFilter by remember { mutableStateOf("today") }
     var showFilterSheet by remember { mutableStateOf(false) }
@@ -135,8 +136,9 @@ fun HistoryScreen(
                         CompactStatisticsSection(
                             lang = lang,
                             historyList = historyList,
-                            currency = currency,
-                            colors = colors
+                            currency = currentCurrency, // ✅ Pass as CurrencyType
+                            colors = colors,
+                            selectedFilter = selectedFilter
                         )
                     }
                 }
@@ -173,7 +175,7 @@ fun HistoryScreen(
                             ImprovedHistoryCard(
                                 lang = lang,
                                 trade = trade,
-                                currency = currency
+                                currency = currentCurrency
                             )
                         }
                     }
@@ -350,64 +352,6 @@ private fun ImprovedHeader(
                     }
                 }
             }
-
-            // ROW 3: BADGE FILTER AKTIF (JIKA ADA)
-            if (selectedFilter != "all") {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // BADGE UNTUK FILTER YANG AKTIF
-                    when (selectedFilter) {
-                        "today" -> { // Tambahkan case ini
-                            FilterBadge(
-                                icon = Icons.Default.Today,
-                                text = StringsManager.getToday(lang),
-                                iconColor = Color(0xFF9C27B0), // Warna ungu
-                                backgroundColor = Color(0xFF2D1F3D),
-                                borderColor = Color(0x809C27B0)
-                            )
-                        }
-
-                        "week" -> {
-                            FilterBadge(
-                                icon = Icons.Default.DateRange,
-                                text = StringsManager.getThisWeek(lang),
-                                iconColor = Color(0xFF2196F3),
-                                backgroundColor = Color(0xFF1A2B3D),
-                                borderColor = Color(0x802196F3)
-                            )
-                        }
-                        "won" -> {
-                            FilterBadge(
-                                icon = Icons.Outlined.TrendingUp,
-                                text = StringsManager.getWonTrades(lang),
-                                iconColor = WifiGreen,
-                                backgroundColor = WifiGreen.copy(alpha = 0.1f),
-                                borderColor = WifiGreen.copy(alpha = 0.3f)
-                            )
-                        }
-                        "lost" -> {
-                            FilterBadge(
-                                icon = Icons.Outlined.TrendingDown,
-                                text = StringsManager.getLostTrades(lang),
-                                iconColor = AccentSecondary,
-                                backgroundColor = AccentSecondary.copy(alpha = 0.1f),
-                                borderColor = AccentSecondary.copy(alpha = 0.3f)
-                            )
-                        }
-                        "opened" -> {
-                            FilterBadge(
-                                icon = Icons.Outlined.Schedule,
-                                text = StringsManager.getOpenTrades(lang),
-                                iconColor = AccentWarning,
-                                backgroundColor = AccentWarning.copy(alpha = 0.1f),
-                                borderColor = AccentWarning.copy(alpha = 0.3f)
-                            )
-                        }
-                    }
-                }
-            }
         }
     }
 }
@@ -460,25 +404,31 @@ private fun FilterBadge(
 private fun CompactStatisticsSection(
     lang: String,
     historyList: List<TradingHistoryNew>,
-    currency: String,
-    colors: DashboardColors
+    currency: CurrencyType, // ✅ Changed from String
+    colors: DashboardColors,
+    selectedFilter: String // ← TAMBAH PARAMETER INI
 ) {
-    val weeklyTrades = historyList.filter { isWithinLastWeek(it.createdAt) }
-    val allTrades = historyList
+    // FILTER DATA SESUAI DENGAN FILTER YANG AKTIF
+    val displayTrades = when (selectedFilter) {
+        "today" -> historyList.filter { isToday(it.createdAt) }
+        "week" -> historyList.filter { isWithinLastWeek(it.createdAt) }
+        "won" -> historyList.filter { it.status == "won" }
+        "lost" -> historyList.filter { it.status == "lost" }
+        "opened" -> historyList.filter { it.status == "opened" }
+        else -> historyList // "all"
+    }
 
-    val weeklyTotalTrades = weeklyTrades.size
-    val weeklyWonTrades = weeklyTrades.count { it.status == "won" }
-    val weeklyWinRate = if (weeklyTotalTrades > 0) (weeklyWonTrades.toFloat() / weeklyTotalTrades * 100) else 0f
-    val weeklyProfit = weeklyTrades.sumOf { (it.win - it.amount) }
-
-    val totalTrades = allTrades.size
-    val wonTrades = allTrades.count { it.status == "won" }
-    val winRate = if (totalTrades > 0) (wonTrades.toFloat() / totalTrades * 100) else 0f
-    val totalProfit = allTrades.sumOf { (it.win - it.amount) }
+    // HITUNG STATISTIK DARI DISPLAY TRADES (BUKAN ALL TRADES)
+    val displayTotalTrades = displayTrades.size
+    val displayWonTrades = displayTrades.count { it.status == "won" }
+    val displayWinRate = if (displayTotalTrades > 0)
+        (displayWonTrades.toFloat() / displayTotalTrades * 100) else 0f
+    val displayProfit = displayTrades.sumOf { (it.win - it.amount) }
 
     Column(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        // CARD PERFORMANCE SESUAI FILTER
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -498,29 +448,47 @@ private fun CompactStatisticsSection(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column {
+                        // JUDUL SESUAI FILTER
                         Text(
-                            text = StringsManager.getThisWeekPerformance(lang),
+                            text = when (selectedFilter) {
+                                "today" -> StringsManager.getTodayPerformance(lang)
+                                "week" -> StringsManager.getThisWeekPerformance(lang)
+                                "won" -> "Won Trades"
+                                "lost" -> "Lost Trades"
+                                "opened" -> "Open Trades"
+                                else -> "All Trades"
+                            },
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Medium,
                             color = TextPrimary
                         )
-                        Text(
-                            text = getWeekDateRange(),
-                            fontSize = 11.sp,
-                            color = TextSecondary
-                        )
+
+                        // DATE RANGE (HANYA UNTUK TODAY DAN WEEK)
+                        if (selectedFilter == "today" || selectedFilter == "week") {
+                            Text(
+                                text = when (selectedFilter) {
+                                    "today" -> getTodayDateString()
+                                    "week" -> getWeekDateRange()
+                                    else -> ""
+                                },
+                                fontSize = 11.sp,
+                                color = TextSecondary
+                            )
+                        }
                     }
 
-                    if (weeklyTotalTrades > 0) {
+                    // WIN RATE BADGE (HANYA JIKA ADA TRADES)
+                    if (displayTotalTrades > 0) {
                         Surface(
                             shape = RoundedCornerShape(12.dp),
-                            color = if (weeklyWinRate >= 50) WifiGreen.copy(alpha = 0.2f) else AccentSecondary.copy(alpha = 0.2f)
+                            color = if (displayWinRate >= 50) WifiGreen.copy(alpha = 0.2f)
+                            else AccentSecondary.copy(alpha = 0.2f)
                         ) {
                             Text(
-                                text = "${weeklyWinRate.toInt()}% ${StringsManager.getWinRate(lang).uppercase()}",
+                                text = "${displayWinRate.toInt()}% ${StringsManager.getWinRate(lang).uppercase()}",
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Medium,
-                                color = if (weeklyWinRate >= 50) WifiGreen else AccentSecondary,
+                                color = if (displayWinRate >= 50) WifiGreen else AccentSecondary,
                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
                                 maxLines = 1
                             )
@@ -528,56 +496,49 @@ private fun CompactStatisticsSection(
                     }
                 }
 
-                if (weeklyTotalTrades > 0) {
+                // PROFIT & TRADE COUNT (TAMPILKAN MESKIPUN 0)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = if (weeklyProfit >= 0) Icons.Outlined.TrendingUp else Icons.Outlined.TrendingDown,
-                                contentDescription = null,
-                                tint = if (weeklyProfit >= 0) WifiGreen else AccentSecondary,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Column {
-                                Text(
-                                    text = StringsManager.getTotalPnL(lang),
-                                    fontSize = 11.sp,
-                                    color = TextSecondary
-                                )
-                                Text(
-                                    text = formatCurrencyByISO(weeklyProfit, currency),
-                                    fontSize = 18.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = if (weeklyProfit >= 0) WifiGreen else AccentSecondary
-                                )
-                            }
-                        }
-
-                        Text(
-                            text = "$weeklyTotalTrades ${StringsManager.getTrades(lang)}",
-                            fontSize = 13.sp,
-                            color = TextSecondary,
-                            fontWeight = FontWeight.Medium
+                        Icon(
+                            imageVector = if (displayProfit >= 0) Icons.Outlined.TrendingUp
+                            else Icons.Outlined.TrendingDown,
+                            contentDescription = null,
+                            tint = if (displayProfit >= 0) WifiGreen else AccentSecondary,
+                            modifier = Modifier.size(20.dp)
                         )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column {
+                            Text(
+                                text = StringsManager.getTotalPnL(lang),
+                                fontSize = 11.sp,
+                                color = TextSecondary
+                            )
+                            Text(
+                                text = formatCurrencyByISO(displayProfit, currency),
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (displayProfit >= 0) WifiGreen else AccentSecondary
+                            )
+                        }
                     }
-                } else {
+
                     Text(
-                        text = StringsManager.getNoTradesThisWeek(lang),
-                        fontSize = 14.sp,
+                        text = "$displayTotalTrades ${StringsManager.getTrades(lang)}",
+                        fontSize = 13.sp,
                         color = TextSecondary,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth()
+                        fontWeight = FontWeight.Medium
                     )
                 }
             }
         }
 
+        // 3 STAT CARDS - GUNAKAN DATA DARI DISPLAY TRADES (BUKAN ALL TIME)
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -585,7 +546,7 @@ private fun CompactStatisticsSection(
             StatCard(
                 modifier = Modifier.weight(1f),
                 title = StringsManager.getTotal(lang),
-                value = totalTrades.toString(),
+                value = displayTotalTrades.toString(), // ← UBAH DARI totalTrades
                 icon = Icons.Outlined.BarChart,
                 color = StatusBlue,
                 colors = colors
@@ -594,22 +555,28 @@ private fun CompactStatisticsSection(
             StatCard(
                 modifier = Modifier.weight(1f),
                 title = StringsManager.getWinRate(lang),
-                value = "${winRate.toInt()}%",
+                value = "${displayWinRate.toInt()}%", // ← UBAH DARI winRate
                 icon = Icons.Outlined.TrendingUp,
-                color = if (winRate >= 50) WifiGreen else AccentSecondary,
+                color = if (displayWinRate >= 50) WifiGreen else AccentSecondary,
                 colors = colors
             )
 
             StatCard(
                 modifier = Modifier.weight(1f),
                 title = StringsManager.getAllPnL(lang),
-                value = formatCurrencyCompact(totalProfit, currency),
+                value = formatCurrencyByISO(displayProfit, currency), // ← UBAH DARI totalProfit
                 icon = Icons.Outlined.AccountBalance,
-                color = if (totalProfit >= 0) WifiGreen else AccentSecondary,
+                color = if (displayProfit >= 0) WifiGreen else AccentSecondary,
                 colors = colors
             )
         }
     }
+}
+
+// HELPER FUNCTION UNTUK DATE STRING HARI INI
+private fun getTodayDateString(): String {
+    val outputFormat = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
+    return outputFormat.format(Date())
 }
 
 @Composable
@@ -672,7 +639,7 @@ private fun StatCard(
 private fun ImprovedHistoryCard(
     lang: String,
     trade: TradingHistoryNew,
-    currency: String
+    currency: CurrencyType // ✅ Changed from String
 ) {
     val statusColor = when (trade.status) {
         "won" -> WifiGreen
@@ -848,6 +815,7 @@ private fun ImprovedHistoryCard(
                         },
                         maxLines = 1
                     )
+
 
                     Text(
                         text = formatCurrencyByISO(trade.amount, currency),
@@ -1133,8 +1101,8 @@ private fun EmptyStateSection(
             Text(
                 text = when (selectedFilter) {
                     "today" -> StringsManager.getNoTradesToday(lang)
-                    "all" -> StringsManager.getNoTradingHistory(lang)
                     "week" -> StringsManager.getNoTradesThisWeek(lang)
+                    "all" -> StringsManager.getNoTradingHistory(lang)
                     "won" -> StringsManager.getNoWonTrades(lang)
                     "lost" -> StringsManager.getNoLostTrades(lang)
                     "opened" -> StringsManager.getNoOpenedTrades(lang)
@@ -1171,7 +1139,7 @@ private fun FilterBottomSheet(
     onDismiss: () -> Unit
 ) {
     val filters = listOf(
-        "today" to StringsManager.getToday(lang),
+        "today" to StringsManager.getToday(lang),  // ✅ Tetap di posisi pertama
         "all" to StringsManager.getAllTrades(lang),
         "week" to StringsManager.getThisWeek(lang),
         "won" to StringsManager.getWonTrades(lang),
@@ -1357,127 +1325,8 @@ private fun formatDateTime(dateTime: String): String {
 }
 
 // ✅ FUNGSI UTAMA: Format currency dengan ISO code (untuk tampilan detail)
-private fun formatCurrencyByISO(amount: Long, currencyISO: String): String {
-    val amountValue = amount / 100.0
-
-    return when (currencyISO.uppercase()) {
-        "IDR" -> {
-            formatRupiahCompact(amountValue, includeSymbol = true)
-        }
-        "USD" -> {
-            val symbols = java.text.DecimalFormatSymbols(java.util.Locale.US).apply {
-                groupingSeparator = ','
-                decimalSeparator = '.'
-            }
-            val formatter = java.text.DecimalFormat("#,##0.00", symbols)
-            "$${formatter.format(amountValue)}"
-        }
-        "EUR" -> {
-            val symbols = java.text.DecimalFormatSymbols(java.util.Locale.GERMANY).apply {
-                groupingSeparator = '.'
-                decimalSeparator = ','
-            }
-            val formatter = java.text.DecimalFormat("#,##0.00", symbols)
-            "€${formatter.format(amountValue)}"
-        }
-        "GBP" -> {
-            val symbols = java.text.DecimalFormatSymbols(java.util.Locale.UK).apply {
-                groupingSeparator = ','
-                decimalSeparator = '.'
-            }
-            val formatter = java.text.DecimalFormat("#,##0.00", symbols)
-            "£${formatter.format(amountValue)}"
-        }
-        "JPY" -> {
-            val symbols = java.text.DecimalFormatSymbols(java.util.Locale.JAPAN).apply {
-                groupingSeparator = ','
-            }
-            val formatter = java.text.DecimalFormat("#,##0", symbols)
-            "¥${formatter.format(amountValue.toLong())}"
-        }
-        "CNY", "RMB" -> {
-            val symbols = java.text.DecimalFormatSymbols(java.util.Locale.CHINA).apply {
-                groupingSeparator = ','
-                decimalSeparator = '.'
-            }
-            val formatter = java.text.DecimalFormat("#,##0.00", symbols)
-            "¥${formatter.format(amountValue)}"
-        }
-        "KRW" -> {
-            val symbols = java.text.DecimalFormatSymbols(java.util.Locale.KOREA).apply {
-                groupingSeparator = ','
-            }
-            val formatter = java.text.DecimalFormat("#,##0", symbols)
-            "₩${formatter.format(amountValue.toLong())}"
-        }
-        "SGD" -> {
-            val symbols = java.text.DecimalFormatSymbols(java.util.Locale("en", "SG")).apply {
-                groupingSeparator = ','
-                decimalSeparator = '.'
-            }
-            val formatter = java.text.DecimalFormat("#,##0.00", symbols)
-            "S${formatter.format(amountValue)}"
-        }
-        "MYR" -> {
-            val symbols = java.text.DecimalFormatSymbols(java.util.Locale("ms", "MY")).apply {
-                groupingSeparator = ','
-                decimalSeparator = '.'
-            }
-            val formatter = java.text.DecimalFormat("#,##0.00", symbols)
-            "RM${formatter.format(amountValue)}"
-        }
-        "THB" -> {
-            val symbols = java.text.DecimalFormatSymbols(java.util.Locale("th", "TH")).apply {
-                groupingSeparator = ','
-                decimalSeparator = '.'
-            }
-            val formatter = java.text.DecimalFormat("#,##0.00", symbols)
-            "฿${formatter.format(amountValue)}"
-        }
-        "PHP" -> {
-            val symbols = java.text.DecimalFormatSymbols(java.util.Locale("en", "PH")).apply {
-                groupingSeparator = ','
-                decimalSeparator = '.'
-            }
-            val formatter = java.text.DecimalFormat("#,##0.00", symbols)
-            "₱${formatter.format(amountValue)}"
-        }
-        "VND" -> {
-            formatVietnameseDongCompact(amountValue, includeSymbol = true)
-        }
-        "INR" -> {
-            val symbols = java.text.DecimalFormatSymbols(java.util.Locale("en", "IN")).apply {
-                groupingSeparator = ','
-                decimalSeparator = '.'
-            }
-            val formatter = java.text.DecimalFormat("#,##0.00", symbols)
-            "₹${formatter.format(amountValue)}"
-        }
-        "AUD" -> {
-            val symbols = java.text.DecimalFormatSymbols(java.util.Locale("en", "AU")).apply {
-                groupingSeparator = ','
-                decimalSeparator = '.'
-            }
-            val formatter = java.text.DecimalFormat("#,##0.00", symbols)
-            "A${formatter.format(amountValue)}"
-        }
-        "CAD" -> {
-            val symbols = java.text.DecimalFormatSymbols(java.util.Locale.CANADA).apply {
-                groupingSeparator = ','
-                decimalSeparator = '.'
-            }
-            val formatter = java.text.DecimalFormat("#,##0.00", symbols)
-            "C${formatter.format(amountValue)}"
-        }
-        else -> {
-            val symbols = java.text.DecimalFormatSymbols(java.util.Locale.US).apply {
-                groupingSeparator = ','
-                decimalSeparator = '.'
-            }
-            val formatter = java.text.DecimalFormat("#,##0.00", symbols)
-            "$currencyISO ${formatter.format(amountValue)}"
-        }
-    }
+private fun formatCurrencyByISO(amount: Long, currency: CurrencyType): String {
+    return currency.formatAmount(amount)
 }
 
 // ✅ FUNGSI UTAMA: Format currency compact (untuk statistik card)

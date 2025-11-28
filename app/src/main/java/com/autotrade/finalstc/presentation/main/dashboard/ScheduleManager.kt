@@ -14,11 +14,12 @@ import kotlin.collections.isNotEmpty
 class ScheduleManager(
     private val scope: CoroutineScope,
     private val onScheduledOrdersUpdate: (List<ScheduledOrder>) -> Unit,
-    private val onExecuteScheduledTrade: (String, String) -> Unit,
+    private val onExecuteScheduledTrade: (String, String, Int) -> Unit,
     private val onAllSchedulesCompleted: () -> Unit,
     private val sessionManager: SessionManager,
     private val onMartingaleStepUpdate: ((String, Int) -> Unit)? = null,
-    private val onMartingaleCompletion: ((orderId: String, isWin: Boolean, finalStep: Int) -> Unit)? = null
+    private val onMartingaleCompletion: ((orderId: String, isWin: Boolean, finalStep: Int) -> Unit)? = null,
+
 ) {
     private var scheduledOrders = mutableListOf<ScheduledOrder>()
     private var scheduleMonitoringJob: Job? = null
@@ -31,25 +32,8 @@ class ScheduleManager(
     private val COMPLETION_CHECK_INTERVAL = 5000L
     private val COMPLETION_CONFIRMATION_DELAY = 3000L
 
-    // ========================================
-    // 🔥 TIMING PRECISION CONFIGURATION
-    // ========================================
+    private var currentCurrency: CurrencyType = CurrencyType.IDR
 
-    /**
-     * EXECUTION_ADVANCE_SECONDS: Eksekusi order SEBELUM waktu jadwal
-     *
-     * Kenapa butuh advance?
-     * 1. Processing time: 10-50ms untuk prepare request
-     * 2. Network latency: 50-200ms untuk kirim ke server
-     * 3. Server processing: 50-100ms untuk queue trade
-     *
-     * Nilai yang disarankan:
-     * - 1L = Eksekusi 1 detik sebelum jadwal (untuk koneksi cepat)
-     * - 2L = Eksekusi 2 detik sebelum jadwal (RECOMMENDED - paling stabil)
-     * - 3L = Eksekusi 3 detik sebelum jadwal (untuk koneksi lambat)
-     *
-     * CATATAN: Server akan menjadwalkan trade untuk dimulai TEPAT pada waktu target
-     */
     private val EXECUTION_ADVANCE_SECONDS = 2L  // ✅ CHANGED FROM 0L TO 2L
 
     private val PRECISION_CHECK_INTERVAL_MS = 50L  // Check setiap 50ms
@@ -66,9 +50,15 @@ class ScheduleManager(
     private var preWarmTargetTime = 0L
     private var preWarmOrderId: String? = null
 
-    // ========================================
-    // 🎯 TIMING METRICS
-    // ========================================
+    private var alwaysSignalLossTracking: AlwaysSignalLossState? = null
+
+    data class AlwaysSignalLossState(
+        val hasOutstandingLoss: Boolean = false,
+        val currentMartingaleStep: Int = 0,
+        val originalOrderId: String = "",
+        val totalLoss: Long = 0L,
+        val currentTrend: String = ""
+    )
 
     private data class ExecutionMetrics(
         val scheduledTime: Long,
@@ -80,6 +70,11 @@ class ScheduleManager(
 
     private val executionHistory = mutableListOf<ExecutionMetrics>()
     private val MAX_HISTORY_SIZE = 20
+
+    fun updateCurrency(currency: CurrencyType) {
+        currentCurrency = currency
+        println("ScheduleManager: Currency updated to ${currency.code}")
+    }
 
     fun addScheduledOrders(input: String): Result<String> {
         return try {
@@ -192,6 +187,9 @@ class ScheduleManager(
         if (botState == BotState.RUNNING) return
         botState = BotState.RUNNING
 
+        // ✅ RESET ALWAYS SIGNAL TRACKING
+        alwaysSignalLossTracking = null
+
         println("=" .repeat(60))
         println("🚀 SCHEDULE MANAGER STARTED")
         println("=" .repeat(60))
@@ -231,11 +229,76 @@ class ScheduleManager(
     fun stopBot() {
         botState = BotState.STOPPED
         activeMartingaleOrderId = null
+        alwaysSignalLossTracking = null  // ✅ RESET
         stopMonitoring()
         stopCompletionMonitoring()
         stopPreWarming()
 
-        println("⏹️  Schedule Manager STOPPED")
+        println("⏹️ Schedule Manager STOPPED")
+    }
+
+    // ✅ FUNGSI BARU UNTUK CEK ALWAYS SIGNAL
+    fun isAlwaysSignalMode(martingaleSettings: MartingaleState): Boolean {
+        return martingaleSettings.isEnabled && martingaleSettings.isAlwaysSignal
+    }
+
+    fun handleAlwaysSignalOrderResult(
+        orderId: String,
+        isWin: Boolean,
+        martingaleSettings: MartingaleState
+    ) {
+        if (!isAlwaysSignalMode(martingaleSettings)) return
+
+        val currentState = alwaysSignalLossTracking
+
+        if (isWin) {
+            // WIN - Reset tracking
+            println("✅ ALWAYS SIGNAL WIN - Reset tracking")
+            alwaysSignalLossTracking = null
+
+            // Update order martingale state
+            val orderIndex = scheduledOrders.indexOfFirst { it.id == orderId }
+            if (orderIndex != -1) {
+                val order = scheduledOrders[orderIndex]
+                scheduledOrders[orderIndex] = order.copy(
+                    martingaleState = order.martingaleState.copy(
+                        isActive = false,
+                        isCompleted = true,
+                        finalResult = "WIN",
+                        currentStep = currentState?.currentMartingaleStep ?: 0
+                    )
+                )
+                onScheduledOrdersUpdate(scheduledOrders.toList())
+            }
+
+        } else {
+            // LOSE - Track for next signal
+            val nextStep = (currentState?.currentMartingaleStep ?: 0) + 1
+            val orderIndex = scheduledOrders.indexOfFirst { it.id == orderId }
+            val order = scheduledOrders.getOrNull(orderIndex)
+
+            println("❌ ALWAYS SIGNAL LOSE - Will continue on next signal (Step $nextStep)")
+
+            alwaysSignalLossTracking = AlwaysSignalLossState(
+                hasOutstandingLoss = true,
+                currentMartingaleStep = nextStep,
+                originalOrderId = orderId,
+                totalLoss = (currentState?.totalLoss ?: 0L) + (order?.martingaleState?.totalLoss ?: martingaleSettings.baseAmount),
+                currentTrend = order?.trend ?: ""
+            )
+
+            // Update order state
+            if (orderIndex != -1 && order != null) {
+                scheduledOrders[orderIndex] = order.copy(
+                    martingaleState = order.martingaleState.copy(
+                        isActive = true,
+                        currentStep = nextStep,
+                        totalLoss = alwaysSignalLossTracking?.totalLoss ?: 0L
+                    )
+                )
+                onScheduledOrdersUpdate(scheduledOrders.toList())
+            }
+        }
     }
 
     private fun scheduleNextPreWarming() {
@@ -494,12 +557,66 @@ class ScheduleManager(
     }
 
     private fun executeScheduledOrderPrecise(order: ScheduledOrder) {
-        onExecuteScheduledTrade(order.trend, order.id)
+        // Check if Always Signal mode has outstanding loss
+        val lossState = alwaysSignalLossTracking
+
+        if (lossState != null && lossState.hasOutstandingLoss) {
+            println("🔄 ALWAYS SIGNAL: Executing as Martingale Step ${lossState.currentMartingaleStep}")
+            println("   Original Order: ${lossState.originalOrderId}")
+            println("   Current Total Loss: ${formatAmount(lossState.totalLoss)}")
+            println("   New Order: ${order.id} - ${order.time} ${order.trend.uppercase()}")
+
+            // Update order dengan martingale info
+            val orderIndex = scheduledOrders.indexOfFirst { it.id == order.id }
+            if (orderIndex != -1) {
+                scheduledOrders[orderIndex] = order.copy(
+                    martingaleState = ScheduledOrderMartingaleState(
+                        isActive = true,
+                        currentStep = lossState.currentMartingaleStep,
+                        totalLoss = lossState.totalLoss
+                    )
+                )
+                onScheduledOrdersUpdate(scheduledOrders.toList())
+            }
+        }
+
+        // ✅ FIX: Pass martingale step untuk perhitungan amount
+        val martingaleStep = if (lossState != null && lossState.hasOutstandingLoss) {
+            lossState.currentMartingaleStep
+        } else {
+            0
+        }
+
+        onExecuteScheduledTrade(order.trend, order.id, martingaleStep) // ✅ TAMBAH PARAMETER
     }
 
-    // ========================================
-    // 📊 EXECUTION METRICS
-    // ========================================
+    fun getAlwaysSignalStatus(): Map<String, Any> {
+        val lossState = alwaysSignalLossTracking
+
+        return if (lossState != null && lossState.hasOutstandingLoss) {
+            mapOf(
+                "is_active" to true,
+                "current_step" to lossState.currentMartingaleStep,
+                "original_order_id" to lossState.originalOrderId,
+                "total_loss" to lossState.totalLoss,
+                "formatted_loss" to formatAmount(lossState.totalLoss),
+                "status" to "Waiting for next signal (Step ${lossState.currentMartingaleStep})"
+            )
+        } else {
+            mapOf(
+                "is_active" to false,
+                "status" to "No outstanding loss"
+            )
+        }
+    }
+
+    private fun formatAmount(amount: Long): String {
+        return when {
+            amount >= 1_000_000 -> "${amount / 1_000_000}M"
+            amount >= 1_000 -> "${amount / 1_000}K"
+            else -> amount.toString()
+        }
+    }
 
     private fun addExecutionMetrics(metrics: ExecutionMetrics) {
         executionHistory.add(metrics)

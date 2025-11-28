@@ -264,12 +264,12 @@ fun ThemedBottomNavigationBar(
                                     .size(40.dp)
                                     .clip(RoundedCornerShape(20.dp))
                                     .background(
-                                        if (selected) colors.accentPrimary2main.copy(alpha = 0.12f)
+                                        if (selected) colors.chartLine2.copy(alpha = 0.1f)
                                         else Color.Transparent
                                     )
                                     .border(
                                         width = if (selected) 1.dp else 0.dp,
-                                        color = if (selected) colors.accentPrimary2main.copy(alpha = 0.3f)
+                                        color = if (selected) colors.chartLine2.copy(alpha = 0.2f)
                                         else Color.Transparent,
                                         shape = RoundedCornerShape(20.dp)
                                     ),
@@ -278,7 +278,7 @@ fun ThemedBottomNavigationBar(
                                 Icon(
                                     imageVector = item.icon,
                                     contentDescription = item.label,
-                                    tint = if (selected) colors.accentPrimary2main else colors.TextPrimary1,
+                                    tint = if (selected) colors.chartLine2.copy(alpha = 0.6f) else colors.TextPrimary1,
                                     modifier = Modifier.size(22.dp)
                                 )
                             }
@@ -287,7 +287,7 @@ fun ThemedBottomNavigationBar(
                             Text(
                                 text = item.label,
                                 fontSize = 11.sp,
-                                color = if (selected) colors.accentPrimary2main else colors.TextPrimary1,
+                                color = if (selected) colors.chartLine2.copy(alpha = 0.6f) else colors.TextPrimary1,
                                 fontWeight = if (selected) androidx.compose.ui.text.font.FontWeight.Medium
                                 else androidx.compose.ui.text.font.FontWeight.Normal,
                                 modifier = Modifier.padding(top = 2.dp),
