@@ -15,8 +15,8 @@ android {
         applicationId = "com.autotrade.finalstc"
         minSdk = 26
         targetSdk = 35
-        versionCode = 3
-        versionName = "1.5"
+        versionCode = 4
+        versionName = "1.6"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -120,6 +120,9 @@ dependencies {
     androidTestImplementation(libs.androidx.ui.test.junit4)
 
     implementation("com.google.accompanist:accompanist-webview:0.34.0")
+    implementation("com.google.firebase:firebase-messaging-ktx")
+
+    implementation("androidx.work:work-runtime-ktx:2.8.1")
 
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)

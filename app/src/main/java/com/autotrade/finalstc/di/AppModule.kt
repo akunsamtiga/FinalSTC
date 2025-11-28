@@ -4,6 +4,14 @@ import com.autotrade.finalstc.data.api.BalanceApiService
 import com.autotrade.finalstc.data.api.LoginApiService
 import com.autotrade.finalstc.data.api.UserProfileApiService
 import com.autotrade.finalstc.data.api.CurrencyApiService
+import com.autotrade.finalstc.data.local.SessionManager
+import com.autotrade.finalstc.data.repository.TradingHistoryRepository
+import com.autotrade.finalstc.data.repository.CurrencyRepository
+import com.autotrade.finalstc.data.repository.FirebaseRepository
+import com.autotrade.finalstc.data.repository.ProfileRepository
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ktx.firestore
+import com.google.firebase.ktx.Firebase
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -17,10 +25,18 @@ import javax.inject.Singleton
 
 @Module
 @InstallIn(SingletonComponent::class)
-object NetworkModule {
+object AppModule {
 
     private const val BASE_URL = "https://api.stockity.id/"
 
+    // Firebase Providers
+    @Provides
+    @Singleton
+    fun provideFirebaseFirestore(): FirebaseFirestore {
+        return Firebase.firestore
+    }
+
+    // Network Providers
     @Provides
     @Singleton
     fun provideOkHttpClient(): OkHttpClient {
@@ -68,5 +84,40 @@ object NetworkModule {
     @Singleton
     fun provideBalanceApiService(retrofit: Retrofit): BalanceApiService {
         return retrofit.create(BalanceApiService::class.java)
+    }
+
+    // Repository Providers
+    @Provides
+    @Singleton
+    fun provideTradingHistoryRepository(
+        sessionManager: SessionManager
+    ): TradingHistoryRepository {
+        return TradingHistoryRepository(sessionManager)
+    }
+
+    @Provides
+    @Singleton
+    fun provideCurrencyRepository(
+        currencyApiService: CurrencyApiService,
+        sessionManager: SessionManager
+    ): CurrencyRepository {
+        return CurrencyRepository(currencyApiService, sessionManager)
+    }
+
+    @Provides
+    @Singleton
+    fun provideFirebaseRepository(
+        firestore: FirebaseFirestore
+    ): FirebaseRepository {
+        return FirebaseRepository(firestore)
+    }
+
+    @Provides
+    @Singleton
+    fun provideProfileRepository(
+        apiService: UserProfileApiService,
+        sessionManager: SessionManager
+    ): ProfileRepository {
+        return ProfileRepository(apiService, sessionManager)
     }
 }

@@ -9,7 +9,8 @@ enum class TradingMode {
     FOLLOW_ORDER,
     INDICATOR_ORDER,
     CTC_ORDER,
-    MULTI_MOMENTUM
+    MULTI_MOMENTUM,
+    AI_SIGNAL
 }
 
 enum class BotState {

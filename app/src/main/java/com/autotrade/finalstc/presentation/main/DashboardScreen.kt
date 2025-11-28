@@ -479,10 +479,11 @@ fun DashboardScreen(
     historyViewModel: HistoryViewModel = hiltViewModel(),
     themeViewModel: ThemeViewModel,
 ) {
+    val aiSignalOrders by dashboardViewModel.aiSignalOrders.collectAsStateWithLifecycle()
+
     val dashboardTheme by themeViewModel.currentTheme.collectAsStateWithLifecycle()
     val colors = dashboardTheme.colors
 
-    // ✅ TAMBAH WHITELIST CHECK STATE
     val whitelistCheckState by dashboardViewModel.whitelistCheckState.collectAsStateWithLifecycle()
 
     val multiMomentumOrders by dashboardViewModel.multiMomentumOrders.collectAsStateWithLifecycle()
@@ -578,6 +579,7 @@ fun DashboardScreen(
             }
 
             is WhitelistCheckState.Verified -> {
+                // ✅ SCROLLABLE CONTENT
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
@@ -673,6 +675,10 @@ fun DashboardScreen(
                                 multiMomentumOrders = multiMomentumOrders,
                                 onStartMultiMomentum = dashboardViewModel::startMultiMomentumMode,
                                 onStopMultiMomentum = dashboardViewModel::stopMultiMomentumMode,
+                                isAISignalModeActive = uiState.isAISignalModeActive,
+                                aiSignalOrders = aiSignalOrders,
+                                onStartAISignal = dashboardViewModel::startAISignalMode,
+                                onStopAISignal = dashboardViewModel::stopAISignalMode,
                             )
                         }
 
@@ -686,6 +692,12 @@ fun DashboardScreen(
                         MultiMomentumInfoCard(
                             multiMomentumOrders = multiMomentumOrders,
                             isMultiMomentumModeActive = uiState.isMultiMomentumModeActive,
+                            colors = colors
+                        )
+
+                        AISignalInfoCard(
+                            aiSignalOrders = aiSignalOrders,
+                            isAISignalModeActive = uiState.isAISignalModeActive,
                             colors = colors
                         )
 
@@ -745,13 +757,12 @@ fun DashboardScreen(
                             )
                         }
 
-                        uiState.error?.let {
-                            ErrorCard(
-                                error = it,
-                                onDismiss = dashboardViewModel::clearError,
-                                colors = colors
-                            )
-                        }
+                        BotStatusInfoCard(
+                            botState = uiState.botState,
+                            botStatus = uiState.botStatus,
+                            colors = colors,
+                            currentLanguage = currentLanguage
+                        )
 
                         uiState.lastTradeResult?.let {
                             LastTradeResultCard(
@@ -770,68 +781,82 @@ fun DashboardScreen(
                         )
                     }
                 }
-
-                // ✅ DIALOGS TETAP DI SINI
-                if (showAssetDialog) {
-                    AssetSelectionDialog(
-                        assets = assets,
-                        isLoading = uiState.assetsLoading,
-                        onAssetSelected = {
-                            dashboardViewModel.selectAsset(it)
-                            showAssetDialog = false
-                        },
-                        onDismiss = { showAssetDialog = false },
-                        colors = colors,
-                        onRefresh = dashboardViewModel::refreshAssets,
-                        currentLanguage = currentLanguage
-                    )
-                }
-
-                if (showScheduleDialog) {
-                    ScheduleListDialog(
-                        scheduledOrders = scheduledOrders,
-                        onRemoveOrder = dashboardViewModel::removeScheduledOrder,
-                        onClearAll = dashboardViewModel::clearAllScheduledOrders,
-                        onDismiss = { showScheduleDialog = false },
-                        onShowInputSignal = {
-                            showScheduleDialog = false
-                            showMultilineScheduleDialog = true
-                        },
-                        colors = colors
-                    )
-                }
-
-                if (showMultilineScheduleDialog) {
-                    MultilineScheduleDialog(
-                        currentInput = "",
-                        scheduledOrders = scheduledOrders,
-                        onInputChange = { input ->
-                            dashboardViewModel.updateScheduleInput(input)
-                        },
-                        onAdd = {
-                            dashboardViewModel.addScheduledOrders()
-                            showMultilineScheduleDialog = false
-                        },
-                        onDismiss = { showMultilineScheduleDialog = false },
-                        colors = colors
-                    )
-                }
-
-                if (showIndicatorSettingsDialog) {
-                    IndicatorSettingsDialog(
-                        indicatorSettings = uiState.indicatorSettings,
-                        consecutiveLossSettings = uiState.consecutiveLossSettings,
-                        canModify = uiState.canModifySettings(),
-                        onIndicatorTypeChange = dashboardViewModel::setIndicatorType,
-                        onIndicatorPeriodChange = dashboardViewModel::setIndicatorPeriod,
-                        onRSILevelsChange = dashboardViewModel::setIndicatorRSILevels,
-                        onSensitivityChange = dashboardViewModel::setIndicatorSensitivity,
-                        onConsecutiveLossChange = dashboardViewModel::setConsecutiveLossLimit,
-                        onDismiss = { showIndicatorSettingsDialog = false },
-                        colors = colors
-                    )
-                }
             }
+        }
+
+        if (whitelistCheckState is WhitelistCheckState.Verified) {
+            FloatingConnectionToast(
+                isConnected = uiState.isWebSocketConnected,
+                connectionStatus = uiState.connectionStatus,
+                colors = colors
+            )
+
+            FloatingErrorToast(
+                error = uiState.error,
+                onDismiss = dashboardViewModel::clearError,
+                colors = colors
+            )
+
+        }
+
+        if (showAssetDialog) {
+            AssetSelectionDialog(
+                assets = assets,
+                isLoading = uiState.assetsLoading,
+                onAssetSelected = {
+                    dashboardViewModel.selectAsset(it)
+                    showAssetDialog = false
+                },
+                onDismiss = { showAssetDialog = false },
+                colors = colors,
+                onRefresh = dashboardViewModel::refreshAssets,
+                currentLanguage = currentLanguage
+            )
+        }
+
+        if (showScheduleDialog) {
+            ScheduleListDialog(
+                scheduledOrders = scheduledOrders,
+                onRemoveOrder = dashboardViewModel::removeScheduledOrder,
+                onClearAll = dashboardViewModel::clearAllScheduledOrders,
+                onDismiss = { showScheduleDialog = false },
+                onShowInputSignal = {
+                    showScheduleDialog = false
+                    showMultilineScheduleDialog = true
+                },
+                colors = colors
+            )
+        }
+
+        if (showMultilineScheduleDialog) {
+            MultilineScheduleDialog(
+                currentInput = "",
+                scheduledOrders = scheduledOrders,
+                onInputChange = { input ->
+                    dashboardViewModel.updateScheduleInput(input)
+                },
+                onAdd = {
+                    dashboardViewModel.addScheduledOrders()
+                    showMultilineScheduleDialog = false
+                },
+                onDismiss = { showMultilineScheduleDialog = false },
+                colors = colors
+            )
+        }
+
+        if (showIndicatorSettingsDialog) {
+            IndicatorSettingsDialog(
+                indicatorSettings = uiState.indicatorSettings,
+                consecutiveLossSettings = uiState.consecutiveLossSettings,
+                canModify = uiState.canModifySettings(),
+                onIndicatorTypeChange = dashboardViewModel::setIndicatorType,
+                onIndicatorPeriodChange = dashboardViewModel::setIndicatorPeriod,
+                onRSILevelsChange = dashboardViewModel::setIndicatorRSILevels,
+                onSensitivityChange = dashboardViewModel::setIndicatorSensitivity,
+                onConsecutiveLossChange = dashboardViewModel::setConsecutiveLossLimit,
+                onDismiss = { showIndicatorSettingsDialog = false },
+                colors = colors
+            )
         }
     }
 }
@@ -843,7 +868,6 @@ private fun WhitelistCheckingScreen(
 ) {
     val currentLanguage by viewModel.currentLanguage.collectAsStateWithLifecycle()
 
-    // ✅ Animated Background Gradient
     val infiniteTransition = rememberInfiniteTransition(label = "background")
     val gradientOffset by infiniteTransition.animateFloat(
         initialValue = 0f,
@@ -1237,6 +1261,7 @@ private fun WhitelistFailedScreen(
     }
 }
 
+
 @Composable
 fun HeaderSection(
     isConnected: Boolean,
@@ -1246,19 +1271,7 @@ fun HeaderSection(
     colors: DashboardColors,
     modifier: Modifier = Modifier
 ) {
-    var showToast by remember { mutableStateOf(false) }
-    var previousConnectionState by remember { mutableStateOf(isConnected) }
 
-    LaunchedEffect(isConnected) {
-        if (isConnected != previousConnectionState) {
-            showToast = true
-            previousConnectionState = isConnected
-            delay(3000)
-            showToast = false
-        }
-    }
-
-    // Pilih header image berdasarkan mode
     val headerImageResource = if (isDarkMode) {
         R.drawable.header5
     } else {
@@ -1268,18 +1281,18 @@ fun HeaderSection(
     Box(
         modifier = modifier.fillMaxWidth()
     ) {
-        // Background Image - TIDAK TERPOTONG SAMA SEKALI
+        // Background Image
         Image(
             painter = painterResource(id = headerImageResource),
             contentDescription = "Header Background",
             modifier = Modifier
                 .fillMaxWidth()
-                .wrapContentHeight(), // Tinggi menyesuaikan konten gambar
-            contentScale = ContentScale.FillWidth, // Lebar penuh, tinggi proporsional
+                .wrapContentHeight(),
+            contentScale = ContentScale.FillWidth,
             alignment = Alignment.TopCenter
         )
 
-        // Content Layer (di atas background image)
+        // Content Layer
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1289,12 +1302,46 @@ fun HeaderSection(
             Spacer(modifier = Modifier.height(60.dp))
         }
 
-        // Toast notification
-        AnimatedVisibility(
-            visible = showToast,
-            enter = fadeIn() + slideInVertically(initialOffsetY = { -100 }),
-            exit = fadeOut() + slideOutVertically(targetOffsetY = { -100 }),
-            modifier = Modifier.align(Alignment.TopCenter)
+    }
+}
+
+@Composable
+private fun FloatingConnectionToast(
+    isConnected: Boolean,
+    connectionStatus: String,
+    colors: DashboardColors
+) {
+    var showToast by remember { mutableStateOf(false) }
+    var previousConnectionState by remember { mutableStateOf(isConnected) }
+
+    LaunchedEffect(isConnected) {
+        if (isConnected != previousConnectionState) {
+            showToast = true
+            previousConnectionState = isConnected
+            delay(5000)
+            showToast = false
+        }
+    }
+
+    AnimatedVisibility(
+        visible = showToast,
+        enter = fadeIn(tween(300)) + slideInVertically(
+            initialOffsetY = { -it },
+            animationSpec = tween(500, easing = FastOutSlowInEasing)
+        ),
+        exit = fadeOut(tween(300)) + slideOutVertically(
+            targetOffsetY = { -it },
+            animationSpec = tween(400, easing = FastOutSlowInEasing)
+        ),
+        modifier = Modifier
+            .fillMaxWidth()
+            .wrapContentHeight()
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 16.dp),
+            contentAlignment = Alignment.TopCenter
         ) {
             EnhancedConnectionToast(
                 isConnected = isConnected,
@@ -1310,48 +1357,173 @@ private fun EnhancedConnectionToast(
     connectionStatus: String,
     modifier: Modifier = Modifier
 ) {
+    val infiniteTransition = rememberInfiniteTransition(label = "toast")
+    val pulseAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.6f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1500, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulse"
+    )
+
     Box(
         modifier = modifier
             .wrapContentWidth()
-            .defaultMinSize(minHeight = 42.dp)
-            .background(
-                color = Color(0xFFFFFFFF),
-                shape = RoundedCornerShape(50)
+            .defaultMinSize(minHeight = 52.dp)
+            .shadow(
+                elevation = 16.dp,
+                shape = RoundedCornerShape(26.dp),
+                spotColor = if (isConnected)
+                    Color(0xFF67D88B).copy(alpha = 0.4f)
+                else
+                    Color(0xFFDC4D4D).copy(alpha = 0.4f),
+                ambientColor = Color.Black.copy(alpha = 0.3f)
             )
-            .padding(horizontal = 14.dp, vertical = 8.dp)
+            .background(
+                brush = Brush.horizontalGradient(
+                    colors = if (isConnected) {
+                        listOf(
+                            Color(0xFFFFFFFF),
+                            Color(0xFFF8FFFC)
+                        )
+                    } else {
+                        listOf(
+                            Color(0xFFFFFFFF),
+                            Color(0xFFFFF8F8)
+                        )
+                    }
+                ),
+                shape = RoundedCornerShape(26.dp)
+            )
+            .border(
+                width = 1.5.dp,
+                brush = Brush.horizontalGradient(
+                    colors = if (isConnected) {
+                        listOf(
+                            Color(0xFF67D88B).copy(alpha = 0.6f),
+                            Color(0xFF67D88B).copy(alpha = 0.3f)
+                        )
+                    } else {
+                        listOf(
+                            Color(0xFFDC4D4D).copy(alpha = 0.6f),
+                            Color(0xFFDC4D4D).copy(alpha = 0.3f)
+                        )
+                    }
+                ),
+                shape = RoundedCornerShape(26.dp)
+            )
+            .padding(horizontal = 18.dp, vertical = 10.dp)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center,
             modifier = Modifier.wrapContentWidth()
         ) {
-            Icon(
-                imageVector = if (isConnected) Icons.Default.Wifi else Icons.Default.WifiOff,
-                contentDescription = null,
-                tint = if (isConnected) Color(0xFF67D88B) else Color(0xFFDC4D4D),
-                modifier = Modifier.size(20.dp)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-
-            Column {
-                Text(
-                    text = if (isConnected) "Connected to server" else "Disconnected from server",
-                    color = if (isConnected) Color(0xFF67D88B) else Color(0xFFDC4D4D),
-                    fontWeight = FontWeight.Medium,
-                    fontSize = 15.sp,
-                    maxLines = 1
+            Box(
+                modifier = Modifier.size(32.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .background(
+                            brush = Brush.radialGradient(
+                                colors = if (isConnected) {
+                                    listOf(
+                                        Color(0xFF67D88B).copy(alpha = pulseAlpha * 0.3f),
+                                        Color.Transparent
+                                    )
+                                } else {
+                                    listOf(
+                                        Color(0xFFDC4D4D).copy(alpha = pulseAlpha * 0.3f),
+                                        Color.Transparent
+                                    )
+                                }
+                            ),
+                            shape = CircleShape
+                        )
                 )
 
-                if (connectionStatus.isNotEmpty() && connectionStatus != "Connected" && connectionStatus != "Disconnected") {
+                Surface(
+                    modifier = Modifier.size(28.dp),
+                    shape = CircleShape,
+                    color = if (isConnected)
+                        Color(0xFF67D88B).copy(alpha = 0.15f)
+                    else
+                        Color(0xFFDC4D4D).copy(alpha = 0.15f),
+                    border = BorderStroke(
+                        width = 1.dp,
+                        color = if (isConnected)
+                            Color(0xFF67D88B).copy(alpha = 0.4f)
+                        else
+                            Color(0xFFDC4D4D).copy(alpha = 0.4f)
+                    )
+                ) {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        Icon(
+                            imageVector = if (isConnected) Icons.Default.Wifi else Icons.Default.WifiOff,
+                            contentDescription = null,
+                            tint = if (isConnected) Color(0xFF67D88B) else Color(0xFFDC4D4D),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            Column(
+                verticalArrangement = Arrangement.Center
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = if (isConnected) "Connected" else "Disconnected",
+                        color = if (isConnected) Color(0xFF2D7A4F) else Color(0xFFB83E3E),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp,
+                        maxLines = 1,
+                        letterSpacing = 0.3.sp
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .background(
+                                color = if (isConnected)
+                                    Color(0xFF67D88B).copy(alpha = pulseAlpha)
+                                else
+                                    Color(0xFFDC4D4D).copy(alpha = pulseAlpha),
+                                shape = CircleShape
+                            )
+                    )
+                }
+
+                if (connectionStatus.isNotEmpty() &&
+                    connectionStatus != "Connected" &&
+                    connectionStatus != "Disconnected") {
                     Text(
                         text = connectionStatus,
-                        color = if (isConnected) Color(0xFF67D88B).copy(alpha = 0.7f) else Color(0xFFDC4D4D).copy(alpha = 0.7f),
-                        fontWeight = FontWeight.Normal,
-                        fontSize = 12.sp,
-                        maxLines = 1
+                        color = if (isConnected)
+                            Color(0xFF2D7A4F).copy(alpha = 0.7f)
+                        else
+                            Color(0xFFB83E3E).copy(alpha = 0.7f),
+                        fontWeight = FontWeight.Medium,
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                        letterSpacing = 0.1.sp
                     )
                 }
             }
+
+            Spacer(modifier = Modifier.width(8.dp))
         }
     }
 }
@@ -1379,6 +1551,214 @@ fun FadingGradientLine(
     )
 }
 
+@Composable
+private fun FloatingErrorToast(
+    error: String?,
+    onDismiss: () -> Unit,
+    colors: DashboardColors
+) {
+    var showToast by remember { mutableStateOf(false) }
+    var currentError by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(error) {
+        if (error != null && error != currentError) {
+            currentError = error
+            showToast = true
+            delay(5000) // Auto-dismiss after 5 seconds
+            showToast = false
+            delay(300) // Wait for animation to complete
+            onDismiss()
+        } else if (error == null) {
+            showToast = false
+            currentError = null
+        }
+    }
+
+    AnimatedVisibility(
+        visible = showToast && currentError != null,
+        enter = fadeIn(tween(300)) + slideInVertically(
+            initialOffsetY = { -it },
+            animationSpec = tween(500, easing = FastOutSlowInEasing)
+        ),
+        exit = fadeOut(tween(300)) + slideOutVertically(
+            targetOffsetY = { -it },
+            animationSpec = tween(400, easing = FastOutSlowInEasing)
+        ),
+        modifier = Modifier
+            .fillMaxWidth()
+            .wrapContentHeight()
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 80.dp), // Position below connection toast
+            contentAlignment = Alignment.TopCenter
+        ) {
+            EnhancedErrorToast(
+                errorMessage = currentError ?: "",
+                onDismiss = {
+                    showToast = false
+                    onDismiss()
+                },
+                colors = colors
+            )
+        }
+    }
+}
+
+@Composable
+private fun EnhancedErrorToast(
+    errorMessage: String,
+    onDismiss: () -> Unit,
+    colors: DashboardColors,
+    modifier: Modifier = Modifier
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "error_toast")
+    val pulseAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.6f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1500, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulse"
+    )
+
+    Box(
+        modifier = modifier
+            .wrapContentWidth()
+            .widthIn(max = 360.dp)
+            .defaultMinSize(minHeight = 52.dp)
+            .shadow(
+                elevation = 16.dp,
+                shape = RoundedCornerShape(26.dp),
+                spotColor = colors.errorColor.copy(alpha = 0.4f),
+                ambientColor = Color.Black.copy(alpha = 0.3f)
+            )
+            .background(
+                brush = Brush.horizontalGradient(
+                    colors = listOf(
+                        Color(0xFFFFFFFF),
+                        Color(0xFFFFF8F8)
+                    )
+                ),
+                shape = RoundedCornerShape(26.dp)
+            )
+            .border(
+                width = 1.5.dp,
+                brush = Brush.horizontalGradient(
+                    colors = listOf(
+                        colors.errorColor.copy(alpha = 0.6f),
+                        colors.errorColor.copy(alpha = 0.3f)
+                    )
+                ),
+                shape = RoundedCornerShape(26.dp)
+            )
+            .padding(horizontal = 18.dp, vertical = 10.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+            modifier = Modifier.wrapContentWidth()
+        ) {
+            Box(
+                modifier = Modifier.size(32.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                // Pulse background
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .background(
+                            brush = Brush.radialGradient(
+                                colors = listOf(
+                                    colors.errorColor.copy(alpha = pulseAlpha * 0.3f),
+                                    Color.Transparent
+                                )
+                            ),
+                            shape = CircleShape
+                        )
+                )
+
+                // Icon background
+                Surface(
+                    modifier = Modifier.size(28.dp),
+                    shape = CircleShape,
+                    color = colors.errorColor.copy(alpha = 0.15f),
+                    border = BorderStroke(
+                        width = 1.dp,
+                        color = colors.errorColor.copy(alpha = 0.4f)
+                    )
+                ) {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Warning,
+                            contentDescription = null,
+                            tint = colors.errorColor,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            Column(
+                verticalArrangement = Arrangement.Center,
+                modifier = Modifier.weight(1f, fill = false)
+            ) {
+                Text(
+                    text = "Error",
+                    color = Color(0xFFB83E3E),
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp,
+                    maxLines = 1,
+                    letterSpacing = 0.3.sp
+                )
+
+                if (errorMessage.isNotEmpty()) {
+                    Text(
+                        text = errorMessage,
+                        color = Color(0xFFB83E3E).copy(alpha = 0.7f),
+                        fontWeight = FontWeight.Medium,
+                        fontSize = 11.sp,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        letterSpacing = 0.1.sp,
+                        lineHeight = 14.sp
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            // Close button
+            Surface(
+                modifier = Modifier
+                    .size(24.dp)
+                    .clip(CircleShape),
+                shape = CircleShape,
+                color = colors.errorColor.copy(alpha = 0.1f),
+                onClick = onDismiss
+            ) {
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Dismiss",
+                        tint = colors.errorColor,
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
+            }
+        }
+    }
+}
 
 @Composable
 fun BotControlCard(
@@ -1391,7 +1771,7 @@ fun BotControlCard(
     onResumeBot: () -> Unit,
     onStopBot: () -> Unit,
     colors: DashboardColors,
-    currentLanguage: String = "id"  // ✅ ADD PARAMETER
+    currentLanguage: String = "id"
 ) {
     Card(
         modifier = Modifier
@@ -1441,7 +1821,7 @@ fun BotControlCard(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = StringsManager.getBotControl(currentLanguage), // ✅ MULTILANGUAGE
+                        text = StringsManager.getBotControl(currentLanguage),
                         style = MaterialTheme.typography.titleMedium.copy(
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 19.sp,
@@ -1500,7 +1880,7 @@ fun BotControlCard(
                                     BotState.RUNNING -> StringsManager.getBotRunning(currentLanguage)
                                     BotState.PAUSED -> StringsManager.getBotPaused(currentLanguage)
                                     BotState.STOPPED -> StringsManager.getBotStopped(currentLanguage)
-                                }, // ✅ MULTILANGUAGE
+                                },
                                 style = MaterialTheme.typography.bodySmall.copy(
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 13.sp
@@ -1524,7 +1904,6 @@ fun BotControlCard(
                             .weight(1f)
                             .height(48.dp)
                     ) {
-                        // Layer bayangan
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
@@ -1539,7 +1918,6 @@ fun BotControlCard(
                                 .offset(y = 2.dp)
                         )
 
-                        // Tombol utama
                         Surface(
                             modifier = Modifier
                                 .fillMaxSize()
@@ -1597,7 +1975,7 @@ fun BotControlCard(
                                         text = if (canResumeBot)
                                             StringsManager.getBotResume(currentLanguage)
                                         else
-                                            StringsManager.getBotPause(currentLanguage), // ✅ MULTILANGUAGE
+                                            StringsManager.getBotPause(currentLanguage),
                                         style = MaterialTheme.typography.labelLarge.copy(
                                             fontWeight = FontWeight.SemiBold,
                                             fontSize = 12.sp,
@@ -1618,7 +1996,6 @@ fun BotControlCard(
                             .weight(1f)
                             .height(48.dp)
                     ) {
-                        // Layer bayangan
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
@@ -1629,7 +2006,6 @@ fun BotControlCard(
                                 .offset(y = 2.dp)
                         )
 
-                        // Tombol utama
                         Surface(
                             modifier = Modifier
                                 .fillMaxSize()
@@ -1669,7 +2045,7 @@ fun BotControlCard(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
-                                        text = StringsManager.getBotStop(currentLanguage), // ✅ MULTILANGUAGE
+                                        text = StringsManager.getBotStop(currentLanguage),
                                         style = MaterialTheme.typography.labelLarge.copy(
                                             fontWeight = FontWeight.SemiBold,
                                             fontSize = 12.sp,
@@ -1684,41 +2060,159 @@ fun BotControlCard(
                         }
                     }
                 }
+            }
+        }
+    }
+}
 
-                if (botState == BotState.RUNNING && botStatus.isNotBlank()) {
-                    Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(14.dp)),
-                        color = colors.botInfoCardBg,
-                        shape = RoundedCornerShape(14.dp),
-                        border = BorderStroke(
-                            0.5.dp,
-                            colors.borderColor.copy(alpha = 0.5f)
+@Composable
+fun BotStatusInfoCard(
+    botState: BotState,
+    botStatus: String,
+    colors: DashboardColors,
+    currentLanguage: String = "id",
+    modifier: Modifier = Modifier
+) {
+    // Hanya tampilkan jika bot running dan ada status
+    if (botState != BotState.RUNNING || botStatus.isBlank()) return
+
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 2.dp, vertical = 8.dp)
+            .shadow(
+                elevation = 8.dp,
+                shape = RoundedCornerShape(20.dp),
+                spotColor = colors.accentPrimary.copy(alpha = 0.3f),
+                ambientColor = Color.Black.copy(alpha = 0.2f)
+            ),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = colors.cardBackground
+        ),
+        border = BorderStroke(0.5.dp, colors.accentPrimary.copy(alpha = 0.3f))
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            // Header dengan gradient
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(
+                                colors.accentPrimary.copy(alpha = 0.08f),
+                                colors.accentPrimary.copy(alpha = 0.04f)
+                            )
                         )
+                    ),
+                color = Color.Transparent,
+                shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        modifier = Modifier.size(40.dp),
+                        shape = CircleShape,
+                        color = colors.accentPrimary.copy(alpha = 0.15f),
+                        border = BorderStroke(1.dp, colors.accentPrimary.copy(alpha = 0.3f))
                     ) {
-                        Row(
-                            modifier = Modifier.padding(14.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
+                        Box(contentAlignment = Alignment.Center) {
                             Icon(
                                 imageVector = Icons.Default.Info,
                                 contentDescription = null,
-                                modifier = Modifier.size(18.dp),
-                                tint = colors.accentPrimary
+                                tint = colors.accentPrimary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(
+                            text = "Bot Status Information",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = colors.textPrimary,
+                            letterSpacing = (-0.01).sp
+                        )
+                        Text(
+                            text = "Current execution details",
+                            fontSize = 12.sp,
+                            color = colors.textSecondary
+                        )
+                    }
+                }
+            }
+
+            // Content - Status Message
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = colors.surface.copy(alpha = 0.5f),
+                shape = RoundedCornerShape(
+                    bottomStart = 20.dp,
+                    bottomEnd = 20.dp
+                )
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    // Icon indicator
+                    Surface(
+                        modifier = Modifier.size(36.dp),
+                        shape = CircleShape,
+                        color = colors.successColor.copy(alpha = 0.15f)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.PlayArrow,
+                                contentDescription = null,
+                                tint = colors.successColor,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+
+                    // Status text
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = botStatus,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = colors.textPrimary,
+                            lineHeight = 18.sp
+                        )
+
+                        // Timestamp
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.AccessTime,
+                                contentDescription = null,
+                                tint = colors.textMuted,
+                                modifier = Modifier.size(12.dp)
                             )
                             Text(
-                                text = botStatus,
-                                modifier = Modifier.weight(1f),
-                                style = MaterialTheme.typography.bodySmall.copy(
-                                    fontWeight = FontWeight.Medium,
-                                    fontSize = 13.sp,
-                                    lineHeight = 18.sp
-                                ),
-                                color = colors.textPrimary,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis
+                                text = SimpleDateFormat(
+                                    "HH:mm:ss",
+                                    Locale.getDefault()
+                                ).format(Date()),
+                                fontSize = 10.sp,
+                                color = colors.textMuted
                             )
                         }
                     }
@@ -8608,6 +9102,32 @@ private fun TradingModeSelector(
                             showModeDropdown = false
                         }
                     )
+
+                    EnhancedDivider(colors = colors)
+
+                    EnhancedModeMenuItem(
+                        icon = Icons.Default.Send,
+                        title = "AI Signal Mode",
+                        description = "Telegram signal automation",
+                        isSelected = isModeSelected && currentMode == TradingMode.AI_SIGNAL,
+                        isEnabled = botState == BotState.STOPPED &&
+                                !isFollowModeActive &&
+                                !isIndicatorModeActive &&
+                                !isCTCModeActive,
+                        accentColor = Color(0xFFE91E63), // Pink color
+                        colors = colors,
+                        onClick = {
+                            val canSelect = botState == BotState.STOPPED &&
+                                    !isFollowModeActive &&
+                                    !isIndicatorModeActive &&
+                                    !isCTCModeActive
+                            if (canSelect) {
+                                onModeChange(TradingMode.AI_SIGNAL)
+                            }
+                            showModeDropdown = false
+                        }
+                    )
+
                 }
             }
         }
@@ -8817,6 +9337,1141 @@ private fun getModeDisplayName(mode: TradingMode): String {
         TradingMode.INDICATOR_ORDER -> "Analysis Strategy Mode"
         TradingMode.CTC_ORDER -> "Fastrade CTC Mode"
         TradingMode.MULTI_MOMENTUM -> "Momentum Mode"
+        TradingMode.AI_SIGNAL -> "AI Signal Mode"
+    }
+}
+
+@Composable
+private fun AISignalContent(
+    isActive: Boolean,
+    aiSignalOrders: List<AISignalOrder>,
+    canModify: Boolean,
+    onStartAISignal: () -> Unit,
+    onStopAISignal: () -> Unit,
+    colors: DashboardColors
+) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        // Status Card
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = if (isActive)
+                    colors.successColor.copy(alpha = 0.15f)
+                else colors.surface
+            ),
+            shape = RoundedCornerShape(8.dp),
+            border = BorderStroke(
+                0.5.dp,
+                if (isActive) colors.successColor.copy(alpha = 0.5f)
+                else colors.borderColor
+            )
+        ) {
+            Column(
+                modifier = Modifier.padding(8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                // ======================================================================
+                // MODE AKTIF + ADA ORDER → LAST SIGNALS
+                // ======================================================================
+                if (isActive && aiSignalOrders.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(2.dp))
+
+                    val recentOrders = aiSignalOrders.takeLast(6).reversed()
+                    val lastTrend = recentOrders.firstOrNull()?.trend?.uppercase() ?: "-"
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = "Last Signals Active",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = colors.textPrimary,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 14.sp
+                        )
+
+                        Text(
+                            text = "Latest trend: $lastTrend",
+                            fontSize = 8.sp,
+                            color = colors.textSecondary,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 14.sp
+                        )
+
+                        Spacer(modifier = Modifier.height(13.dp))
+                    }
+                }
+
+                // ======================================================================
+                // MODE AKTIF + BELUM ADA ORDER
+                // ======================================================================
+                else if (isActive && aiSignalOrders.isEmpty()) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        val infiniteTransition = rememberInfiniteTransition(label = "")
+                        val pulseAlpha by infiniteTransition.animateFloat(
+                            initialValue = 0.5f,
+                            targetValue = 1f,
+                            animationSpec = infiniteRepeatable(
+                                animation = tween(1200, easing = LinearEasing),
+                                repeatMode = RepeatMode.Reverse
+                            ),
+                            label = "pulseAlpha"
+                        )
+
+                        Icon(
+                            imageVector = Icons.Default.Send,
+                            contentDescription = null,
+                            tint = colors.wifiGreen.copy(alpha = pulseAlpha),
+                            modifier = Modifier.size(24.dp)
+                        )
+
+                        Text(
+                            text = "AI Signal Active",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = colors.textPrimary,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 14.sp
+                        )
+
+                        Text(
+                            text = "Waiting Telegram signal",
+                            fontSize = 8.sp,
+                            color = colors.textSecondary,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 14.sp
+                        )
+
+                        Spacer(modifier = Modifier.height(15.dp))
+                    }
+                }
+
+                // ======================================================================
+                // MODE NON-AKTIF
+                // ======================================================================
+                else {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Spacer(modifier = Modifier.height(13.dp))
+
+                        Text(
+                            text = "Telegram Signal Bot",
+                            fontSize = 10.sp,
+                            color = colors.textPrimary,
+                            fontWeight = FontWeight.Medium,
+                            lineHeight = 14.sp,
+                            textAlign = TextAlign.Center
+                        )
+
+                        Text(
+                            text = "Auto execution via FCM",
+                            fontSize = 8.sp,
+                            color = colors.textSecondary,
+                            lineHeight = 14.sp,
+                            textAlign = TextAlign.Center
+                        )
+
+                        Spacer(modifier = Modifier.height(14.dp))
+                    }
+                }
+            }
+        }
+
+        // ======================================================================
+        // CONTROL BUTTONS
+        // ======================================================================
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(
+                onClick = onStartAISignal,
+                enabled = !isActive && canModify,
+                modifier = Modifier.fillMaxWidth().height(36.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = colors.errorColor,
+                    contentColor = colors.TextPrimary1,
+                    disabledContainerColor = colors.botButtonDisabledBg,
+                    disabledContentColor = colors.textMuted,
+                ),
+                shape = RoundedCornerShape(6.dp)
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Start", fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                }
+            }
+
+            Button(
+                onClick = onStopAISignal,
+                enabled = isActive,
+                modifier = Modifier.fillMaxWidth().height(36.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = colors.errorColor,
+                    contentColor = colors.TextPrimary1,
+                    disabledContentColor = colors.textMuted
+                ),
+                shape = RoundedCornerShape(6.dp)
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Stop", fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun AISignalInfoCard(
+    aiSignalOrders: List<AISignalOrder>,
+    isAISignalModeActive: Boolean,
+    colors: DashboardColors,
+    modifier: Modifier = Modifier
+) {
+    if (!isAISignalModeActive && aiSignalOrders.isEmpty()) return
+
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 2.dp, vertical = 8.dp)
+            .shadow(
+                elevation = 8.dp,
+                shape = RoundedCornerShape(20.dp),
+                spotColor = Color(0xFFE91E63).copy(alpha = 0.15f),
+                ambientColor = Color.Black.copy(alpha = 0.2f)
+            ),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = colors.cardBackground
+        ),
+        border = BorderStroke(0.5.dp, Color(0xFFE91E63).copy(alpha = 0.2f))
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // Header
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        modifier = Modifier.size(32.dp),
+                        shape = CircleShape,
+                        color = Color(0xFFE91E63).copy(alpha = 0.15f),
+                        border = BorderStroke(1.dp, Color(0xFFE91E63).copy(alpha = 0.3f))
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.Send,
+                                contentDescription = null,
+                                tint = Color(0xFFE91E63),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+
+                    Text(
+                        text = "AI Signal Analysis",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = colors.textPrimary
+                    )
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (isAISignalModeActive)
+                        Color(0xFFE91E63).copy(alpha = 0.15f)
+                    else
+                        colors.surface.copy(alpha = 0.5f),
+                    border = BorderStroke(
+                        0.5.dp,
+                        if (isAISignalModeActive)
+                            Color(0xFFE91E63).copy(alpha = 0.4f)
+                        else
+                            colors.borderColor.copy(alpha = 0.3f)
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .background(
+                                    color = if (isAISignalModeActive)
+                                        Color(0xFFE91E63)
+                                    else
+                                        colors.textMuted,
+                                    shape = CircleShape
+                                )
+                        )
+                        Text(
+                            text = if (isAISignalModeActive) "Active" else "Inactive",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = if (isAISignalModeActive)
+                                Color(0xFFE91E63)
+                            else
+                                colors.textMuted
+                        )
+                    }
+                }
+            }
+
+            // Content
+            when {
+                isAISignalModeActive && aiSignalOrders.isNotEmpty() -> {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        // Statistics
+                        AISignalStatsSection(
+                            aiSignalOrders = aiSignalOrders,
+                            colors = colors
+                        )
+
+                        // Recent Signals
+                        AISignalRecentSection(
+                            aiSignalOrders = aiSignalOrders,
+                            colors = colors
+                        )
+
+                        // Status Footer
+                        AISignalStatusFooter(colors = colors)
+                    }
+                }
+
+                isAISignalModeActive && aiSignalOrders.isEmpty() -> {
+                    AISignalWaitingState(colors = colors)
+                }
+
+                else -> {
+                    AISignalInactiveState(colors = colors)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AISignalStatsSection(
+    aiSignalOrders: List<AISignalOrder>,
+    colors: DashboardColors
+) {
+    val executed = aiSignalOrders.count { it.isExecuted }
+    val pending = aiSignalOrders.count { !it.isExecuted }
+    val buyOrders = aiSignalOrders.count { it.trend.lowercase() in listOf("call", "buy") }
+    val sellOrders = aiSignalOrders.count { it.trend.lowercase() in listOf("put", "sell") }
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = colors.surface.copy(alpha = 0.5f),
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(0.5.dp, colors.borderColor.copy(alpha = 0.3f))
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = "Statistics",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                color = colors.textPrimary
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                StatItemCompact(
+                    modifier = Modifier.weight(1f),
+                    label = "Total",
+                    value = "${aiSignalOrders.size}",
+                    color = Color(0xFFE91E63)
+                )
+                StatItemCompact(
+                    modifier = Modifier.weight(1f),
+                    label = "Executed",
+                    value = "$executed",
+                    color = Color(0xFF10B981)
+                )
+                StatItemCompact(
+                    modifier = Modifier.weight(1f),
+                    label = "Pending",
+                    value = "$pending",
+                    color = Color(0xFFFBBF24)
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                TrendItemCompact(
+                    modifier = Modifier.weight(1f),
+                    label = "Buy",
+                    value = "$buyOrders",
+                    icon = Icons.Default.TrendingUp,
+                    color = Color(0xFF10B981)
+                )
+                TrendItemCompact(
+                    modifier = Modifier.weight(1f),
+                    label = "Sell",
+                    value = "$sellOrders",
+                    icon = Icons.Default.TrendingDown,
+                    color = Color(0xFFEF4444)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AISignalRecentSection(
+    aiSignalOrders: List<AISignalOrder>,
+    colors: DashboardColors
+) {
+    val recentOrders = aiSignalOrders.takeLast(6).reversed()
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = colors.surface.copy(alpha = 0.5f),
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(0.5.dp, Color(0xFFE91E63).copy(alpha = 0.2f))
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Recent Signals",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = colors.textPrimary
+                )
+
+                Text(
+                    text = "${recentOrders.size} signals",
+                    fontSize = 10.sp,
+                    color = colors.textSecondary
+                )
+            }
+
+            LazyColumn(
+                modifier = Modifier.heightIn(max = 200.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                items(recentOrders.take(5)) { order ->
+                    AISignalOrderRow(order = order, colors = colors)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AISignalOrderRow(
+    order: AISignalOrder,
+    colors: DashboardColors
+) {
+    val trendColor = if (order.trend.lowercase() in listOf("call", "buy"))
+        Color(0xFF10B981)
+    else
+        Color(0xFFEF4444)
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = Color(0xFF2D2E30),
+        shape = RoundedCornerShape(8.dp),
+        border = BorderStroke(1.dp, trendColor.copy(alpha = 0.3f))
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.AccessTime,
+                    contentDescription = null,
+                    tint = Color(0xFF9CA3AF),
+                    modifier = Modifier.size(14.dp)
+                )
+                Text(
+                    text = order.getExecutionTimeFormatted(),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color(0xFFE2E8F0),
+                    fontFamily = FontFamily.Monospace
+                )
+            }
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(
+                    color = trendColor.copy(alpha = 0.2f),
+                    shape = RoundedCornerShape(6.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (order.trend.lowercase() in listOf("call", "buy"))
+                                Icons.Default.TrendingUp
+                            else
+                                Icons.Default.TrendingDown,
+                            contentDescription = null,
+                            tint = trendColor,
+                            modifier = Modifier.size(12.dp)
+                        )
+                        Text(
+                            text = order.trend.uppercase(),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = trendColor
+                        )
+                    }
+                }
+
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .background(
+                            color = if (order.isExecuted)
+                                Color(0xFF10B981)
+                            else
+                                Color(0xFFFBBF24),
+                            shape = CircleShape
+                        )
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AISignalStatusFooter(colors: DashboardColors) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = Color(0xFFE91E63).copy(alpha = 0.1f),
+        shape = RoundedCornerShape(10.dp),
+        border = BorderStroke(0.5.dp, Color(0xFFE91E63).copy(alpha = 0.3f))
+    ) {
+        Row(
+            modifier = Modifier.padding(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Default.Visibility,
+                contentDescription = null,
+                tint = Color(0xFFE91E63),
+                modifier = Modifier.size(14.dp)
+            )
+            Text(
+                text = "Monitoring Telegram signals via FCM",
+                fontSize = 10.sp,
+                color = Color(0xFFE91E63),
+                fontWeight = FontWeight.Medium
+            )
+        }
+    }
+}
+
+@Composable
+private fun AISignalWaitingState(colors: DashboardColors) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = colors.surface.copy(alpha = 0.5f),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            val infiniteTransition = rememberInfiniteTransition(label = "")
+            val pulseAlpha by infiniteTransition.animateFloat(
+                initialValue = 0.5f,
+                targetValue = 1f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(1200),
+                    repeatMode = RepeatMode.Reverse
+                ),
+                label = "pulse"
+            )
+
+            CircularProgressIndicator(
+                modifier = Modifier.size(32.dp),
+                color = Color(0xFFE91E63).copy(alpha = pulseAlpha),
+                strokeWidth = 3.dp
+            )
+
+            Text(
+                text = "Waiting for Telegram signals...",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                color = colors.textPrimary
+            )
+
+            Text(
+                text = "FCM connection active",
+                fontSize = 10.sp,
+                color = colors.textSecondary
+            )
+        }
+    }
+}
+
+@Composable
+private fun AISignalInactiveState(colors: DashboardColors) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = colors.surface.copy(alpha = 0.3f),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Info,
+                contentDescription = null,
+                tint = colors.textMuted,
+                modifier = Modifier.size(28.dp)
+            )
+            Text(
+                text = "AI Signal mode inactive",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                color = colors.textMuted
+            )
+        }
+    }
+}
+
+@Composable
+private fun MiniSignalCard(
+    order: AISignalOrder,
+    colors: DashboardColors
+) {
+    val trendColor = if (order.trend.uppercase() == "CALL")
+        colors.successColor
+    else
+        colors.errorColor
+
+    Surface(
+        modifier = Modifier
+            .width(60.dp)
+            .height(40.dp),
+        color = trendColor.copy(alpha = 0.1f),
+        shape = RoundedCornerShape(6.dp),
+        border = BorderStroke(0.5.dp, trendColor.copy(alpha = 0.3f))
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(4.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            // Trend
+            Text(
+                text = order.trend.uppercase().take(1),
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                color = trendColor
+            )
+
+            // Execution time
+            Text(
+                text = order.getExecutionTimeFormatted().substring(0, 5), // HH:MM only
+                fontSize = 7.sp,
+                color = colors.textSecondary
+            )
+
+            // Status indicator
+            Box(
+                modifier = Modifier
+                    .size(4.dp)
+                    .background(
+                        color = if (order.isExecuted) colors.successColor else colors.warningColor,
+                        shape = CircleShape
+                    )
+            )
+        }
+    }
+}
+
+@Composable
+private fun FeatureItem(
+    text: String,
+    colors: DashboardColors
+) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(4.dp)
+                .background(
+                    colors.successColor,
+                    shape = CircleShape
+                )
+        )
+        Text(
+            text = text,
+            fontSize = 8.sp,
+            color = colors.textSecondary
+        )
+    }
+}
+
+@Composable
+private fun MultiMomentumContent(
+    isActive: Boolean,
+    multiMomentumOrders: List<MultiMomentumOrder>,
+    canModify: Boolean,
+    onStartMultiMomentum: () -> Unit,
+    onStopMultiMomentum: () -> Unit,
+    colors: DashboardColors
+) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+
+        // Status Card
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = if (isActive) colors.successColor.copy(alpha = 0.15f)
+                else colors.surface
+            ),
+            shape = RoundedCornerShape(8.dp),
+            border = BorderStroke(
+                0.5.dp,
+                if (isActive) colors.successColor.copy(alpha = 0.5f) else colors.borderColor
+            )
+        ) {
+
+            Column(
+                modifier = Modifier.padding(8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+
+                // ======================================================================
+                // MODE AKTIF + ADA ORDER → LAST SIGNALS PREMIUM UI
+                // ======================================================================
+                if (isActive && multiMomentumOrders.isNotEmpty()) {
+
+                    Spacer(modifier = Modifier.height(2.dp))
+
+                    val recentOrders = multiMomentumOrders.takeLast(6).reversed()
+                    val lastTrend = recentOrders.firstOrNull()?.trend?.uppercase() ?: "-"
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = "Last Signals Active",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = colors.textPrimary,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 14.sp
+                        )
+
+                        Text(
+                            text = "Latest trend: $lastTrend",
+                            fontSize = 8.sp,
+                            color = colors.textSecondary,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 14.sp
+                        )
+
+                        Spacer(modifier = Modifier.height(13.dp))
+                    }
+                }
+
+                // ======================================================================
+                // MODE AKTIF + BELUM ADA ORDER
+                // ======================================================================
+                else if (isActive && multiMomentumOrders.isEmpty()) {
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+
+                        val infiniteTransition = rememberInfiniteTransition(label = "")
+                        val pulseAlpha by infiniteTransition.animateFloat(
+                            initialValue = 0.5f,
+                            targetValue = 1f,
+                            animationSpec = infiniteRepeatable(
+                                animation = tween(1200, easing = LinearEasing),
+                                repeatMode = RepeatMode.Reverse
+                            )
+                        )
+
+                        Icon(
+                            imageVector = Icons.Default.Analytics,
+                            contentDescription = null,
+                            tint = colors.wifiGreen.copy(alpha = pulseAlpha),
+                            modifier = Modifier.size(24.dp)
+                        )
+
+                        Text(
+                            text = "Moment Active",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = colors.textPrimary,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 14.sp
+                        )
+
+                        Text(
+                            text = "Waiting execution",
+                            fontSize = 8.sp,
+                            color = colors.textSecondary,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 14.sp
+                        )
+
+                        Spacer(modifier = Modifier.height(15.dp))
+                    }
+                }
+
+                // ======================================================================
+                // MODE NON-AKTIF
+                // ======================================================================
+                else {
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+
+                        Spacer(modifier = Modifier.height(13.dp))
+
+                        Text(
+                            text = "Modular Moment Strategy",
+                            fontSize = 10.sp,
+                            color = colors.textPrimary,
+                            fontWeight = FontWeight.Medium,
+                            lineHeight = 14.sp,
+                            textAlign = TextAlign.Center
+                        )
+
+                        Text(
+                            text = "Parallel analysis",
+                            fontSize = 8.sp,
+                            color = colors.textSecondary,
+                            lineHeight = 14.sp,
+                            textAlign = TextAlign.Center
+                        )
+
+                        Spacer(modifier = Modifier.height(14.dp))
+                    }
+                }
+            }
+        }
+
+        // ======================================================================
+        // CONTROL BUTTONS
+        // ======================================================================
+
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+
+            Button(
+                onClick = onStartMultiMomentum,
+                enabled = !isActive && canModify,
+                modifier = Modifier.fillMaxWidth().height(36.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = colors.errorColor,
+                    contentColor = colors.TextPrimary1,
+                    disabledContainerColor = colors.botButtonDisabledBg,
+                    disabledContentColor = colors.textMuted,
+                ),
+                shape = RoundedCornerShape(6.dp)
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Start", fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                }
+            }
+
+            Button(
+                onClick = onStopMultiMomentum,
+                enabled = isActive,
+                modifier = Modifier.fillMaxWidth().height(36.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = colors.errorColor,
+                    contentColor = colors.TextPrimary1,
+                    disabledContentColor = colors.textMuted
+                ),
+                shape = RoundedCornerShape(6.dp)
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Stop", fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun MultiMomentumInfoCard(
+    multiMomentumOrders: List<MultiMomentumOrder>,
+    isMultiMomentumModeActive: Boolean,
+    colors: DashboardColors,
+    modifier: Modifier = Modifier,
+    viewModel: DashboardViewModel = hiltViewModel()
+) {
+    if (!isMultiMomentumModeActive && multiMomentumOrders.isEmpty()) return
+
+    var performanceStats by remember { mutableStateOf<Map<String, Any>>(emptyMap()) }
+    var loadingCandles by remember { mutableStateOf(false) }
+    var candleLoadError by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(isMultiMomentumModeActive) {
+        while (isMultiMomentumModeActive) {
+            try {
+                loadingCandles = true
+                candleLoadError = null
+
+                performanceStats = viewModel.getMultiMomentumPerformanceInfo()
+
+                loadingCandles = false
+                delay(1000L)
+            } catch (e: Exception) {
+                loadingCandles = false
+                candleLoadError = e.message
+                Log.e("MultiMomentumInfoCard", "Error getting stats: ${e.message}")
+                delay(5000L)
+            }
+        }
+    }
+
+    val candleHistory = remember(performanceStats) {
+        try {
+            val candles = performanceStats["recent_candles"]
+            when (candles) {
+                is List<*> -> candles.mapNotNull { candle ->
+                    (candle as? Map<*, *>)?.let { map ->
+                        if (map.containsKey("open") &&
+                            map.containsKey("close") &&
+                            map.containsKey("high") &&
+                            map.containsKey("low")) {
+                            @Suppress("UNCHECKED_CAST")
+                            map as Map<String, Any>
+                        } else null
+                    }
+                }
+                else -> emptyList()
+            }
+        } catch (e: Exception) {
+            Log.e("MultiMomentumInfoCard", "Error parsing candles: ${e.message}")
+            emptyList()
+        }
+    }
+
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 2.dp, vertical = 8.dp)
+            .shadow(
+                elevation = 8.dp,
+                shape = RoundedCornerShape(20.dp),
+                spotColor = Color(0xFF00BCD4).copy(alpha = 0.15f),
+                ambientColor = Color.Black.copy(alpha = 0.2f)
+            ),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = colors.cardBackground
+        ),
+        border = BorderStroke(0.5.dp, Color(0xFF00BCD4).copy(alpha = 0.2f))
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // ✅ HEADER - Compact & Clean
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        modifier = Modifier.size(32.dp),
+                        shape = CircleShape,
+                        color = Color(0xFF00BCD4).copy(alpha = 0.15f),
+                        border = BorderStroke(1.dp, Color(0xFF00BCD4).copy(alpha = 0.3f))
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.Analytics,
+                                contentDescription = null,
+                                tint = Color(0xFF00BCD4),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+
+                    Text(
+                        text = "Momentum Analysis",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = colors.textPrimary
+                    )
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (isMultiMomentumModeActive)
+                        Color(0xFF00BCD4).copy(alpha = 0.15f)
+                    else
+                        colors.surface.copy(alpha = 0.5f),
+                    border = BorderStroke(
+                        0.5.dp,
+                        if (isMultiMomentumModeActive)
+                            Color(0xFF00BCD4).copy(alpha = 0.4f)
+                        else
+                            colors.borderColor.copy(alpha = 0.3f)
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .background(
+                                    color = if (isMultiMomentumModeActive)
+                                        Color(0xFF00BCD4)
+                                    else
+                                        colors.textMuted,
+                                    shape = CircleShape
+                                )
+                        )
+                        Text(
+                            text = if (isMultiMomentumModeActive) "Active" else "Inactive",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = if (isMultiMomentumModeActive)
+                                Color(0xFF00BCD4)
+                            else
+                                colors.textMuted
+                        )
+                    }
+                }
+            }
+
+            // ✅ CONTENT - Conditional Display
+            when {
+                candleLoadError != null -> {
+                    ErrorStateCompact(
+                        error = candleLoadError ?: "Unknown error",
+                        colors = colors
+                    )
+                }
+
+                loadingCandles && candleHistory.isEmpty() -> {
+                    LoadingStateCompact(colors = colors)
+                }
+
+                isMultiMomentumModeActive && candleHistory.isNotEmpty() -> {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        CandleDataSection(
+                            candleHistory = candleHistory,
+                            colors = colors
+                        )
+
+                        MomentumTypesGrid(
+                            multiMomentumOrders = multiMomentumOrders,
+                            colors = colors
+                        )
+
+                        if (multiMomentumOrders.isNotEmpty()) {
+                            ExecutionStatsCompact(
+                                multiMomentumOrders = multiMomentumOrders,
+                                colors = colors
+                            )
+                        }
+
+                        ActiveStatusFooter(colors = colors)
+                    }
+                }
+
+                !isMultiMomentumModeActive -> {
+                    InactiveStateCompact(colors = colors)
+                }
+            }
+        }
     }
 }
 
@@ -10938,23 +12593,14 @@ fun TradingModeCard(
     multiMomentumOrders: List<MultiMomentumOrder>,
     onStartMultiMomentum: () -> Unit,
     onStopMultiMomentum: () -> Unit,
-) {
-    // ✅ State untuk mengatur dialog mana yang terbuka
+    isAISignalModeActive: Boolean,
+    aiSignalOrders: List<AISignalOrder>,
+    onStartAISignal: () -> Unit,
+    onStopAISignal: () -> Unit,
+
+    ) {
     var showMultilineDialog by remember { mutableStateOf(false) }
     var showViewDialog by remember { mutableStateOf(false) }
-
-    // ✅ HAPUS semua LaunchedEffect auto-open
-    // TIDAK PERLU LAGI kode seperti ini:
-    /*
-    LaunchedEffect(currentMode, isTradingModeSelected, hasAutoOpenedScheduleDialog) {
-        if (isTradingModeSelected &&
-            currentMode == TradingMode.SCHEDULE &&
-            !hasAutoOpenedScheduleDialog) {
-            showMultilineDialog = true
-            hasAutoOpenedScheduleDialog = true
-        }
-    }
-    */
 
     Card(
         modifier = modifier
@@ -11015,6 +12661,16 @@ fun TradingModeCard(
 
             if (isTradingModeSelected) {
                 when (currentMode) {
+                    TradingMode.AI_SIGNAL -> {
+                        AISignalContent(
+                            isActive = isAISignalModeActive,
+                            aiSignalOrders = aiSignalOrders,
+                            canModify = canModify,
+                            onStartAISignal = onStartAISignal,
+                            onStopAISignal = onStopAISignal,
+                            colors = colors
+                        )
+                    }
                     TradingMode.SCHEDULE -> {
                         ScheduleContent(
                             scheduleInput = scheduleInput,
@@ -11174,410 +12830,7 @@ private fun InfoRow(
     }
 }
 
-@Composable
-private fun MultiMomentumContent(
-    isActive: Boolean,
-    multiMomentumOrders: List<MultiMomentumOrder>,
-    canModify: Boolean,
-    onStartMultiMomentum: () -> Unit,
-    onStopMultiMomentum: () -> Unit,
-    colors: DashboardColors
-) {
-    Column(
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = Modifier.fillMaxWidth()
-    ) {
 
-        // Status Card
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = if (isActive) colors.successColor.copy(alpha = 0.15f)
-                else colors.surface
-            ),
-            shape = RoundedCornerShape(8.dp),
-            border = BorderStroke(
-                0.5.dp,
-                if (isActive) colors.successColor.copy(alpha = 0.5f) else colors.borderColor
-            )
-        ) {
-
-            Column(
-                modifier = Modifier.padding(8.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-
-                // ======================================================================
-                // MODE AKTIF + ADA ORDER → LAST SIGNALS PREMIUM UI
-                // ======================================================================
-                if (isActive && multiMomentumOrders.isNotEmpty()) {
-
-                    Spacer(modifier = Modifier.height(2.dp))
-
-                    val recentOrders = multiMomentumOrders.takeLast(6).reversed()
-                    val lastTrend = recentOrders.firstOrNull()?.trend?.uppercase() ?: "-"
-
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Text(
-                            text = "Last Signals Active",
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = colors.textPrimary,
-                            textAlign = TextAlign.Center,
-                            lineHeight = 14.sp
-                        )
-
-                        Text(
-                            text = "Latest trend: $lastTrend",
-                            fontSize = 8.sp,
-                            color = colors.textSecondary,
-                            textAlign = TextAlign.Center,
-                            lineHeight = 14.sp
-                        )
-
-                        Spacer(modifier = Modifier.height(13.dp))
-                    }
-                }
-
-                // ======================================================================
-                // MODE AKTIF + BELUM ADA ORDER
-                // ======================================================================
-                else if (isActive && multiMomentumOrders.isEmpty()) {
-
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-
-                        val infiniteTransition = rememberInfiniteTransition(label = "")
-                        val pulseAlpha by infiniteTransition.animateFloat(
-                            initialValue = 0.5f,
-                            targetValue = 1f,
-                            animationSpec = infiniteRepeatable(
-                                animation = tween(1200, easing = LinearEasing),
-                                repeatMode = RepeatMode.Reverse
-                            )
-                        )
-
-                        Icon(
-                            imageVector = Icons.Default.Analytics,
-                            contentDescription = null,
-                            tint = colors.wifiGreen.copy(alpha = pulseAlpha),
-                            modifier = Modifier.size(24.dp)
-                        )
-
-                        Text(
-                            text = "Moment Active",
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = colors.textPrimary,
-                            textAlign = TextAlign.Center,
-                            lineHeight = 14.sp
-                        )
-
-                        Text(
-                            text = "Waiting execution",
-                            fontSize = 8.sp,
-                            color = colors.textSecondary,
-                            textAlign = TextAlign.Center,
-                            lineHeight = 14.sp
-                        )
-
-                        Spacer(modifier = Modifier.height(15.dp))
-                    }
-                }
-
-                // ======================================================================
-                // MODE NON-AKTIF
-                // ======================================================================
-                else {
-
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-
-                        Spacer(modifier = Modifier.height(13.dp))
-
-                        Text(
-                            text = "Modular Moment Strategy",
-                            fontSize = 10.sp,
-                            color = colors.textPrimary,
-                            fontWeight = FontWeight.Medium,
-                            lineHeight = 14.sp,
-                            textAlign = TextAlign.Center
-                        )
-
-                        Text(
-                            text = "Parallel analysis",
-                            fontSize = 8.sp,
-                            color = colors.textSecondary,
-                            lineHeight = 14.sp,
-                            textAlign = TextAlign.Center
-                        )
-
-                        Spacer(modifier = Modifier.height(14.dp))
-                    }
-                }
-            }
-        }
-
-        // ======================================================================
-        // CONTROL BUTTONS
-        // ======================================================================
-
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-
-            Button(
-                onClick = onStartMultiMomentum,
-                enabled = !isActive && canModify,
-                modifier = Modifier.fillMaxWidth().height(36.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = colors.errorColor,
-                    contentColor = colors.TextPrimary1,
-                    disabledContainerColor = colors.botButtonDisabledBg,
-                    disabledContentColor = colors.textMuted,
-                ),
-                shape = RoundedCornerShape(6.dp)
-            ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Start", fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
-                }
-            }
-
-            Button(
-                onClick = onStopMultiMomentum,
-                enabled = isActive,
-                modifier = Modifier.fillMaxWidth().height(36.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = colors.errorColor,
-                    contentColor = colors.TextPrimary1,
-                    disabledContentColor = colors.textMuted
-                ),
-                shape = RoundedCornerShape(6.dp)
-            ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Stop", fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun MultiMomentumInfoCard(
-    multiMomentumOrders: List<MultiMomentumOrder>,
-    isMultiMomentumModeActive: Boolean,
-    colors: DashboardColors,
-    modifier: Modifier = Modifier,
-    viewModel: DashboardViewModel = hiltViewModel()
-) {
-    if (!isMultiMomentumModeActive && multiMomentumOrders.isEmpty()) return
-
-    var performanceStats by remember { mutableStateOf<Map<String, Any>>(emptyMap()) }
-    var loadingCandles by remember { mutableStateOf(false) }
-    var candleLoadError by remember { mutableStateOf<String?>(null) }
-
-    LaunchedEffect(isMultiMomentumModeActive) {
-        while (isMultiMomentumModeActive) {
-            try {
-                loadingCandles = true
-                candleLoadError = null
-
-                performanceStats = viewModel.getMultiMomentumPerformanceInfo()
-
-                loadingCandles = false
-                delay(1000L)
-            } catch (e: Exception) {
-                loadingCandles = false
-                candleLoadError = e.message
-                Log.e("MultiMomentumInfoCard", "Error getting stats: ${e.message}")
-                delay(5000L)
-            }
-        }
-    }
-
-    val candleHistory = remember(performanceStats) {
-        try {
-            val candles = performanceStats["recent_candles"]
-            when (candles) {
-                is List<*> -> candles.mapNotNull { candle ->
-                    (candle as? Map<*, *>)?.let { map ->
-                        if (map.containsKey("open") &&
-                            map.containsKey("close") &&
-                            map.containsKey("high") &&
-                            map.containsKey("low")) {
-                            @Suppress("UNCHECKED_CAST")
-                            map as Map<String, Any>
-                        } else null
-                    }
-                }
-                else -> emptyList()
-            }
-        } catch (e: Exception) {
-            Log.e("MultiMomentumInfoCard", "Error parsing candles: ${e.message}")
-            emptyList()
-        }
-    }
-
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 2.dp, vertical = 8.dp)
-            .shadow(
-                elevation = 8.dp,
-                shape = RoundedCornerShape(20.dp),
-                spotColor = Color(0xFF00BCD4).copy(alpha = 0.15f),
-                ambientColor = Color.Black.copy(alpha = 0.2f)
-            ),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = colors.cardBackground
-        ),
-        border = BorderStroke(0.5.dp, Color(0xFF00BCD4).copy(alpha = 0.2f))
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            // ✅ HEADER - Compact & Clean
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Surface(
-                        modifier = Modifier.size(32.dp),
-                        shape = CircleShape,
-                        color = Color(0xFF00BCD4).copy(alpha = 0.15f),
-                        border = BorderStroke(1.dp, Color(0xFF00BCD4).copy(alpha = 0.3f))
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.Default.Analytics,
-                                contentDescription = null,
-                                tint = Color(0xFF00BCD4),
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    }
-
-                    Text(
-                        text = "Momentum Analysis",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = colors.textPrimary
-                    )
-                }
-
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = if (isMultiMomentumModeActive)
-                        Color(0xFF00BCD4).copy(alpha = 0.15f)
-                    else
-                        colors.surface.copy(alpha = 0.5f),
-                    border = BorderStroke(
-                        0.5.dp,
-                        if (isMultiMomentumModeActive)
-                            Color(0xFF00BCD4).copy(alpha = 0.4f)
-                        else
-                            colors.borderColor.copy(alpha = 0.3f)
-                    )
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(6.dp)
-                                .background(
-                                    color = if (isMultiMomentumModeActive)
-                                        Color(0xFF00BCD4)
-                                    else
-                                        colors.textMuted,
-                                    shape = CircleShape
-                                )
-                        )
-                        Text(
-                            text = if (isMultiMomentumModeActive) "Active" else "Inactive",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = if (isMultiMomentumModeActive)
-                                Color(0xFF00BCD4)
-                            else
-                                colors.textMuted
-                        )
-                    }
-                }
-            }
-
-            // ✅ CONTENT - Conditional Display
-            when {
-                candleLoadError != null -> {
-                    ErrorStateCompact(
-                        error = candleLoadError ?: "Unknown error",
-                        colors = colors
-                    )
-                }
-
-                loadingCandles && candleHistory.isEmpty() -> {
-                    LoadingStateCompact(colors = colors)
-                }
-
-                isMultiMomentumModeActive && candleHistory.isNotEmpty() -> {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        CandleDataSection(
-                            candleHistory = candleHistory,
-                            colors = colors
-                        )
-
-                        MomentumTypesGrid(
-                            multiMomentumOrders = multiMomentumOrders,
-                            colors = colors
-                        )
-
-                        if (multiMomentumOrders.isNotEmpty()) {
-                            ExecutionStatsCompact(
-                                multiMomentumOrders = multiMomentumOrders,
-                                colors = colors
-                            )
-                        }
-
-                        ActiveStatusFooter(colors = colors)
-                    }
-                }
-
-                !isMultiMomentumModeActive -> {
-                    InactiveStateCompact(colors = colors)
-                }
-            }
-        }
-    }
-}
 
 // ✅ COMPACT HELPER COMPOSABLES
 
@@ -12327,6 +13580,7 @@ private fun MetricValue(
     }
 }
 
+
 private fun buildStatusText(order: ScheduledOrder): String {
     return when {
         // Order di-skip
@@ -12476,291 +13730,291 @@ private fun isTradeCompletedSync(trade: TradingHistoryNew): Boolean {
 private fun getQuickAmountsForCurrency(currency: CurrencyType): List<Pair<Long, String>> {
     return when (currency) {
         CurrencyType.IDR -> listOf(
-            20000000L to "200K",
-            50000000L to "500K",
-            100000000L to "1JT",
-            200000000L to "2JT",
-            500000000L to "5JT"
+            2000000L to "20K",
+            5000000L to "50K",
+            7000000L to "70K",
+            10000000L to "100K",
+            25000000L to "250K"
         )
         CurrencyType.USD -> listOf(
+            100L to "$1",
+            250L to "$2.5",
+            500L to "$5",
             1000L to "$10",
-            2000L to "$20",
-            5000L to "$50",
-            10000L to "$100",
-            20000L to "$200"
+            2500L to "$25"
         )
         CurrencyType.EUR -> listOf(
+            95L to "€1",
+            237L to "€2.5",
+            475L to "€5",
             950L to "€10",
-            1900L to "€20",
-            4750L to "€50",
-            9500L to "€100",
-            19000L to "€200"
+            2375L to "€25"
         )
         CurrencyType.GBP -> listOf(
+            80L to "£1",
+            200L to "£2.5",
+            400L to "£5",
             800L to "£10",
-            1600L to "£20",
-            4000L to "£50",
-            8000L to "£100",
-            16000L to "£200"
+            2000L to "£25"
         )
         CurrencyType.JPY -> listOf(
+            15000L to "¥150",
+            37500L to "¥375",
+            75000L to "¥750",
             150000L to "¥1.5K",
-            300000L to "¥3K",
-            750000L to "¥7.5K",
-            1500000L to "¥15K",
-            3000000L to "¥30K"
+            375000L to "¥3.75K"
         )
         CurrencyType.AUD -> listOf(
+            150L to "A$1.5",
+            375L to "A$3.75",
+            750L to "A$7.5",
             1500L to "A$15",
-            3000L to "A$30",
-            7500L to "A$75",
-            15000L to "A$150",
-            30000L to "A$300"
+            3750L to "A$37.5"
         )
         CurrencyType.CAD -> listOf(
+            135L to "C$1.35",
+            337L to "C$3.37",
+            675L to "C$6.75",
             1350L to "C$13.5",
-            2700L to "C$27",
-            6750L to "C$67.5",
-            13500L to "C$135",
-            27000L to "C$270"
+            3375L to "C$33.75"
         )
         CurrencyType.SGD -> listOf(
+            135L to "S$1.35",
+            337L to "S$3.37",
+            675L to "S$6.75",
             1350L to "S$13.5",
-            2700L to "S$27",
-            6750L to "S$67.5",
-            13500L to "S$135",
-            27000L to "S$270"
+            3375L to "S$33.75"
         )
         CurrencyType.MYR -> listOf(
+            465L to "RM4.65",
+            1162L to "RM11.62",
+            2325L to "RM23.25",
             4650L to "RM46.5",
-            9300L to "RM93",
-            23250L to "RM232.5",
-            46500L to "RM465",
-            93000L to "RM930"
+            11625L to "RM116.25"
         )
         CurrencyType.THB -> listOf(
+            3500L to "฿35",
+            8750L to "฿87.5",
+            17500L to "฿175",
             35000L to "฿350",
-            70000L to "฿700",
-            175000L to "฿1.75K",
-            350000L to "฿3.5K",
-            700000L to "฿7K"
+            87500L to "฿875"
         )
         CurrencyType.PHP -> listOf(
+            5600L to "₱56",
+            14000L to "₱140",
+            28000L to "₱280",
             56000L to "₱560",
-            112000L to "₱1.1K",
-            280000L to "₱2.8K",
-            560000L to "₱5.6K",
-            1120000L to "₱11.2K"
+            140000L to "₱1.4K"
         )
         CurrencyType.VND -> listOf(
+            2450000L to "₫24.5K",
+            6125000L to "₫61.25K",
+            12250000L to "₫122.5K",
             24500000L to "₫245K",
-            49000000L to "₫490K",
-            122500000L to "₫1.2M",
-            245000000L to "₫2.5M",
-            490000000L to "₫4.9M"
+            61250000L to "₫612.5K"
         )
         CurrencyType.KRW -> listOf(
+            133000L to "₩1.33K",
+            332500L to "₩3.32K",
+            665000L to "₩6.65K",
             1330000L to "₩13.3K",
-            2660000L to "₩26.6K",
-            6650000L to "₩66.5K",
-            13300000L to "₩133K",
-            26600000L to "₩266K"
+            3325000L to "₩33.25K"
         )
         CurrencyType.CNY -> listOf(
+            725L to "¥7.25",
+            1812L to "¥18.12",
+            3625L to "¥36.25",
             7250L to "¥72.5",
-            14500L to "¥145",
-            36250L to "¥362.5",
-            72500L to "¥725",
-            145000L to "¥1.45K"
+            18125L to "¥181.25"
         )
         CurrencyType.HKD -> listOf(
+            780L to "HK$7.8",
+            1950L to "HK$19.5",
+            3900L to "HK$39",
             7800L to "HK$78",
-            15600L to "HK$156",
-            39000L to "HK$390",
-            78000L to "HK$780",
-            156000L to "HK$1.56K"
+            19500L to "HK$195"
         )
         CurrencyType.TWD -> listOf(
+            3150L to "NT$31.5",
+            7875L to "NT$78.75",
+            15750L to "NT$157.5",
             31500L to "NT$315",
-            63000L to "NT$630",
-            157500L to "NT$1.57K",
-            315000L to "NT$3.15K",
-            630000L to "NT$6.3K"
+            78750L to "NT$787.5"
         )
         CurrencyType.INR -> listOf(
+            8300L to "₹83",
+            20750L to "₹207.5",
+            41500L to "₹415",
             83000L to "₹830",
-            166000L to "₹1.66K",
-            415000L to "₹4.15K",
-            830000L to "₹8.3K",
-            1660000L to "₹16.6K"
+            207500L to "₹2.07K"
         )
         CurrencyType.PKR -> listOf(
+            28000L to "₨280",
+            70000L to "₨700",
+            140000L to "₨1.4K",
             280000L to "₨2.8K",
-            560000L to "₨5.6K",
-            1400000L to "₨14K",
-            2800000L to "₨28K",
-            5600000L to "₨56K"
+            700000L to "₨7K"
         )
         CurrencyType.BDT -> listOf(
+            11000L to "৳110",
+            27500L to "৳275",
+            55000L to "৳550",
             110000L to "৳1.1K",
-            220000L to "৳2.2K",
-            550000L to "৳5.5K",
-            1100000L to "৳11K",
-            2200000L to "৳22K"
+            275000L to "৳2.75K"
         )
         CurrencyType.LKR -> listOf(
+            32500L to "Rs325",
+            81250L to "Rs812.5",
+            162500L to "Rs1.62K",
             325000L to "Rs3.25K",
-            650000L to "Rs6.5K",
-            1625000L to "Rs16.25K",
-            3250000L to "Rs32.5K",
-            6500000L to "Rs65K"
+            812500L to "Rs8.12K"
         )
         CurrencyType.CHF -> listOf(
+            90L to "Fr0.9",
+            225L to "Fr2.25",
+            450L to "Fr4.5",
             900L to "Fr9",
-            1800L to "Fr18",
-            4500L to "Fr45",
-            9000L to "Fr90",
-            18000L to "Fr180"
+            2250L to "Fr22.5"
         )
         CurrencyType.NZD -> listOf(
+            165L to "NZ$1.65",
+            412L to "NZ$4.12",
+            825L to "NZ$8.25",
             1650L to "NZ$16.5",
-            3300L to "NZ$33",
-            8250L to "NZ$82.5",
-            16500L to "NZ$165",
-            33000L to "NZ$330"
+            4125L to "NZ$41.25"
         )
         CurrencyType.MXN -> listOf(
+            1700L to "Mex$17",
+            4250L to "Mex$42.5",
+            8500L to "Mex$85",
             17000L to "Mex$170",
-            34000L to "Mex$340",
-            85000L to "Mex$850",
-            170000L to "Mex$1.7K",
-            340000L to "Mex$3.4K"
+            42500L to "Mex$425"
         )
         CurrencyType.BRL -> listOf(
+            500L to "R$5",
+            1250L to "R$12.5",
+            2500L to "R$25",
             5000L to "R$50",
-            10000L to "R$100",
-            25000L to "R$250",
-            50000L to "R$500",
-            100000L to "R$1K"
+            12500L to "R$125"
         )
         CurrencyType.ARS -> listOf(
+            35000L to "$350",
+            87500L to "$875",
+            175000L to "$1.75K",
             350000L to "$3.5K",
-            700000L to "$7K",
-            1750000L to "$17.5K",
-            3500000L to "$35K",
-            7000000L to "$70K"
+            875000L to "$8.75K"
         )
         CurrencyType.CLP -> listOf(
+            90000L to "$900",
+            225000L to "$2.25K",
+            450000L to "$4.5K",
             900000L to "$9K",
-            1800000L to "$18K",
-            4500000L to "$45K",
-            9000000L to "$90K",
-            18000000L to "$180K"
+            2250000L to "$22.5K"
         )
         CurrencyType.COP -> listOf(
+            400000L to "$4K",
+            1000000L to "$10K",
+            2000000L to "$20K",
             4000000L to "$40K",
-            8000000L to "$80K",
-            20000000L to "$200K",
-            40000000L to "$400K",
-            80000000L to "$800K"
+            10000000L to "$100K"
         )
         CurrencyType.AED -> listOf(
+            367L to "د.إ3.67",
+            917L to "د.إ9.17",
+            1835L to "د.إ18.35",
             3670L to "د.إ36.7",
-            7340L to "د.إ73.4",
-            18350L to "د.إ183.5",
-            36700L to "د.إ367",
-            73400L to "د.إ734"
+            9175L to "د.إ91.75"
         )
         CurrencyType.SAR -> listOf(
+            375L to "﷼3.75",
+            937L to "﷼9.37",
+            1875L to "﷼18.75",
             3750L to "﷼37.5",
-            7500L to "﷼75",
-            18750L to "﷼187.5",
-            37500L to "﷼375",
-            75000L to "﷼750"
+            9375L to "﷼93.75"
         )
         CurrencyType.TRY -> listOf(
+            2800L to "₺28",
+            7000L to "₺70",
+            14000L to "₺140",
             28000L to "₺280",
-            56000L to "₺560",
-            140000L to "₺1.4K",
-            280000L to "₺2.8K",
-            560000L to "₺5.6K"
+            70000L to "₺700"
         )
         CurrencyType.EGP -> listOf(
+            3100L to "£31",
+            7750L to "£77.5",
+            15500L to "£155",
             31000L to "£310",
-            62000L to "£620",
-            155000L to "£1.55K",
-            310000L to "£3.1K",
-            620000L to "£6.2K"
+            77500L to "£775"
         )
         CurrencyType.ZAR -> listOf(
+            1850L to "R18.5",
+            4625L to "R46.25",
+            9250L to "R92.5",
             18500L to "R185",
-            37000L to "R370",
-            92500L to "R925",
-            185000L to "R1.85K",
-            370000L to "R3.7K"
+            46250L to "R462.5"
         )
         CurrencyType.NGN -> listOf(
+            80000L to "₦800",
+            200000L to "₦2K",
+            400000L to "₦4K",
             800000L to "₦8K",
-            1600000L to "₦16K",
-            4000000L to "₦40K",
-            8000000L to "₦80K",
-            16000000L to "₦160K"
+            2000000L to "₦20K"
         )
         CurrencyType.RUB -> listOf(
+            9200L to "₽92",
+            23000L to "₽230",
+            46000L to "₽460",
             92000L to "₽920",
-            184000L to "₽1.84K",
-            460000L to "₽4.6K",
-            920000L to "₽9.2K",
-            1840000L to "₽18.4K"
+            230000L to "₽2.3K"
         )
         CurrencyType.PLN -> listOf(
+            400L to "zł4",
+            1000L to "zł10",
+            2000L to "zł20",
             4000L to "zł40",
-            8000L to "zł80",
-            20000L to "zł200",
-            40000L to "zł400",
-            80000L to "zł800"
+            10000L to "zł100"
         )
         CurrencyType.CZK -> listOf(
+            2300L to "Kč23",
+            5750L to "Kč57.5",
+            11500L to "Kč115",
             23000L to "Kč230",
-            46000L to "Kč460",
-            115000L to "Kč1.15K",
-            230000L to "Kč2.3K",
-            460000L to "Kč4.6K"
+            57500L to "Kč575"
         )
         CurrencyType.HUF -> listOf(
+            36000L to "Ft360",
+            90000L to "Ft900",
+            180000L to "Ft1.8K",
             360000L to "Ft3.6K",
-            720000L to "Ft7.2K",
-            1800000L to "Ft18K",
-            3600000L to "Ft36K",
-            7200000L to "Ft72K"
+            900000L to "Ft9K"
         )
         CurrencyType.SEK -> listOf(
+            1050L to "kr10.5",
+            2625L to "kr26.25",
+            5250L to "kr52.5",
             10500L to "kr105",
-            21000L to "kr210",
-            52500L to "kr525",
-            105000L to "kr1.05K",
-            210000L to "kr2.1K"
+            26250L to "kr262.5"
         )
         CurrencyType.NOK -> listOf(
+            1080L to "kr10.8",
+            2700L to "kr27",
+            5400L to "kr54",
             10800L to "kr108",
-            21600L to "kr216",
-            54000L to "kr540",
-            108000L to "kr1.08K",
-            216000L to "kr2.16K"
+            27000L to "kr270"
         )
         CurrencyType.DKK -> listOf(
+            700L to "kr7",
+            1750L to "kr17.5",
+            3500L to "kr35",
             7000L to "kr70",
-            14000L to "kr140",
-            35000L to "kr350",
-            70000L to "kr700",
-            140000L to "kr1.4K"
+            17500L to "kr175"
         )
         CurrencyType.KZT -> listOf(
+            45000L to "₸450",
+            112500L to "₸1.12K",
+            225000L to "₸2.25K",
             450000L to "₸4.5K",
-            900000L to "₸9K",
-            2250000L to "₸22.5K",
-            4500000L to "₸45K",
-            9000000L to "₸90K"
+            1125000L to "₸11.25K"
         )
     }
 }

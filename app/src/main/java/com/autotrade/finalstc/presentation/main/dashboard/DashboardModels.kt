@@ -53,36 +53,40 @@ data class DashboardUiState(
     val activeMultiMomentumOrderId: String? = null,
     val multiMomentumMartingaleSteps: Map<String, Int> = emptyMap(),
     val multiMomentumCandleCount: Int = 0,
-    ) {
-    fun canStartMultiMomentumMode(): Boolean {
+
+    val isAISignalModeActive: Boolean = false,
+    val aiSignalOrderStatus: String = "AI Signal tidak aktif",
+    val activeAISignalOrderId: String? = null,
+    val telegramConnectionStatus: String = "Not connected"
+
+) {
+
+    fun canStartAISignalMode(): Boolean {
         return botState == BotState.STOPPED &&
                 !isFollowModeActive &&
                 !isIndicatorModeActive &&
                 !isCTCModeActive &&
                 !isMultiMomentumModeActive &&
+                !isAISignalModeActive &&
                 selectedAsset != null &&
                 isWebSocketConnected &&
-                martingaleSettings.validate(currencySettings.selectedCurrency).isSuccess &&
-                stopLossSettings.validate().isSuccess &&
-                stopProfitSettings.validate().isSuccess &&
-                getMartingaleValidationError() == null
+                currencySettings.validate().isSuccess
     }
 
-    fun canStopMultiMomentumMode(): Boolean = isMultiMomentumModeActive
+    fun canStopAISignalMode(): Boolean = isAISignalModeActive
 
     fun canModifySettings(): Boolean = botState == BotState.STOPPED &&
             !isFollowModeActive &&
             !isIndicatorModeActive &&
             !isCTCModeActive &&
-            !isMultiMomentumModeActive
+            !isMultiMomentumModeActive &&
+            !isAISignalModeActive
 
     fun canStartBot(): Boolean {
         val martingaleValid = if (martingaleSettings.isEnabled && martingaleSettings.isAlwaysSignal) {
-            // ✅ Always Signal mode: Skip maxSteps validation
             martingaleSettings.baseAmount >= currencySettings.selectedCurrency.minAmountInCents &&
                     martingaleSettings.baseAmount <= 100_000_000_000L
         } else {
-            // Regular martingale: Full validation
             martingaleSettings.validate(currencySettings.selectedCurrency).isSuccess &&
                     getMartingaleValidationError() == null
         }
@@ -92,9 +96,10 @@ data class DashboardUiState(
                 !isIndicatorModeActive &&
                 !isCTCModeActive &&
                 !isMultiMomentumModeActive &&
+                !isAISignalModeActive &&  // ✅ TAMBAH INI
                 selectedAsset != null &&
                 isWebSocketConnected &&
-                martingaleValid &&  // ✅ Use conditional validation
+                martingaleValid &&
                 currencySettings.validate().isSuccess &&
                 stopLossSettings.validate().isSuccess &&
                 stopProfitSettings.validate().isSuccess
@@ -106,6 +111,7 @@ data class DashboardUiState(
                 !isIndicatorModeActive &&
                 !isCTCModeActive &&
                 !isMultiMomentumModeActive &&
+                !isAISignalModeActive &&  // ✅ TAMBAH INI
                 selectedAsset != null &&
                 isWebSocketConnected &&
                 martingaleSettings.validate(currencySettings.selectedCurrency).isSuccess &&
@@ -114,14 +120,13 @@ data class DashboardUiState(
                 getMartingaleValidationError() == null
     }
 
-
-
     fun canStartIndicatorMode(): Boolean {
         return botState == BotState.STOPPED &&
                 !isFollowModeActive &&
                 !isIndicatorModeActive &&
                 !isCTCModeActive &&
                 !isMultiMomentumModeActive &&
+                !isAISignalModeActive &&  // ✅ TAMBAH INI
                 selectedAsset != null &&
                 isWebSocketConnected &&
                 martingaleSettings.validate(currencySettings.selectedCurrency).isSuccess &&
@@ -138,6 +143,7 @@ data class DashboardUiState(
                 !isIndicatorModeActive &&
                 !isCTCModeActive &&
                 !isMultiMomentumModeActive &&
+                !isAISignalModeActive &&  // ✅ TAMBAH INI
                 selectedAsset != null &&
                 isWebSocketConnected &&
                 martingaleSettings.validate(currencySettings.selectedCurrency).isSuccess &&
@@ -145,6 +151,23 @@ data class DashboardUiState(
                 stopProfitSettings.validate().isSuccess &&
                 getMartingaleValidationError() == null
     }
+
+    fun canStartMultiMomentumMode(): Boolean {
+        return botState == BotState.STOPPED &&
+                !isFollowModeActive &&
+                !isIndicatorModeActive &&
+                !isCTCModeActive &&
+                !isMultiMomentumModeActive &&
+                !isAISignalModeActive &&  // ✅ TAMBAH INI
+                selectedAsset != null &&
+                isWebSocketConnected &&
+                martingaleSettings.validate(currencySettings.selectedCurrency).isSuccess &&
+                stopLossSettings.validate().isSuccess &&
+                stopProfitSettings.validate().isSuccess &&
+                getMartingaleValidationError() == null
+    }
+
+    fun canStopMultiMomentumMode(): Boolean = isMultiMomentumModeActive
 
     fun canStopCTCMode(): Boolean = isCTCModeActive
 
@@ -158,6 +181,7 @@ data class DashboardUiState(
 
     fun getBotStatusText(): String {
         return when {
+            isAISignalModeActive -> "AI Signal Mode Active"  // ✅ TAMBAH INI
             isMultiMomentumModeActive -> "Multi-Momentum Order Active"
             isCTCModeActive -> "CTC Order Active"
             isIndicatorModeActive -> "Indicator Order Active"
@@ -170,9 +194,9 @@ data class DashboardUiState(
         }
     }
 
-
     fun getBotStatusColor(): String {
         return when {
+            isAISignalModeActive -> "#E91E63"  // ✅ TAMBAH INI (Pink)
             isMultiMomentumModeActive -> "#00BCD4"
             isCTCModeActive -> "#FF9800"
             isIndicatorModeActive -> "#9C27B0"
@@ -299,6 +323,12 @@ data class DashboardUiState(
 
     fun getCurrentModeInfo(): Map<String, String> {
         return when {
+            isAISignalModeActive -> mapOf(
+                "mode" to "AI Signal",
+                "status" to aiSignalOrderStatus,
+                "telegram_status" to telegramConnectionStatus,
+                "description" to "Eksekusi otomatis berdasarkan sinyal Telegram"
+            )
             isCTCModeActive -> mapOf(
                 "mode" to "CTC Order",
                 "status" to ctcOrderStatus,

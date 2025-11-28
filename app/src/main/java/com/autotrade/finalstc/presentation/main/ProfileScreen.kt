@@ -19,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import com.autotrade.finalstc.R
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -36,6 +37,8 @@ import com.autotrade.finalstc.presentation.main.history.HistoryViewModel
 import com.autotrade.finalstc.presentation.main.dashboard.DashboardViewModel
 import javax.inject.Inject
 import androidx.lifecycle.ViewModel
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -50,11 +53,14 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.window.Dialog
+import com.autotrade.finalstc.data.local.SessionManager
 import com.autotrade.finalstc.data.model.UserProfileData
 import com.autotrade.finalstc.data.repository.ProfileRepository
+import com.autotrade.finalstc.presentation.main.dashboard.CurrencyType
 
 private val DarkBackground = Color(0xFF1B1B1B)
 private val DarkSurface = Color(0xFF1F1F1F)
@@ -73,8 +79,11 @@ private val DangerRed = Color(0xFFE53935)
 class ProfileViewModel @Inject constructor(
     private val firebaseRepository: FirebaseRepository,
     private val languageManager: LanguageManager,
-    private val profileRepository: ProfileRepository
+    private val profileRepository: ProfileRepository,
+    private val sessionManager: SessionManager
 ) : ViewModel() {
+    private val _currentCurrency = MutableStateFlow(CurrencyType.IDR)
+    val currentCurrency: StateFlow<CurrencyType> = _currentCurrency.asStateFlow()
 
     private val _userProfile = MutableStateFlow<UserProfileData?>(null)
     val userProfile: StateFlow<UserProfileData?> = _userProfile.asStateFlow()
@@ -104,6 +113,11 @@ class ProfileViewModel @Inject constructor(
         data class Error(val message: String) : DeleteAccountState()
     }
 
+    init {
+        loadCurrency()
+        observeCurrencyChanges()
+    }
+
     fun loadUserProfile() {
         viewModelScope.launch {
             _isLoadingProfile.value = true
@@ -116,6 +130,24 @@ class ProfileViewModel @Inject constructor(
                     Log.e("ProfileViewModel", "Failed to load profile: ${error.message}")
                     _isLoadingProfile.value = false
                 }
+        }
+    }
+
+    private fun loadCurrency() {
+        val currencyIso = sessionManager.getCurrencyIso()
+        val currencyType = CurrencyType.fromCode(currencyIso)
+        _currentCurrency.value = currencyType
+        Log.d("ProfileViewModel", "💰 Loaded currency: ${currencyType.code}")
+    }
+
+    // ✅ TAMBAH: Observasi perubahan currency
+    private fun observeCurrencyChanges() {
+        viewModelScope.launch {
+            sessionManager.currencyFlow.collect { newCurrencyIso ->
+                val currencyType = CurrencyType.fromCode(newCurrencyIso)
+                _currentCurrency.value = currencyType
+                Log.d("ProfileViewModel", "💰 Currency changed to: ${currencyType.code}")
+            }
         }
     }
 
@@ -193,10 +225,11 @@ fun ProfileScreen(
     val deleteAccountState by profileViewModel.deleteAccountState.collectAsStateWithLifecycle()
 
     val dashboardUiState by dashboardViewModel.uiState.collectAsStateWithLifecycle()
-    val currentCurrency = dashboardUiState.currencySettings.selectedCurrency
 
     val userProfile by profileViewModel.userProfile.collectAsStateWithLifecycle()
     val isLoadingProfile by profileViewModel.isLoadingProfile.collectAsStateWithLifecycle()
+
+    val currentCurrency by profileViewModel.currentCurrency.collectAsStateWithLifecycle()
 
     LaunchedEffect(userSession?.email) {
         userSession?.email?.let { email ->
@@ -240,20 +273,10 @@ fun ProfileScreen(
         }
     }
 
-    val formattedPortfolio = remember(totalPortfolioCents) {
-        val value = totalPortfolioCents / 100.0
-        when {
-            kotlin.math.abs(value) >= 1_000_000 -> {
-                String.format("%.1fM", value / 1_000_000)
-            }
-            kotlin.math.abs(value) >= 10_000 -> {
-                String.format("%.1fK", value / 1_000)
-            }
-            else -> {
-                String.format("%.2f", value)
-            }
-        }
+    val formattedPortfolio = remember(totalPortfolioCents, currentCurrency) {
+        currentCurrency.formatAmount(totalPortfolioCents)
     }
+
 
     val activeDays = remember(historyList, isDemoAccount) {
         historyList.filter { it.isDemoAccount == isDemoAccount }
@@ -366,26 +389,130 @@ fun ProfileScreen(
                                         ),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(64.dp)
-                                            .background(
-                                                brush = Brush.linearGradient(
-                                                    colors = listOf(
-                                                        StatusBlue.copy(alpha = 0.2f),
-                                                        WifiGreen.copy(alpha = 0.2f)
-                                                    )
-                                                ),
-                                                shape = CircleShape
-                                            ),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = if (isAdmin) Icons.Default.AdminPanelSettings else Icons.Default.Person,
-                                            contentDescription = null,
+                                    if (isLoadingProfile) {
+                                        CircularProgressIndicator(
                                             modifier = Modifier.size(32.dp),
-                                            tint = Color.White
+                                            color = StatusBlue,
+                                            strokeWidth = 2.dp
                                         )
+                                    } else {
+                                        val avatarUrl = userProfile?.avatar
+                                        if (!avatarUrl.isNullOrEmpty()) {
+                                            var isLoading by remember { mutableStateOf(true) }
+                                            var isError by remember { mutableStateOf(false) }
+
+                                            Box(
+                                                modifier = Modifier.size(64.dp),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                // Loading shimmer background
+                                                if (isLoading && !isError) {
+                                                    val infiniteTransition = rememberInfiniteTransition(label = "shimmer")
+                                                    val alpha by infiniteTransition.animateFloat(
+                                                        initialValue = 0.3f,
+                                                        targetValue = 0.7f,
+                                                        animationSpec = infiniteRepeatable(
+                                                            animation = tween(1000),
+                                                            repeatMode = RepeatMode.Reverse
+                                                        ),
+                                                        label = "alpha"
+                                                    )
+
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .size(64.dp)
+                                                            .clip(CircleShape)
+                                                            .background(
+                                                                brush = Brush.linearGradient(
+                                                                    colors = listOf(
+                                                                        StatusBlue.copy(alpha = alpha),
+                                                                        WifiGreen.copy(alpha = alpha)
+                                                                    )
+                                                                )
+                                                            ),
+                                                        contentAlignment = Alignment.Center
+                                                    ) {
+                                                        CircularProgressIndicator(
+                                                            modifier = Modifier.size(24.dp),
+                                                            color = Color.White.copy(alpha = 0.8f),
+                                                            strokeWidth = 2.dp
+                                                        )
+                                                    }
+                                                }
+
+                                                // Error fallback icon
+                                                if (isError) {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .size(64.dp)
+                                                            .clip(CircleShape)
+                                                            .background(
+                                                                brush = Brush.linearGradient(
+                                                                    colors = listOf(
+                                                                        StatusBlue.copy(alpha = 0.2f),
+                                                                        WifiGreen.copy(alpha = 0.2f)
+                                                                    )
+                                                                )
+                                                            ),
+                                                        contentAlignment = Alignment.Center
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = if (isAdmin) Icons.Default.AdminPanelSettings else Icons.Default.Person,
+                                                            contentDescription = null,
+                                                            modifier = Modifier.size(32.dp),
+                                                            tint = Color.White
+                                                        )
+                                                    }
+                                                }
+
+                                                // Actual image
+                                                AsyncImage(
+                                                    model = ImageRequest.Builder(context)
+                                                        .data("https://stockity.id/$avatarUrl")
+                                                        .crossfade(true)
+                                                        .listener(
+                                                            onStart = { isLoading = true },
+                                                            onSuccess = { _, _ ->
+                                                                isLoading = false
+                                                                isError = false
+                                                            },
+                                                            onError = { _, _ ->
+                                                                isLoading = false
+                                                                isError = true
+                                                            }
+                                                        )
+                                                        .build(),
+                                                    contentDescription = "User Avatar",
+                                                    modifier = Modifier
+                                                        .size(64.dp)
+                                                        .clip(CircleShape),
+                                                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                                                )
+                                            }
+                                        } else {
+                                            // No avatar URL - show default icon
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(64.dp)
+                                                    .background(
+                                                        brush = Brush.linearGradient(
+                                                            colors = listOf(
+                                                                StatusBlue.copy(alpha = 0.2f),
+                                                                WifiGreen.copy(alpha = 0.2f)
+                                                            )
+                                                        ),
+                                                        shape = CircleShape
+                                                    ),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(
+                                                    imageVector = if (isAdmin) Icons.Default.AdminPanelSettings else Icons.Default.Person,
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(32.dp),
+                                                    tint = Color.White
+                                                )
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -401,65 +528,131 @@ fun ProfileScreen(
                                     letterSpacing = 0.5.sp
                                 )
 
-                                Spacer(modifier = Modifier.height(6.dp))
-
-                                Text(
-                                    text = when {
-                                        isSuperAdmin -> StringsManager.getSuperAdminAccount(lang)
-                                        isAdmin -> StringsManager.getAdminAccount(lang)
-                                        else -> StringsManager.getStockityAccount(lang)
-                                    },
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = when {
-                                        isSuperAdmin -> AccentWarning
-                                        isAdmin -> AccentWarning
-                                        else -> StatusBlue
-                                    }
-                                )
-
                                 Spacer(modifier = Modifier.height(8.dp))
 
-                                Card(
-                                    colors = CardDefaults.cardColors(
-                                        containerColor = WifiGreen.copy(alpha = 0.15f)
-                                    ),
-                                    shape = RoundedCornerShape(20.dp)
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.padding(
-                                            horizontal = 10.dp,
-                                            vertical = 4.dp
-                                        )
+                                    // Online Badge
+                                    Card(
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = WifiGreen.copy(alpha = 0.15f)
+                                        ),
+                                        shape = RoundedCornerShape(20.dp)
                                     ) {
-                                        val infiniteTransition =
-                                            rememberInfiniteTransition(label = "pulse_animation")
-                                        val pulseAnimation by infiniteTransition.animateFloat(
-                                            initialValue = 0.7f,
-                                            targetValue = 1f,
-                                            animationSpec = infiniteRepeatable(
-                                                animation = tween(1500),
-                                                repeatMode = RepeatMode.Reverse
-                                            ),
-                                            label = "pulse"
-                                        )
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.padding(
+                                                horizontal = 10.dp,
+                                                vertical = 4.dp
+                                            )
+                                        ) {
+                                            val infiniteTransition =
+                                                rememberInfiniteTransition(label = "pulse_animation_header")
+                                            val pulseAnimation by infiniteTransition.animateFloat(
+                                                initialValue = 0.7f,
+                                                targetValue = 1f,
+                                                animationSpec = infiniteRepeatable(
+                                                    animation = tween(1500),
+                                                    repeatMode = RepeatMode.Reverse
+                                                ),
+                                                label = "pulse"
+                                            )
 
-                                        Box(
-                                            modifier = Modifier
-                                                .size(6.dp)
-                                                .background(
-                                                    WifiGreen.copy(alpha = pulseAnimation),
-                                                    CircleShape
-                                                )
-                                        )
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(
-                                            text = StringsManager.getOnline(lang),
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = WifiGreen
-                                        )
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(6.dp)
+                                                    .background(
+                                                        WifiGreen.copy(alpha = pulseAnimation),
+                                                        CircleShape
+                                                    )
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = StringsManager.getOnline(lang),
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = WifiGreen
+                                            )
+                                        }
+                                    }
+
+                                    // Role Badge
+                                    Card(
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = when {
+                                                isSuperAdmin -> AccentWarning.copy(alpha = 0.15f)
+                                                isAdmin -> AccentWarning.copy(alpha = 0.15f)
+                                                else -> StatusBlue.copy(alpha = 0.15f)
+                                            }
+                                        ),
+                                        shape = RoundedCornerShape(20.dp)
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.padding(
+                                                horizontal = 10.dp,
+                                                vertical = 4.dp
+                                            )
+                                        ) {
+                                            Icon(
+                                                imageVector = when {
+                                                    isSuperAdmin -> Icons.Default.Security
+                                                    isAdmin -> Icons.Default.AdminPanelSettings
+                                                    else -> Icons.Default.Person
+                                                },
+                                                contentDescription = null,
+                                                modifier = Modifier.size(12.dp),
+                                                tint = when {
+                                                    isSuperAdmin -> AccentWarning
+                                                    isAdmin -> AccentWarning
+                                                    else -> StatusBlue
+                                                }
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = when {
+                                                    isSuperAdmin -> when(lang) {
+                                                        "id" -> "Super Admin"
+                                                        "en" -> "Super Admin"
+                                                        "es" -> "Super Admin"
+                                                        "vi" -> "Super Admin"
+                                                        "tr" -> "Süper Admin"
+                                                        "hi" -> "सुपर एडमिन"
+                                                        "ms" -> "Super Admin"
+                                                        else -> "Super Admin"
+                                                    }
+                                                    isAdmin -> when(lang) {
+                                                        "id" -> "Admin"
+                                                        "en" -> "Admin"
+                                                        "es" -> "Admin"
+                                                        "vi" -> "Quản trị"
+                                                        "tr" -> "Admin"
+                                                        "hi" -> "एडमिन"
+                                                        "ms" -> "Admin"
+                                                        else -> "Admin"
+                                                    }
+                                                    else -> when(lang) {
+                                                        "id" -> "User"
+                                                        "en" -> "User"
+                                                        "es" -> "Usuario"
+                                                        "vi" -> "Người dùng"
+                                                        "tr" -> "Kullanıcı"
+                                                        "hi" -> "उपयोगकर्ता"
+                                                        "ms" -> "Pengguna"
+                                                        else -> "User"
+                                                    }
+                                                },
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = when {
+                                                    isSuperAdmin -> AccentWarning
+                                                    isAdmin -> AccentWarning
+                                                    else -> StatusBlue
+                                                }
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -774,7 +967,6 @@ fun ProfileScreen(
                                 iconColor = WifiGreen
                             )
 
-                            // ✓ Tombol Hapus Akun dipindahkan ke sini
                             Divider(
                                 color = BorderColor,
                                 thickness = 1.dp,
@@ -821,20 +1013,19 @@ fun ProfileScreen(
                         }
                     }
 
-                    // Update tombol bahasa dengan versi yang lebih bersih
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 2.dp, vertical = 8.dp),
-                        colors = CardDefaults.cardColors(containerColor = CardBackground),
+                        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
                         elevation = CardDefaults.cardElevation(
-                            defaultElevation = 2.dp,
-                            pressedElevation = 4.dp,
-                            focusedElevation = 4.dp,
-                            hoveredElevation = 3.dp
+                            defaultElevation = 0.dp,
+                            pressedElevation = 0.dp,
+                            focusedElevation = 0.dp,
+                            hoveredElevation = 0.dp
                         ),
                         shape = RoundedCornerShape(24.dp),
-                        border = BorderStroke(0.5.dp, Color(0xFF4A4A4A))
+                        border = BorderStroke(1.dp, BorderColor.copy(alpha = 0.5f))
                     ) {
                         OutlinedButton(
                             onClick = { profileViewModel.toggleLanguageDialog(true) },
@@ -842,7 +1033,8 @@ fun ProfileScreen(
                                 .fillMaxWidth()
                                 .height(64.dp),
                             colors = ButtonDefaults.outlinedButtonColors(
-                                contentColor = TextPrimary
+                                contentColor = TextPrimary,
+                                containerColor = Color.Transparent
                             ),
                             border = BorderStroke(0.dp, Color.Transparent),
                             shape = RoundedCornerShape(24.dp)
@@ -895,6 +1087,7 @@ fun ProfileScreen(
                             }
                         }
                     }
+
 
                     Card(
                         modifier = Modifier

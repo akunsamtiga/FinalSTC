@@ -1,7 +1,9 @@
 package com.autotrade.finalstc
 
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
@@ -9,6 +11,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.navigation.compose.NavHost
@@ -17,11 +20,12 @@ import androidx.navigation.compose.rememberNavController
 import com.autotrade.finalstc.data.repository.LoginRepository
 import com.autotrade.finalstc.presentation.login.LoginScreen
 import com.autotrade.finalstc.presentation.main.MainScreen
-import com.autotrade.finalstc.presentation.register.RegisterScreen // ✅ NEW: Import RegisterScreen
+import com.autotrade.finalstc.presentation.register.RegisterScreen
 import com.autotrade.finalstc.ui.theme.FinalSTCTheme
-import com.autotrade.finalstc.utils.PermissionsHandler // ✅ NEW: Import permissions handler
+import com.autotrade.finalstc.utils.PermissionsHandler
 import dagger.hilt.android.AndroidEntryPoint
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.delay
 import javax.inject.Inject
 
 @HiltViewModel
@@ -41,7 +45,6 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         permissionsHandler = PermissionsHandler(this)
-
         permissionsHandler.checkAndRequestPermissions()
 
         setContent {
@@ -63,6 +66,29 @@ fun TradingApp(
 ) {
     val navController = rememberNavController()
     val startDestination = if (appViewModel.isLoggedIn()) "main" else "login"
+    val context = LocalContext.current
+
+    var backPressedOnce by remember { mutableStateOf(false) }
+
+    LaunchedEffect(backPressedOnce) {
+        if (backPressedOnce) {
+            delay(2000)
+            backPressedOnce = false
+        }
+    }
+
+    BackHandler(enabled = navController.currentDestination?.route in listOf("main", "login")) {
+        if (backPressedOnce) {
+            (context as? ComponentActivity)?.finish()
+        } else {
+            backPressedOnce = true
+            Toast.makeText(
+                context,
+                "Tekan sekali lagi untuk keluar",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
 
     NavHost(
         navController = navController,

@@ -39,8 +39,11 @@ class DashboardViewModel @Inject constructor(
     private val languageManager: LanguageManager,
     private val sessionManager: SessionManager,
     private val firebaseRepository: FirebaseRepository,
-    private val balanceRepository: BalanceRepository
+    private val balanceRepository: BalanceRepository,
+    private val telegramSignalService: TelegramSignalService
 ) : ViewModel() {
+    private val _aiSignalOrders = MutableStateFlow<List<AISignalOrder>>(emptyList())
+    val aiSignalOrders: StateFlow<List<AISignalOrder>> = _aiSignalOrders.asStateFlow()
 
     private val _balanceInfo = MutableStateFlow(BalanceInfo())
     val balanceInfo: StateFlow<BalanceInfo> = _balanceInfo.asStateFlow()
@@ -120,6 +123,7 @@ class DashboardViewModel @Inject constructor(
     private lateinit var indicatorOrderManager: IndicatorOrderManager
     private lateinit var ctcOrderManager: CTCOrderManager
     private lateinit var todayProfitCalculator: TodayProfitCalculator
+    private lateinit var aiSignalOrderManager: AISignalOrderManager
 
     private var serverTimeOffset = 0L
 
@@ -1248,7 +1252,7 @@ class DashboardViewModel @Inject constructor(
             },
             webSocketManager = webSocketManager,
             onStepUpdate = { orderId, step ->
-                println("🔗 VM: Received step update - Order: $orderId, Step: $step")
+                println("📗 VM: Received step update - Order: $orderId, Step: $step")
                 scheduleManager.updateMartingaleStepRealtime(orderId, step)
             }
         )
@@ -1279,7 +1283,7 @@ class DashboardViewModel @Inject constructor(
                 _scheduledOrders.value = orders
                 checkBotAutoStop()
             },
-            onExecuteScheduledTrade = { trend, orderId, martingaleStep -> // ✅ TAMBAH PARAMETER
+            onExecuteScheduledTrade = { trend, orderId, martingaleStep ->
                 executeScheduledTrade(trend, orderId, martingaleStep)
             },
             onAllSchedulesCompleted = {
@@ -1292,7 +1296,6 @@ class DashboardViewModel @Inject constructor(
         )
 
         scheduleManager.loadScheduledOrdersFromStorage()
-
         scheduleManager.updateCurrency(_uiState.value.currencySettings.selectedCurrency)
 
         assetManager = AssetManager(
@@ -1463,6 +1466,36 @@ class DashboardViewModel @Inject constructor(
                 )
             }
         )
+
+        telegramSignalService.initialize(
+            scope = viewModelScope,
+            onSignalReceived = { signal ->
+                handleNewTelegramSignal(signal)
+            },
+            onStatusUpdate = { status ->
+                _uiState.value = _uiState.value.copy(
+                    telegramConnectionStatus = status
+                )
+            },
+            serverTimeService = serverTimeService
+        )
+
+        aiSignalOrderManager = AISignalOrderManager(
+            scope = viewModelScope,
+            onAISignalOrdersUpdate = { orders ->
+                _aiSignalOrders.value = orders
+            },
+            onExecuteAISignalTrade = { trend, orderId, amount ->
+                executeAISignalTrade(trend, orderId, amount)
+            },
+            onModeStatusUpdate = { status ->
+                _uiState.value = _uiState.value.copy(
+                    aiSignalOrderStatus = status
+                )
+            },
+            telegramSignalService = telegramSignalService,
+            serverTimeService = serverTimeService
+        )
     }
 
     private fun startConnectionMonitoring() {
@@ -1604,6 +1637,166 @@ class DashboardViewModel @Inject constructor(
             }
         }
     }
+
+    private fun handleNewTelegramSignal(signal: TelegramSignal) {
+        if (_uiState.value.isAISignalModeActive) {
+            aiSignalOrderManager.handleNewSignal(signal)
+        }
+    }
+
+    // ✅ FUNGSI START AI SIGNAL MODE
+    fun startAISignalMode() {
+        val currentState = _uiState.value
+
+        if (!ensureStableConnection()) {
+            _uiState.value = currentState.copy(
+                error = "WebSocket connection not stable. Please wait or force reconnect."
+            )
+            return
+        }
+
+        if (!currentState.canStartAISignalMode()) {
+            _uiState.value = currentState.copy(
+                error = "Cannot start AI Signal: Other modes are active"
+            )
+            return
+        }
+
+        val selectedAsset = currentState.selectedAsset ?: return
+
+        viewModelScope.launch {
+            try {
+                _uiState.value = currentState.copy(
+                    aiSignalOrderStatus = "Starting AI Signal Mode...",
+                    error = null
+                )
+
+                // Stop other modes
+                if (currentState.botState != BotState.STOPPED) stopBot()
+                if (currentState.isFollowModeActive) stopFollowMode()
+                if (currentState.isIndicatorModeActive) stopIndicatorMode()
+                if (currentState.isCTCModeActive) stopCTCMode()
+                if (currentState.isMultiMomentumModeActive) stopMultiMomentumMode()
+
+                delay(1000)
+
+                stopLossProfitManager.startNewSession()
+
+                val result = aiSignalOrderManager.startAISignalMode(
+                    asset = selectedAsset,
+                    isDemoAccount = currentState.isDemoAccount,
+                    baseAmount = currentState.martingaleSettings.baseAmount
+                )
+
+                result.fold(
+                    onSuccess = { message ->
+                        _uiState.value = currentState.copy(
+                            isAISignalModeActive = true,
+                            tradingMode = TradingMode.AI_SIGNAL,
+                            aiSignalOrderStatus = "🤖 AI Signal active - Monitoring Telegram...",
+                            tradingSession = stopLossProfitManager.getCurrentSession(),
+                            connectionStatus = "Connected - AI Signal active",
+                            error = null
+                        )
+
+                        Log.d("DashboardViewModel", "AI Signal mode started successfully")
+                    },
+                    onFailure = { exception ->
+                        _uiState.value = currentState.copy(
+                            error = exception.message,
+                            aiSignalOrderStatus = "AI Signal inactive"
+                        )
+                    }
+                )
+
+            } catch (e: Exception) {
+                Log.e("DashboardViewModel", "Error starting AI Signal: ${e.message}", e)
+                _uiState.value = currentState.copy(
+                    error = "Error starting AI Signal: ${e.message}",
+                    aiSignalOrderStatus = "AI Signal inactive"
+                )
+            }
+        }
+    }
+
+    // ✅ FUNGSI STOP AI SIGNAL MODE
+    fun stopAISignalMode() {
+        val currentState = _uiState.value
+
+        if (!currentState.canStopAISignalMode()) {
+            _uiState.value = currentState.copy(
+                error = "AI Signal mode is not active"
+            )
+            return
+        }
+
+        Log.d("DashboardViewModel", "Manual stop of AI Signal mode requested")
+
+        val result = aiSignalOrderManager.stopAISignalMode()
+
+        result.fold(
+            onSuccess = { message ->
+                _uiState.value = currentState.copy(
+                    isAISignalModeActive = false,
+                    tradingMode = TradingMode.SCHEDULE,
+                    aiSignalOrderStatus = "AI Signal stopped",
+                    activeAISignalOrderId = null,
+                    connectionStatus = "Connected - Mode can be changed",
+                    error = null
+                )
+
+                Log.d("DashboardViewModel", "AI Signal mode stopped successfully")
+            },
+            onFailure = { exception ->
+                _uiState.value = currentState.copy(
+                    error = exception.message
+                )
+            }
+        )
+    }
+
+    // ✅ EXECUTE AI SIGNAL TRADE
+    private fun executeAISignalTrade(trend: String, orderId: String, amount: Long) {
+        val currentState = _uiState.value
+
+        if (!currentState.isAISignalModeActive) return
+
+        val (shouldPreventTrade, preventReason) = stopLossProfitManager.shouldPreventNewTrade(
+            currentState.stopLossSettings,
+            currentState.stopProfitSettings
+        )
+
+        if (shouldPreventTrade) {
+            Log.w("DashboardViewModel", "AI Signal Trade prevented: $preventReason")
+            return
+        }
+
+        val selectedAsset = currentState.selectedAsset ?: return
+
+        if (!currentState.isWebSocketConnected || !webSocketManager.isRequiredChannelsReady()) {
+            Log.w("DashboardViewModel", "WebSocket not ready for AI Signal Trade")
+            return
+        }
+
+        Log.d("DashboardViewModel", "Executing AI Signal order:")
+        Log.d("DashboardViewModel", "  Trend: $trend")
+        Log.d("DashboardViewModel", "  Amount: ${formatAmount(amount)}")
+
+        _uiState.value = currentState.copy(
+            activeAISignalOrderId = orderId,
+            aiSignalOrderStatus = "🚀 Executing: $trend - ${formatAmount(amount)}"
+        )
+
+        // Execute menggunakan boundary mode (1 minute expiry)
+        tradeManager.executeFollowBoundaryTrade(
+            assetRic = selectedAsset.ric,
+            trend = trend,
+            amount = amount,
+            isDemoAccount = currentState.isDemoAccount,
+            followOrderId = orderId
+        )
+    }
+
 
     private fun handleTradingEventForTodayProfit(message: org.json.JSONObject) {
         try {
@@ -4851,6 +5044,9 @@ class DashboardViewModel @Inject constructor(
         indicatorOrderManager.cleanup()
         ctcOrderManager.cleanup()  // 🔥 NEW
         stopMultiMomentumMode() // ADD THIS
+        stopAISignalMode() // ✅ TAMBAH INI
+        telegramSignalService.cleanup() // ✅ TAMBAH INI
+        aiSignalOrderManager.cleanup()  // ✅ TAMBAH INI
     }
 }
 
