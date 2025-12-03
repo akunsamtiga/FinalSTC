@@ -1,6 +1,8 @@
 package com.autotrade.finalstc
 
+import android.content.Context
 import android.os.Bundle
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -17,6 +19,7 @@ import androidx.lifecycle.ViewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.autotrade.finalstc.data.repository.FirebaseRepository
 import com.autotrade.finalstc.data.repository.LoginRepository
 import com.autotrade.finalstc.presentation.login.LoginScreen
 import com.autotrade.finalstc.presentation.main.MainScreen
@@ -25,12 +28,13 @@ import com.autotrade.finalstc.ui.theme.FinalSTCTheme
 import com.autotrade.finalstc.utils.PermissionsHandler
 import dagger.hilt.android.AndroidEntryPoint
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
 class AppViewModel @Inject constructor(
-    private val loginRepository: LoginRepository
+    private val loginRepository: LoginRepository,
+    private val firebaseRepository: FirebaseRepository
 ) : ViewModel() {
     fun isLoggedIn(): Boolean = loginRepository.isLoggedIn()
 }
@@ -38,7 +42,19 @@ class AppViewModel @Inject constructor(
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
+    @Inject
+    lateinit var loginRepository: LoginRepository
+
+    @Inject
+    lateinit var firebaseRepository: FirebaseRepository
+
     private lateinit var permissionsHandler: PermissionsHandler
+
+    companion object {
+        private const val TAG = "MainActivity"
+        private const val PREFS_NAME = "ai_signal_prefs"
+        private const val KEY_AI_SIGNAL_ACTIVE = "is_ai_signal_active"
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -58,6 +74,138 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    override fun onResume() {
+        super.onResume()
+
+        // ✅ Check AI Signal status and restore notifications if needed
+        val isAISignalActive = getAISignalStatus()
+
+        Log.d(TAG, "=" .repeat(60))
+        Log.d(TAG, "📱 APP RESUMED")
+        Log.d(TAG, "=" .repeat(60))
+        Log.d(TAG, "   AI Signal Status: ${if (isAISignalActive) "ACTIVE ✅" else "INACTIVE ❌"}")
+        Log.d(TAG, "   User Logged In: ${loginRepository.isLoggedIn()}")
+
+        // ✅ Restore AI Signal notifications if mode is active
+        if (isAISignalActive && loginRepository.isLoggedIn()) {
+            Log.d(TAG, "   🔔 Restoring AI Signal notifications...")
+            com.autotrade.finalstc.service.TradingSignalMessagingService.setAISignalModeActive(true)
+        }
+        Log.d(TAG, "=" .repeat(60))
+    }
+
+    override fun onPause() {
+        super.onPause()
+
+        // ✅ Check AI Signal status, NOT login status
+        val isAISignalActive = getAISignalStatus()
+
+        Log.d(TAG, "=" .repeat(60))
+        Log.d(TAG, "📱 APP PAUSED")
+        Log.d(TAG, "=" .repeat(60))
+        Log.d(TAG, "   AI Signal Status: ${if (isAISignalActive) "ACTIVE ✅" else "INACTIVE ❌"}")
+        Log.d(TAG, "   User Logged In: ${loginRepository.isLoggedIn()}")
+
+        // ✅ Only disable notifications if AI Signal Mode is NOT active
+        if (!isAISignalActive) {
+            Log.d(TAG, "   🔇 AI Signal inactive - Disabling notifications")
+            com.autotrade.finalstc.service.TradingSignalMessagingService.setAISignalModeActive(false)
+        } else {
+            Log.d(TAG, "   🔔 AI Signal ACTIVE - Keeping notifications enabled")
+        }
+        Log.d(TAG, "=" .repeat(60))
+    }
+
+    // MainActivity.kt - UPDATE onDestroy dan tambah method baru
+
+    override fun onDestroy() {
+        super.onDestroy()
+
+        // ✅ CHECK: Hanya clear jika user BENAR-BENAR TIDAK LOGIN
+        if (!loginRepository.isLoggedIn()) {
+            Log.d(TAG, "App destroyed and not logged in - Full cleanup")
+            clearAISignalStatus()
+            clearFCMTokenFromFirestore() // ✅ TAMBAH INI
+            unsubscribeFromFCMTopic()     // ✅ TAMBAH INI
+            com.autotrade.finalstc.service.TradingSignalMessagingService.setAISignalModeActive(false)
+        } else {
+            // ✅ NEW: Bahkan saat user login, tetap clear jika AI Signal tidak aktif
+            val isAISignalActive = getAISignalStatus()
+            if (!isAISignalActive) {
+                Log.d(TAG, "App destroyed, user logged in but AI Signal NOT active - Clearing FCM")
+                clearFCMTokenFromFirestore()
+                unsubscribeFromFCMTopic()
+                com.autotrade.finalstc.service.TradingSignalMessagingService.setAISignalModeActive(false)
+            } else {
+                Log.d(TAG, "App destroyed but AI Signal ACTIVE - Preserving FCM setup")
+            }
+        }
+    }
+
+    // ✅ NEW METHOD: Clear FCM token from Firestore
+    private fun clearFCMTokenFromFirestore() {
+        kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                val userSession = loginRepository.getUserSession()
+                if (userSession != null) {
+                    val email = userSession.email
+                    val userId = userSession.userId
+
+                    Log.d(TAG, "🔕 Clearing FCM token from Firestore...")
+
+                    // Check if admin
+                    val isAdmin = firebaseRepository.checkIsAdmin(email)
+
+                    if (isAdmin) {
+                        firebaseRepository.clearAdminFCMToken(email)
+                        Log.d(TAG, "✅ Admin FCM token cleared from Firestore")
+                    } else {
+                        firebaseRepository.clearUserFCMToken(userId)
+                        Log.d(TAG, "✅ User FCM token cleared from Firestore")
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error clearing FCM token from Firestore: ${e.message}")
+            }
+        }
+    }
+
+    // ✅ NEW METHOD: Unsubscribe from FCM topic
+    private fun unsubscribeFromFCMTopic() {
+        try {
+            Log.d(TAG, "🔕 Unsubscribing from FCM topic...")
+
+            com.google.firebase.messaging.FirebaseMessaging.getInstance()
+                .unsubscribeFromTopic("trading_signals")
+                .addOnSuccessListener {
+                    Log.d(TAG, "✅ Successfully unsubscribed from trading_signals topic")
+                }
+                .addOnFailureListener { e ->
+                    Log.e(TAG, "❌ Failed to unsubscribe: ${e.message}")
+                }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error unsubscribing from topic: ${e.message}")
+        }
+    }
+
+    // ✅ Helper methods for AI Signal status
+    private fun getAISignalStatus(): Boolean {
+        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getBoolean(KEY_AI_SIGNAL_ACTIVE, false)
+    }
+
+    private fun clearAISignalStatus() {
+        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().putBoolean(KEY_AI_SIGNAL_ACTIVE, false).apply()
+    }
+
+    // ✅ Public method to save AI Signal status (called from DashboardViewModel)
+    fun saveAISignalStatus(isActive: Boolean) {
+        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().putBoolean(KEY_AI_SIGNAL_ACTIVE, isActive).apply()
+        Log.d(TAG, "💾 AI Signal status saved: $isActive")
+    }
 }
 
 @Composable
@@ -72,7 +220,7 @@ fun TradingApp(
 
     LaunchedEffect(backPressedOnce) {
         if (backPressedOnce) {
-            delay(2000)
+            kotlinx.coroutines.delay(2000L)
             backPressedOnce = false
         }
     }

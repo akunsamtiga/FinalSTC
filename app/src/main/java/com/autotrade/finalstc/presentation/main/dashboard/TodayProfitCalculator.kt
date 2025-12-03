@@ -367,6 +367,13 @@ class TodayProfitCalculator(
     }
 
     private fun resetForCurrencyChange(newCurrency: String, accountType: String, todayDateString: String) {
+        println("=== CURRENCY CHANGE DETECTED ===")
+        println("Previous currency: $currentCurrency")
+        println("New currency: $newCurrency")
+
+        // ✅ JANGAN reset langsung, simpan trades yang sudah diproses
+        val existingTrades = processedTrades.values.toList()
+
         processedTrades.clear()
         cachedTotalProfit = 0L
         cachedStats = TodayStats()
@@ -375,8 +382,10 @@ class TodayProfitCalculator(
         lastCalculatedDate = todayDateString
         calculationHistory.clear()
 
-        println("Today profit reset for currency change: $newCurrency")
-        println("All cached data cleared")
+        println("Currency reset completed")
+
+        // ✅ PENTING: Inform caller bahwa perlu re-fetch history
+        // Ini akan di-handle di caller (DashboardViewModel)
     }
 
     private fun resetForAccountChange(newAccountType: String, todayDateString: String) {

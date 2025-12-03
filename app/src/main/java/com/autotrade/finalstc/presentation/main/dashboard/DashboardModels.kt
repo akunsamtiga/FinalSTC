@@ -70,7 +70,8 @@ data class DashboardUiState(
                 !isAISignalModeActive &&
                 selectedAsset != null &&
                 isWebSocketConnected &&
-                currencySettings.validate().isSuccess
+                currencySettings.validate().isSuccess &&
+                martingaleSettings.validate(currencySettings.selectedCurrency).isSuccess  // ✅ VALIDATE MARTINGALE
     }
 
     fun canStopAISignalMode(): Boolean = isAISignalModeActive
@@ -83,20 +84,15 @@ data class DashboardUiState(
             !isAISignalModeActive
 
     fun canStartBot(): Boolean {
-        val martingaleValid = if (martingaleSettings.isEnabled && martingaleSettings.isAlwaysSignal) {
-            martingaleSettings.baseAmount >= currencySettings.selectedCurrency.minAmountInCents &&
-                    martingaleSettings.baseAmount <= 100_000_000_000L
-        } else {
-            martingaleSettings.validate(currencySettings.selectedCurrency).isSuccess &&
-                    getMartingaleValidationError() == null
-        }
+        // ✅ Always validate martingale settings, including in Always Signal mode
+        val martingaleValid = martingaleSettings.validate(currencySettings.selectedCurrency).isSuccess
 
         return botState == BotState.STOPPED &&
                 !isFollowModeActive &&
                 !isIndicatorModeActive &&
                 !isCTCModeActive &&
                 !isMultiMomentumModeActive &&
-                !isAISignalModeActive &&  // ✅ TAMBAH INI
+                !isAISignalModeActive &&
                 selectedAsset != null &&
                 isWebSocketConnected &&
                 martingaleValid &&
@@ -238,18 +234,7 @@ data class DashboardUiState(
     }
 
     fun getMartingaleValidationError(): String? {
-        // ✅ Skip validation jika Always Signal mode
-        if (martingaleSettings.isEnabled && martingaleSettings.isAlwaysSignal) {
-            return when {
-                martingaleSettings.baseAmount < currencySettings.selectedCurrency.minAmountInCents ->
-                    "Base amount terlalu kecil untuk ${currencySettings.selectedCurrency.code}"
-                martingaleSettings.baseAmount > 100_000_000_000L ->
-                    "Base amount terlalu besar"
-                else -> null
-            }
-        }
-
-        // Regular validation untuk mode non-Always Signal
+        // ✅ Always validate, including in Always Signal mode
         return try {
             val validationResult = martingaleSettings.validate(currencySettings.selectedCurrency)
             if (validationResult.isFailure) {
@@ -271,10 +256,18 @@ data class DashboardUiState(
         }
     }
 
+
     fun getMartingaleDisplayInfo(): Map<String, String> {
         return try {
             val settings = martingaleSettings
+            val modeDescription = if (settings.isAlwaysSignal) {
+                "Always Signal (Max ${settings.maxSteps} steps per cycle)"
+            } else {
+                "Standard (Max ${settings.maxSteps} steps total)"
+            }
+
             mapOf(
+                "mode" to modeDescription,
                 "sequence" to settings.getFormattedSequence(),
                 "total_risk" to settings.getFormattedTotalRisk(),
                 "max_steps" to "${settings.maxSteps}",
@@ -288,6 +281,7 @@ data class DashboardUiState(
             )
         } catch (e: Exception) {
             mapOf(
+                "mode" to "Error",
                 "sequence" to "Calculation error",
                 "total_risk" to "Unknown",
                 "validation_status" to "Error: ${e.message}",

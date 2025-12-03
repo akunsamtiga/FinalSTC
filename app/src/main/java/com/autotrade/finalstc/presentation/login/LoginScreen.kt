@@ -438,7 +438,7 @@ fun LoginScreen(
                                 .weight(0.3f)
                                 .fillMaxHeight(),
                             colors = ButtonDefaults.outlinedButtonColors(
-                                contentColor = Color.Transparent
+                                contentColor = Color(0xFF000000)
                             ),
                             shape = RoundedCornerShape(24.dp),
                             contentPadding = PaddingValues(horizontal = 8.dp)

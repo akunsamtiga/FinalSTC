@@ -408,14 +408,13 @@ object WebViewConfigManager {
         Log.d(TAG, "Cookie Manager configured with persistence")
     }
 
+    @Deprecated("Use WebViewCacheManager.clearCookiesOnly() instead",
+        ReplaceWith("WebViewCacheManager.clearCookiesOnly(onComplete)"))
     fun clearAllCookies(onComplete: () -> Unit = {}) {
-        val cookieManager = CookieManager.getInstance()
-        cookieManager.removeAllCookies { success ->
-            Log.d(TAG, "Cookies cleared: $success")
-            onComplete()
-        }
+        WebViewCacheManager.clearCookiesOnly { onComplete() }
     }
 
+    @Deprecated("Use WebViewCacheManager.clearAllWebViewData() instead")
     fun clearCache(webView: WebView) {
         webView.clearCache(true)
         webView.clearFormData()
@@ -424,23 +423,15 @@ object WebViewConfigManager {
     }
 
     fun getAllCookies(url: String = "https://stockity.id"): String? {
-        val cookieManager = CookieManager.getInstance()
-        val cookies = cookieManager.getCookie(url)
-        Log.d(TAG, "Cookies for $url: $cookies")
-        return cookies
+        return WebViewCacheManager.getAllCookies(url)
     }
 
     fun isUserLoggedIn(url: String = "https://stockity.id"): Boolean {
-        val cookies = getAllCookies(url)
-        val hasAuthToken = cookies?.contains("authtoken=") == true
-        Log.d(TAG, "User logged in: $hasAuthToken")
-        return hasAuthToken
+        return WebViewCacheManager.isStockityLoggedIn(url)
     }
 
     fun flushCookies() {
-        val cookieManager = CookieManager.getInstance()
-        cookieManager.flush()
-        Log.d(TAG, "Cookies flushed to storage")
+        WebViewCacheManager.flushCookies()
     }
 }
 

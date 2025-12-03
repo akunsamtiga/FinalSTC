@@ -15,5 +15,9 @@ data class AdminUser(
 
     val createdAt: Long = System.currentTimeMillis(),
     val createdBy: String = "",
-    val lastLogin: Long = 0L
+    val lastLogin: Long = 0L,
+
+    // ✅ ADD THESE FIELDS
+    val fcmToken: String = "",
+    val fcmTokenUpdatedAt: Long = 0L
 )

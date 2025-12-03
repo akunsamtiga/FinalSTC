@@ -1,5 +1,7 @@
 package com.autotrade.finalstc.presentation.main.dashboard
 
+import android.content.Intent
+import android.net.Uri
 import android.util.Log
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
@@ -33,6 +35,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -45,29 +48,19 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.PaintingStyle.Companion.Stroke
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.input.ImeAction
-import coil.compose.AsyncImage
 import com.autotrade.finalstc.presentation.main.dashboard.*
 import com.autotrade.finalstc.presentation.theme.ThemeViewModel
 import java.math.BigDecimal
-import java.math.RoundingMode
 import java.text.SimpleDateFormat
-import java.util.*
-import kotlinx.coroutines.delay
-import com.autotrade.finalstc.data.local.LanguageManager
 import com.autotrade.finalstc.utils.StringsManager
-import kotlinx.coroutines.launch
-import kotlin.math.abs
-import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import androidx.compose.ui.platform.LocalContext
 import coil.compose.SubcomposeAsyncImage
@@ -80,12 +73,23 @@ data class DashboardTheme(
         get() = if (isDarkMode) DarkColors else LightColors
 }
 
+data class TradeResultToastData(
+    val isWin: Boolean,
+    val message: String,
+    val amount: Long?,
+    val trend: String?,
+    val orderId: String?,
+    val isMartingale: Boolean = false,
+    val martingaleStep: Int = 0
+)
+
 data class DashboardColors(
     val background: Color,
     val darkBackground: Color,
     val darkBackgroundClock: Color,
     val surface: Color,
     val surface2: Color,
+    val surface3: Color,
     val bgmain: Color,
     val bgmain2: Color,
     val cardBackground: Color,
@@ -216,6 +220,7 @@ val DarkColors = DashboardColors(
     darkBackgroundClock = Color(0xFF1B1B1B),
     surface = Color(0xFF1F1F1F),
     surface2 = Color(0xFF0A141B),
+    surface3 = Color(0xFF0A141B),
     bgmain = Color(0xFF161616),
     bgmain2 = Color(0xFF242738),
     cardBackground = Color(0xFF323232),
@@ -338,6 +343,7 @@ val LightColors = DashboardColors(
     darkBackgroundClock = Color(0xFFF8F9FA),
     surface = Color(0xFFFFFFFF),
     surface2 = Color(0x2AA6BAD8),
+    surface3 = Color(0xFFEBEBEB),
     bgmain = Color(0xFF161616),
     bgmain2 = Color(0xFF242738),
     cardBackground = Color(0xFFFFFFFF),
@@ -507,8 +513,35 @@ fun DashboardScreen(
     var showScheduleDialog by remember { mutableStateOf(false) }
     var showIndicatorSettingsDialog by remember { mutableStateOf(false) }
     var showMultilineScheduleDialog by remember { mutableStateOf(false) }
+    var showTradeResultToast by remember { mutableStateOf(false) }
+    var tradeResultData by remember { mutableStateOf<TradeResultToastData?>(null) }
 
     val scrollState = rememberScrollState()
+
+    LaunchedEffect(uiState.lastTradeResult) {
+        uiState.lastTradeResult?.let { result ->
+            // Only show toast for completed trades (not execution confirmations)
+            if (result.executionType in listOf("MARTINGALE_WIN", "MARTINGALE_MAX_REACHED", "TRADE_CLOSED")) {
+                val isWin = result.success || result.executionType == "MARTINGALE_WIN"
+
+                tradeResultData = TradeResultToastData(
+                    isWin = isWin,
+                    message = result.message,
+                    amount = result.details?.get("amount") as? Long,
+                    trend = result.details?.get("trend") as? String,
+                    orderId = result.orderId,
+                    isMartingale = result.isMartingaleAttempt,
+                    martingaleStep = result.martingaleStep
+                )
+
+                showTradeResultToast = true
+
+                // Auto dismiss after 5 seconds
+                delay(5000)
+                showTradeResultToast = false
+            }
+        }
+    }
 
     LaunchedEffect(uiState.botState, uiState.isFollowModeActive, uiState.isIndicatorModeActive, uiState.isCTCModeActive) {
         println("🔍 BOT STATE CHECK -> botState=${uiState.botState}, follow=${uiState.isFollowModeActive}, indicator=${uiState.isIndicatorModeActive}, ctc=${uiState.isCTCModeActive}")
@@ -516,6 +549,15 @@ fun DashboardScreen(
 
     LaunchedEffect(uiState.currencySettings.selectedCurrency) {
         historyViewModel.updateCurrency(uiState.currencySettings.selectedCurrency)
+    }
+
+    LaunchedEffect(todayProfit, uiState.currencySettings.selectedCurrency) {
+        // Validate today profit matches currency
+        val currency = uiState.currencySettings.selectedCurrency
+        println("💰 Today Profit Display Check:")
+        println("   Value: $todayProfit")
+        println("   Currency: ${currency.code}")
+        println("   Formatted: ${currency.formatAmount(todayProfit)}")
     }
 
     LaunchedEffect(uiState.isDemoAccount) {
@@ -632,7 +674,8 @@ fun DashboardScreen(
                                                 uiState.isFollowModeActive ||
                                                 uiState.isIndicatorModeActive ||
                                                 uiState.isCTCModeActive ||
-                                                uiState.isMultiMomentumModeActive
+                                                uiState.isMultiMomentumModeActive ||
+                                                uiState.isAISignalModeActive
                                         )
                             )
 
@@ -682,25 +725,6 @@ fun DashboardScreen(
                             )
                         }
 
-                        IndicatorInfoCard(
-                            indicatorSettings = uiState.indicatorSettings,
-                            isIndicatorModeActive = uiState.isIndicatorModeActive,
-                            indicatorOrders = indicatorOrders,
-                            predictionInfo = indicatorPredictionInfo
-                        )
-
-                        MultiMomentumInfoCard(
-                            multiMomentumOrders = multiMomentumOrders,
-                            isMultiMomentumModeActive = uiState.isMultiMomentumModeActive,
-                            colors = colors
-                        )
-
-                        AISignalInfoCard(
-                            aiSignalOrders = aiSignalOrders,
-                            isAISignalModeActive = uiState.isAISignalModeActive,
-                            colors = colors
-                        )
-
                         TradingSettingsCard(
                             isDemoAccount = uiState.isDemoAccount,
                             martingaleSettings = uiState.martingaleSettings,
@@ -742,6 +766,7 @@ fun DashboardScreen(
                             currentLanguage = currentLanguage
                         )
 
+
                         if (uiState.tradingMode == TradingMode.SCHEDULE) {
                             BotControlCard(
                                 botState = uiState.botState,
@@ -756,6 +781,25 @@ fun DashboardScreen(
                                 currentLanguage = currentLanguage
                             )
                         }
+
+                        IndicatorInfoCard(
+                            indicatorSettings = uiState.indicatorSettings,
+                            isIndicatorModeActive = uiState.isIndicatorModeActive,
+                            indicatorOrders = indicatorOrders,
+                            predictionInfo = indicatorPredictionInfo
+                        )
+
+                        MultiMomentumInfoCard(
+                            multiMomentumOrders = multiMomentumOrders,
+                            isMultiMomentumModeActive = uiState.isMultiMomentumModeActive,
+                            colors = colors
+                        )
+
+                        AISignalInfoCard(
+                            aiSignalOrders = aiSignalOrders,
+                            isAISignalModeActive = uiState.isAISignalModeActive,
+                            colors = colors
+                        )
 
                         BotStatusInfoCard(
                             botState = uiState.botState,
@@ -785,16 +829,38 @@ fun DashboardScreen(
         }
 
         if (whitelistCheckState is WhitelistCheckState.Verified) {
+            // ✅ CONNECTION TOAST - Selalu di posisi top: 16dp
             FloatingConnectionToast(
                 isConnected = uiState.isWebSocketConnected,
                 connectionStatus = uiState.connectionStatus,
                 colors = colors
             )
 
+            // ✅ ERROR TOAST - Cek apakah connection toast sedang visible
+            val isConnectionToastVisible = remember(uiState.isWebSocketConnected, uiState.connectionStatus) {
+                // Connection toast visible jika ada perubahan status
+                derivedStateOf {
+                    // Logika untuk detect apakah connection toast sedang muncul
+                    // Bisa disesuaikan dengan kondisi yang ada di FloatingConnectionToast
+                    uiState.isWebSocketConnected || uiState.connectionStatus.isNotEmpty()
+                }
+            }
+
             FloatingErrorToast(
                 error = uiState.error,
                 onDismiss = dashboardViewModel::clearError,
-                colors = colors
+                colors = colors,
+                isConnectionToastVisible = isConnectionToastVisible.value
+            )
+
+            FloatingTradeResultToast(
+                show = showTradeResultToast,
+                data = tradeResultData,
+                colors = colors,
+                onDismiss = {
+                    showTradeResultToast = false
+                    tradeResultData = null
+                }
             )
 
         }
@@ -1305,6 +1371,30 @@ fun HeaderSection(
     }
 }
 
+
+@Composable
+fun FadingGradientLine(
+    modifier: Modifier = Modifier,
+    height: Dp = 2.dp
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(height)
+            .background(
+                brush = Brush.horizontalGradient(
+                    colors = listOf(
+                        Color.Transparent,
+                        Color(0xFFF94144),
+                        Color(0xFFF3722C),
+                        Color(0xFF43AA8B),
+                        Color.Transparent
+                    )
+                )
+            )
+    )
+}
+
 @Composable
 private fun FloatingConnectionToast(
     isConnected: Boolean,
@@ -1340,7 +1430,7 @@ private fun FloatingConnectionToast(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 16.dp),
+                .padding(top = 16.dp, start = 16.dp, end = 16.dp),
             contentAlignment = Alignment.TopCenter
         ) {
             EnhancedConnectionToast(
@@ -1371,6 +1461,7 @@ private fun EnhancedConnectionToast(
     Box(
         modifier = modifier
             .wrapContentWidth()
+            .widthIn(max = 400.dp)
             .defaultMinSize(minHeight = 52.dp)
             .shadow(
                 elevation = 16.dp,
@@ -1529,33 +1620,11 @@ private fun EnhancedConnectionToast(
 }
 
 @Composable
-fun FadingGradientLine(
-    modifier: Modifier = Modifier,
-    height: Dp = 2.dp
-) {
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(height)
-            .background(
-                brush = Brush.horizontalGradient(
-                    colors = listOf(
-                        Color.Transparent,
-                        Color(0xFFF94144),
-                        Color(0xFFF3722C),
-                        Color(0xFF43AA8B),
-                        Color.Transparent
-                    )
-                )
-            )
-    )
-}
-
-@Composable
 private fun FloatingErrorToast(
     error: String?,
     onDismiss: () -> Unit,
-    colors: DashboardColors
+    colors: DashboardColors,
+    isConnectionToastVisible: Boolean = false
 ) {
     var showToast by remember { mutableStateOf(false) }
     var currentError by remember { mutableStateOf<String?>(null) }
@@ -1564,15 +1633,21 @@ private fun FloatingErrorToast(
         if (error != null && error != currentError) {
             currentError = error
             showToast = true
-            delay(5000) // Auto-dismiss after 5 seconds
+            delay(5000)
             showToast = false
-            delay(300) // Wait for animation to complete
+            delay(300)
             onDismiss()
         } else if (error == null) {
             showToast = false
             currentError = null
         }
     }
+
+    val topPadding by animateDpAsState(
+        targetValue = if (isConnectionToastVisible) 80.dp else 16.dp,
+        animationSpec = tween(300, easing = FastOutSlowInEasing),
+        label = "errorToastPosition"
+    )
 
     AnimatedVisibility(
         visible = showToast && currentError != null,
@@ -1591,7 +1666,11 @@ private fun FloatingErrorToast(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 80.dp), // Position below connection toast
+                .padding(
+                    top = topPadding,
+                    start = 16.dp,
+                    end = 16.dp
+                ),
             contentAlignment = Alignment.TopCenter
         ) {
             EnhancedErrorToast(
@@ -1627,7 +1706,7 @@ private fun EnhancedErrorToast(
     Box(
         modifier = modifier
             .wrapContentWidth()
-            .widthIn(max = 360.dp)
+            .widthIn(max = 400.dp)
             .defaultMinSize(minHeight = 52.dp)
             .shadow(
                 elevation = 16.dp,
@@ -1753,6 +1832,279 @@ private fun EnhancedErrorToast(
                         contentDescription = "Dismiss",
                         tint = colors.errorColor,
                         modifier = Modifier.size(14.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FloatingTradeResultToast(
+    show: Boolean,
+    data: TradeResultToastData?,
+    colors: DashboardColors,
+    onDismiss: () -> Unit
+) {
+    AnimatedVisibility(
+        visible = show && data != null,
+        enter = fadeIn(tween(300)) + slideInVertically(
+            initialOffsetY = { it },
+            animationSpec = tween(500, easing = FastOutSlowInEasing)
+        ),
+        exit = fadeOut(tween(300)) + slideOutVertically(
+            targetOffsetY = { it },
+            animationSpec = tween(400, easing = FastOutSlowInEasing)
+        ),
+        modifier = Modifier
+            .fillMaxWidth()
+            .wrapContentHeight()
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 80.dp, start = 16.dp, end = 16.dp),
+            contentAlignment = Alignment.BottomCenter
+        ) {
+            data?.let {
+                EnhancedTradeResultToast(
+                    data = it,
+                    colors = colors,
+                    onDismiss = onDismiss
+                )
+            }
+        }
+    }
+}
+
+// 4. ✅ ADD: Enhanced Trade Result Toast UI
+@Composable
+private fun EnhancedTradeResultToast(
+    data: TradeResultToastData,
+    colors: DashboardColors,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "trade_result")
+    val pulseAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.6f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1500, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulse"
+    )
+
+    // Colors based on result
+    val bgColor = if (data.isWin) Color(0xFFFFFFFF) else Color(0xFFFFFFFF)
+    val accentColor = if (data.isWin) Color(0xFF10B981) else Color(0xFFEF4444)
+    val iconColor = if (data.isWin) Color(0xFF10B981) else Color(0xFFEF4444)
+    val icon = if (data.isWin) Icons.Default.CheckCircle else Icons.Default.Cancel
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth(0.95f)
+            .shadow(
+                elevation = 20.dp,
+                shape = RoundedCornerShape(20.dp),
+                spotColor = accentColor.copy(alpha = 0.4f),
+                ambientColor = Color.Black.copy(alpha = 0.3f)
+            )
+            .background(
+                brush = Brush.horizontalGradient(
+                    colors = listOf(
+                        bgColor,
+                        if (data.isWin) Color(0xFFF0FDF4) else Color(0xFFFEF2F2)
+                    )
+                ),
+                shape = RoundedCornerShape(20.dp)
+            )
+            .border(
+                width = 2.dp,
+                brush = Brush.horizontalGradient(
+                    colors = listOf(
+                        accentColor.copy(alpha = 0.6f),
+                        accentColor.copy(alpha = 0.3f)
+                    )
+                ),
+                shape = RoundedCornerShape(20.dp)
+            )
+            .padding(16.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            // Icon with pulse animation
+            Box(
+                modifier = Modifier.size(56.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                // Pulse background
+                Box(
+                    modifier = Modifier
+                        .size(56.dp)
+                        .background(
+                            brush = Brush.radialGradient(
+                                colors = listOf(
+                                    accentColor.copy(alpha = pulseAlpha * 0.3f),
+                                    Color.Transparent
+                                )
+                            ),
+                            shape = CircleShape
+                        )
+                )
+
+                // Icon background
+                Surface(
+                    modifier = Modifier.size(48.dp),
+                    shape = CircleShape,
+                    color = accentColor.copy(alpha = 0.15f),
+                    border = BorderStroke(
+                        width = 2.dp,
+                        color = accentColor.copy(alpha = 0.5f)
+                    )
+                ) {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = null,
+                            tint = iconColor,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+                }
+            }
+
+            // Content
+            Column(
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.weight(1f)
+            ) {
+                // Title
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = if (data.isWin) "TRADE WIN! 🎉" else "TRADE LOSE",
+                        color = accentColor,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp,
+                        letterSpacing = 0.5.sp
+                    )
+
+                    if (data.isMartingale) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = accentColor.copy(alpha = 0.15f),
+                            border = BorderStroke(1.dp, accentColor.copy(alpha = 0.3f))
+                        ) {
+                            Text(
+                                text = "M${data.martingaleStep}",
+                                color = accentColor,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                }
+
+                // Amount and Trend
+                if (data.amount != null && data.trend != null) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Trend badge
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = when (data.trend.lowercase()) {
+                                "call", "buy" -> Color(0xFF10B981).copy(alpha = 0.15f)
+                                else -> Color(0xFFEF4444).copy(alpha = 0.15f)
+                            },
+                            border = BorderStroke(
+                                1.dp,
+                                when (data.trend.lowercase()) {
+                                    "call", "buy" -> Color(0xFF10B981).copy(alpha = 0.4f)
+                                    else -> Color(0xFFEF4444).copy(alpha = 0.4f)
+                                }
+                            )
+                        ) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = when (data.trend.lowercase()) {
+                                        "call", "buy" -> Icons.Default.ArrowUpward
+                                        else -> Icons.Default.ArrowDownward
+                                    },
+                                    contentDescription = null,
+                                    tint = when (data.trend.lowercase()) {
+                                        "call", "buy" -> Color(0xFF10B981)
+                                        else -> Color(0xFFEF4444)
+                                    },
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Text(
+                                    text = data.trend.uppercase(),
+                                    color = when (data.trend.lowercase()) {
+                                        "call", "buy" -> Color(0xFF10B981)
+                                        else -> Color(0xFFEF4444)
+                                    },
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+
+                        // Amount
+                        Text(
+                            text = formatAmount(data.amount),
+                            color = Color(0xFF6B7280),
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+
+                // Message
+                Text(
+                    text = data.message,
+                    color = Color(0xFF6B7280),
+                    fontSize = 12.sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    lineHeight = 16.sp
+                )
+            }
+
+            // Close button
+            Surface(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .clickable(onClick = onDismiss),
+                shape = CircleShape,
+                color = accentColor.copy(alpha = 0.1f)
+            ) {
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Dismiss",
+                        tint = accentColor,
+                        modifier = Modifier.size(18.dp)
                     )
                 }
             }
@@ -4095,7 +4447,7 @@ fun MaxStepSelectionDialog(
                         .padding(horizontal = 20.dp, vertical = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(20.dp)
                 ) {
-                    // ✅ ALWAYS SIGNAL SECTION (dengan info cards)
+                    // ✅ ALWAYS SIGNAL SECTION
                     item {
                         Column(
                             verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -4258,7 +4610,7 @@ fun MaxStepSelectionDialog(
                                                     color = colors.warningColor
                                                 )
                                                 Text(
-                                                    text = "Every scheduled order will execute. If lose, next signal becomes martingale continuation. Continues until WIN. No max step limit.",
+                                                    text = "Every scheduled order will execute. If lose, next signal becomes martingale continuation. Continues until WIN. Max steps setting will be overridden.",
                                                     fontSize = 9.sp,
                                                     color = colors.textSecondary,
                                                     lineHeight = 12.sp
@@ -4300,14 +4652,16 @@ fun MaxStepSelectionDialog(
                         }
                     }
 
-                    // ✅ MAX STEPS SECTION (disabled jika Always Signal active)
+                    // ✅ MAX STEPS SECTION (SELALU ENABLED)
                     item {
                         Column(
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
-                            modifier = Modifier.alpha(if (martingaleSettings.isAlwaysSignal) 0.4f else 1f)
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             Text(
-                                text = "Maximum Steps ${if (martingaleSettings.isAlwaysSignal) "(Disabled - Always Signal Active)" else ""}",
+                                text = if (martingaleSettings.isAlwaysSignal)
+                                    "Maximum Steps (Always Signal will override)"
+                                else
+                                    "Maximum Steps",
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = colors.textPrimary,
@@ -4323,11 +4677,8 @@ fun MaxStepSelectionDialog(
 
                                     OutlinedButton(
                                         onClick = {
-                                            if (!martingaleSettings.isAlwaysSignal) {
-                                                handleMaxStepsSelected(steps)
-                                            }
+                                            handleMaxStepsSelected(steps)
                                         },
-                                        enabled = !martingaleSettings.isAlwaysSignal,
                                         modifier = Modifier
                                             .height(42.dp)
                                             .wrapContentWidth(),
@@ -4335,9 +4686,7 @@ fun MaxStepSelectionDialog(
                                             containerColor = if (isSelected)
                                                 colors.dialogButtonSelected else colors.dialogButtonUnselected,
                                             contentColor = if (isSelected)
-                                                colors.dialogButtonSelectedText else colors.dialogButtonUnselectedText,
-                                            disabledContainerColor = colors.controls,
-                                            disabledContentColor = colors.textMuted
+                                                colors.dialogButtonSelectedText else colors.dialogButtonUnselectedText
                                         ),
                                         border = BorderStroke(
                                             width = 1.dp,
@@ -4350,7 +4699,7 @@ fun MaxStepSelectionDialog(
                                             horizontalArrangement = Arrangement.spacedBy(4.dp),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            if (isSelected && !martingaleSettings.isAlwaysSignal) {
+                                            if (isSelected) {
                                                 Icon(
                                                     imageVector = Icons.Default.CheckCircle,
                                                     contentDescription = null,
@@ -4370,11 +4719,10 @@ fun MaxStepSelectionDialog(
                         }
                     }
 
-                    // ✅ CUSTOM STEPS SECTION (disabled jika Always Signal active)
+                    // ✅ CUSTOM STEPS SECTION (SELALU ENABLED)
                     item {
                         Column(
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.alpha(if (martingaleSettings.isAlwaysSignal) 0.4f else 1f)
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -4390,19 +4738,14 @@ fun MaxStepSelectionDialog(
 
                                 Button(
                                     onClick = {
-                                        if (!martingaleSettings.isAlwaysSignal) {
-                                            showCustomInput = !showCustomInput
-                                            customStepsInput = ""
-                                        }
+                                        showCustomInput = !showCustomInput
+                                        customStepsInput = ""
                                     },
-                                    enabled = !martingaleSettings.isAlwaysSignal,
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = if (showCustomInput)
                                             colors.dialogCancelButtonBg else colors.dialogCustomButtonBg,
                                         contentColor = if (showCustomInput)
-                                            colors.dialogCancelButtonText else colors.dialogCustomButtonText,
-                                        disabledContainerColor = colors.controls,
-                                        disabledContentColor = colors.textMuted
+                                            colors.dialogCancelButtonText else colors.dialogCustomButtonText
                                     ),
                                     shape = RoundedCornerShape(10.dp),
                                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 5.dp),
@@ -4417,7 +4760,7 @@ fun MaxStepSelectionDialog(
                             }
 
                             AnimatedVisibility(
-                                visible = showCustomInput && !martingaleSettings.isAlwaysSignal,
+                                visible = showCustomInput,
                                 enter = fadeIn() + slideInVertically(),
                                 exit = fadeOut() + slideOutVertically()
                             ) {
@@ -4897,7 +5240,7 @@ fun MaxStepSelectionDialog(
                         }
                     }
 
-// Preview Section
+                    // Preview Section
                     item {
                         val previewData = remember(localMaxSteps, localMultiplierType, localMultiplierValue, multiplierInput) {
                             try {
@@ -5042,7 +5385,7 @@ fun MaxStepSelectionDialog(
                                                 modifier = Modifier.size(14.dp)
                                             )
                                             Text(
-                                                text = "Total Risk:",
+                                                text = "Total Risk: ",
                                                 fontSize = 12.sp,
                                                 fontWeight = FontWeight.Medium,
                                                 color = colors.textPrimary
@@ -5050,7 +5393,7 @@ fun MaxStepSelectionDialog(
                                         }
                                         Text(
                                             text = previewData.third,
-                                            fontSize = 14.sp,
+                                            fontSize = 8.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = colors.dialogPreviewAccent
                                         )
@@ -5664,7 +6007,7 @@ fun TradingSettingsCard(
                                     .fillMaxWidth()
                                     .padding(horizontal = 8.dp, vertical = 4.dp),
                                 color = colors.surface.copy(alpha = 0.5f),
-                                shape = RoundedCornerShape(6.dp)
+                                shape = RoundedCornerShape(6.dp),
                             ) {
                                 Text(
                                     text = region,
@@ -7619,6 +7962,205 @@ fun MultilineScheduleDialog(
                     item {
                         Spacer(modifier = Modifier.height(8.dp))
                     }
+
+                    // Di dalam MultilineScheduleDialog, ganti item terakhir (informasi kontak) dengan yang baru:
+
+                    item {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            color = colors.dialogInfoBg.copy(alpha = 0.6f),
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(0.5.dp, colors.dialogInfoBorder.copy(alpha = 0.4f))
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                // Header dengan icon
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.Top
+                                ) {
+                                    Surface(
+                                        modifier = Modifier.size(28.dp),
+                                        shape = CircleShape,
+                                        color = colors.accentPrimary.copy(alpha = 0.15f),
+                                        border = BorderStroke(1.dp, colors.accentPrimary.copy(alpha = 0.3f))
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(
+                                                imageVector = Icons.Default.Info,
+                                                contentDescription = null,
+                                                tint = colors.accentPrimary,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                        }
+                                    }
+
+                                    Text(
+                                        text = "Informasi Schedule Signal",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = colors.textPrimary,
+                                        letterSpacing = 0.2.sp
+                                    )
+                                }
+
+                                // Content: Penjelasan schedule signal
+                                Column(
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Text(
+                                        text = "Schedule signal merupakan jadwal entry yang diperoleh dari grup VIP penyedia update signal harian. Untuk menggunakannya, cukup salin seluruh schedule yang diberikan di grup dan tempelkan pada kolom yang telah disediakan di dalam aplikasi.",
+                                        fontSize = 9.sp,
+                                        color = colors.textSecondary,
+                                        lineHeight = 13.sp
+                                    )
+
+                                    // Format example
+                                    Surface(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        color = colors.surface.copy(alpha = 0.5f),
+                                        shape = RoundedCornerShape(8.dp),
+                                        border = BorderStroke(0.5.dp, colors.borderColor.copy(alpha = 0.3f))
+                                    ) {
+                                        Column(
+                                            modifier = Modifier.padding(10.dp),
+                                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            Text(
+                                                text = "Contoh format signal:",
+                                                fontSize = 8.sp,
+                                                color = colors.textMuted,
+                                                fontWeight = FontWeight.Medium
+                                            )
+
+                                            Text(
+                                                text = "12.50 B   12.50 b\n12.55 S   12.55 s",
+                                                fontSize = 9.sp,
+                                                color = colors.textPrimary,
+                                                fontFamily = FontFamily.Monospace,
+                                                lineHeight = 14.sp,
+                                                modifier = Modifier.padding(top = 4.dp)
+                                            )
+                                        }
+                                    }
+
+                                    Text(
+                                        text = "Signal ini disediakan untuk membantu Anda mengambil keputusan trading dengan lebih akurat, tepat, cepat, dan lebih efisie.",
+                                        fontSize = 9.sp,
+                                        color = colors.textSecondary,
+                                        lineHeight = 13.sp
+                                    )
+                                }
+
+                                // Divider
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(1.dp)
+                                        .background(
+                                            brush = Brush.horizontalGradient(
+                                                colors = listOf(
+                                                    Color.Transparent,
+                                                    colors.dialogDivider,
+                                                    Color.Transparent
+                                                )
+                                            )
+                                        )
+                                )
+
+                                // KONTAK Section
+                                Column(
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Text(
+                                        text = "KONTAK",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = colors.textPrimary,
+                                        letterSpacing = 0.5.sp
+                                    )
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.Top,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Email,
+                                            contentDescription = null,
+                                            tint = colors.accentPrimary,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+
+                                        Column(
+                                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                                        ) {
+                                            Text(
+                                                text = "Apabila Anda butuh bantuan atau informasi mengenai signal, silakan menghubungi:",
+                                                fontSize = 8.sp,
+                                                color = colors.textSecondary,
+                                                lineHeight = 12.sp
+                                            )
+
+                                            Spacer(modifier = Modifier.height(2.dp))
+
+                                            val context = LocalContext.current
+
+                                            Surface(
+                                                modifier = Modifier
+                                                    .wrapContentWidth()
+                                                    .clickable {
+                                                        val intent = Intent(Intent.ACTION_SENDTO).apply {
+                                                            data = Uri.parse("mailto:support@stcbroker.id")
+                                                            putExtra(Intent.EXTRA_SUBJECT, "Request Trading Signal Schedule")
+                                                        }
+                                                        try {
+                                                            context.startActivity(intent)
+                                                        } catch (e: Exception) {
+                                                            Log.e("MultilineScheduleDialog", "Error opening email: ${e.message}")
+                                                        }
+                                                    },
+                                                color = colors.accentPrimary.copy(alpha = 0.1f),
+                                                shape = RoundedCornerShape(6.dp),
+                                                border = BorderStroke(0.5.dp, colors.accentPrimary.copy(alpha = 0.3f))
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Text(
+                                                        text = "support@stcbroker.id",
+                                                        fontSize = 9.sp,
+                                                        fontWeight = FontWeight.SemiBold,
+                                                        color = colors.accentPrimary,
+                                                        style = LocalTextStyle.current.copy(
+                                                            textDecoration = TextDecoration.Underline
+                                                        )
+                                                    )
+                                                    Icon(
+                                                        imageVector = Icons.Default.ChevronRight,
+                                                        contentDescription = null,
+                                                        tint = colors.accentPrimary,
+                                                        modifier = Modifier.size(12.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    item {
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+
                 }
             }
         }
@@ -8885,17 +9427,17 @@ private fun TradingModeSelector(
                 expanded = showModeDropdown,
                 onDismissRequest = { showModeDropdown = false },
                 modifier = Modifier
-                    .widthIn(min = 240.dp, max = 280.dp)  // ✅ Dikecilkan dari 280-320dp
-                    .heightIn(max = 360.dp)                // ✅ Dikecilkan dari 400dp
+                    .widthIn(min = 240.dp, max = 280.dp)
+                    .heightIn(max = 360.dp)
                     .shadow(
-                        elevation = 20.dp,                 // ✅ Dikecilkan dari 24dp
-                        shape = RoundedCornerShape(14.dp), // ✅ Dikecilkan dari 16dp
+                        elevation = 20.dp,
+                        shape = RoundedCornerShape(14.dp),
                         ambientColor = Color.Black.copy(alpha = 0.2f),
                         spotColor = Color.Black.copy(alpha = 0.3f)
                     )
                     .background(
                         color = colors.cardBackground,
-                        shape = RoundedCornerShape(14.dp)  // ✅ Dikecilkan dari 16dp
+                        shape = RoundedCornerShape(14.dp)
                     )
                     .border(
                         width = 1.dp,
@@ -8906,20 +9448,20 @@ private fun TradingModeSelector(
                                 colors.chartLine2.copy(alpha = 0.1f)
                             )
                         ),
-                        shape = RoundedCornerShape(14.dp) // ✅ Dikecilkan dari 16dp
+                        shape = RoundedCornerShape(14.dp)
                     )
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 6.dp)  // ✅ Dikecilkan dari 8dp
+                        .padding(vertical = 6.dp)
                 ) {
                     // ✅ HEADER DENGAN UKURAN LEBIH KECIL
                     Surface(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 10.dp, vertical = 6.dp), // ✅ Dikecilkan dari 12dp, 8dp
-                        shape = RoundedCornerShape(8.dp),  // ✅ Dikecilkan dari 10dp
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                        shape = RoundedCornerShape(8.dp),
                         color = Color.Transparent
                     ) {
                         Box(
@@ -8933,18 +9475,18 @@ private fun TradingModeSelector(
                                             Color.Transparent
                                         )
                                     ),
-                                    shape = RoundedCornerShape(8.dp) // ✅ Dikecilkan dari 10dp
+                                    shape = RoundedCornerShape(8.dp)
                                 )
                                 .border(
                                     width = 0.5.dp,
                                     color = colors.accentPrimary2main.copy(alpha = 0.3f),
-                                    shape = RoundedCornerShape(8.dp) // ✅ Dikecilkan dari 10dp
+                                    shape = RoundedCornerShape(8.dp)
                                 )
-                                .padding(10.dp) // ✅ Dikecilkan dari 12dp
+                                .padding(10.dp)
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp) // ✅ Dikecilkan dari 10dp
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 val infiniteTransition = rememberInfiniteTransition(label = "icon_animation")
                                 val scale by infiniteTransition.animateFloat(
@@ -8959,7 +9501,7 @@ private fun TradingModeSelector(
 
                                 Box(
                                     modifier = Modifier
-                                        .size(28.dp) // ✅ Dikecilkan dari 32dp
+                                        .size(28.dp)
                                         .graphicsLayer {
                                             scaleX = scale
                                             scaleY = scale
@@ -8979,34 +9521,34 @@ private fun TradingModeSelector(
                                         imageVector = Icons.Default.Hub,
                                         contentDescription = null,
                                         tint = colors.accentPrimary2main,
-                                        modifier = Modifier.size(16.dp) // ✅ Dikecilkan dari 18dp
+                                        modifier = Modifier.size(16.dp)
                                     )
                                 }
 
                                 Column {
                                     Text(
                                         text = StringsManager.getSelectTradingMode(currentLanguage),
-                                        fontSize = 11.sp,        // ✅ Dikecilkan dari 13sp
+                                        fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = colors.textPrimary,
-                                        letterSpacing = 0.2.sp   // ✅ Dikecilkan dari 0.3sp
+                                        letterSpacing = 0.2.sp
                                     )
                                     Text(
                                         text = "Choose your strategy",
-                                        fontSize = 8.sp,         // ✅ Dikecilkan dari 9sp
+                                        fontSize = 8.sp,
                                         color = colors.textSecondary,
-                                        letterSpacing = 0.1.sp   // ✅ Dikecilkan dari 0.2sp
+                                        letterSpacing = 0.1.sp
                                     )
                                 }
                             }
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(3.dp)) // ✅ Dikecilkan dari 4dp
+                    Spacer(modifier = Modifier.height(3.dp))
 
                     // ✅ MENU ITEMS
                     EnhancedModeMenuItem(
-                        icon = Icons.Default.Schedule,
+                        iconDrawableId = R.drawable.ic_mode_1,
                         title = "Signal Mode",
                         description = "Manual signal input",
                         isSelected = isModeSelected && currentMode == TradingMode.SCHEDULE,
@@ -9024,7 +9566,7 @@ private fun TradingModeSelector(
                     EnhancedDivider(colors = colors)
 
                     EnhancedModeMenuItem(
-                        icon = Icons.Default.Speed,
+                        iconDrawableId = R.drawable.ic_mode_2,
                         title = "Fastrade FTT Mode",
                         description = "Fast trade execution",
                         isSelected = isModeSelected && currentMode == TradingMode.FOLLOW_ORDER,
@@ -9043,7 +9585,7 @@ private fun TradingModeSelector(
                     EnhancedDivider(colors = colors)
 
                     EnhancedModeMenuItem(
-                        icon = Icons.Default.Analytics,
+                        iconDrawableId = R.drawable.ic_mode_3,
                         title = "Analysis Strategy Mode",
                         description = "Technical analysis based",
                         isSelected = isModeSelected && currentMode == TradingMode.INDICATOR_ORDER,
@@ -9062,7 +9604,7 @@ private fun TradingModeSelector(
                     EnhancedDivider(colors = colors)
 
                     EnhancedModeMenuItem(
-                        icon = Icons.Default.FlashOn,
+                        iconDrawableId = R.drawable.ic_mode_4,
                         title = "Fastrade CTC Mode",
                         description = "Ultra-fast execution",
                         isSelected = isModeSelected && currentMode == TradingMode.CTC_ORDER,
@@ -9081,7 +9623,7 @@ private fun TradingModeSelector(
                     EnhancedDivider(colors = colors)
 
                     EnhancedModeMenuItem(
-                        icon = Icons.Default.Lightbulb,
+                        iconDrawableId = R.drawable.ic_mode_5,
                         title = "Momentum Mode",
                         description = "Parallel momentum analysis",
                         isSelected = isModeSelected && currentMode == TradingMode.MULTI_MOMENTUM,
@@ -9106,15 +9648,15 @@ private fun TradingModeSelector(
                     EnhancedDivider(colors = colors)
 
                     EnhancedModeMenuItem(
-                        icon = Icons.Default.Send,
+                        iconDrawableId = R.drawable.ic_mode_6,
                         title = "AI Signal Mode",
-                        description = "Telegram signal automation",
+                        description = "AI signal automation",
                         isSelected = isModeSelected && currentMode == TradingMode.AI_SIGNAL,
                         isEnabled = botState == BotState.STOPPED &&
                                 !isFollowModeActive &&
                                 !isIndicatorModeActive &&
                                 !isCTCModeActive,
-                        accentColor = Color(0xFFE91E63), // Pink color
+                        accentColor = Color(0xFFE91E63),
                         colors = colors,
                         onClick = {
                             val canSelect = botState == BotState.STOPPED &&
@@ -9134,10 +9676,9 @@ private fun TradingModeSelector(
     }
 }
 
-// ✅ ENHANCED MODE MENU ITEM - UKURAN LEBIH KECIL
 @Composable
 private fun EnhancedModeMenuItem(
-    icon: ImageVector,
+    iconDrawableId: Int,
     title: String,
     description: String,
     isSelected: Boolean,
@@ -9151,8 +9692,8 @@ private fun EnhancedModeMenuItem(
         enabled = isEnabled,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 10.dp, vertical = 3.dp), // ✅ Dikecilkan dari 12dp, 4dp
-        shape = RoundedCornerShape(10.dp),                  // ✅ Dikecilkan dari 12dp
+            .padding(horizontal = 10.dp, vertical = 3.dp),
+        shape = RoundedCornerShape(10.dp),
         color = when {
             isSelected -> accentColor.copy(alpha = 0.15f)
             isEnabled -> Color.Transparent
@@ -9189,20 +9730,20 @@ private fun EnhancedModeMenuItem(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 10.dp, vertical = 10.dp), // ✅ Dikecilkan dari 12dp, 12dp
+                    .padding(horizontal = 10.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp) // ✅ Dikecilkan dari 12dp
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                // Icon Container - UKURAN LEBIH KECIL
+                // Icon Container
                 Box(
-                    modifier = Modifier.size(34.dp), // ✅ Dikecilkan dari 40dp
+                    modifier = Modifier.size(36.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     // Outer glow
                     if (isSelected) {
                         Box(
                             modifier = Modifier
-                                .size(34.dp) // ✅ Dikecilkan dari 40dp
+                                .size(36.dp)
                                 .background(
                                     brush = Brush.radialGradient(
                                         colors = listOf(
@@ -9218,16 +9759,16 @@ private fun EnhancedModeMenuItem(
                     // Icon background
                     Box(
                         modifier = Modifier
-                            .size(30.dp) // ✅ Dikecilkan dari 36dp
+                            .size(32.dp)
                             .background(
                                 color = if (isSelected) {
                                     accentColor.copy(alpha = 0.2f)
                                 } else if (isEnabled) {
-                                    colors.surface.copy(alpha = 0.5f)
+                                    colors.surface3.copy(alpha = 0.4f)
                                 } else {
-                                    colors.surface.copy(alpha = 0.2f)
+                                    colors.surface3.copy(alpha = 0.2f)
                                 },
-                                shape = RoundedCornerShape(8.dp) // ✅ Dikecilkan dari 10dp
+                                shape = RoundedCornerShape(8.dp)
                             )
                             .border(
                                 width = 0.5.dp,
@@ -9236,54 +9777,61 @@ private fun EnhancedModeMenuItem(
                                 } else {
                                     colors.borderColor.copy(alpha = 0.2f)
                                 },
-                                shape = RoundedCornerShape(8.dp) // ✅ Dikecilkan dari 10dp
+                                shape = RoundedCornerShape(8.dp)
                             ),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = icon,
-                            contentDescription = null,
-                            tint = if (isSelected) {
-                                accentColor
-                            } else if (isEnabled) {
-                                colors.textPrimary
+                        // ✅ FIXED: Gunakan icon berbeda untuk mode 5 berdasarkan tema
+                        val finalIconId = if (iconDrawableId == R.drawable.ic_mode_5) {
+                            // Cek apakah sedang dark mode atau light mode
+                            if (colors.background == Color(0xFF161616)) {
+                                // Dark mode - gunakan ic_mode_5 biasa
+                                R.drawable.ic_mode_5
                             } else {
-                                colors.textMuted
-                            },
-                            modifier = Modifier.size(16.dp) // ✅ Dikecilkan dari 18dp
+                                R.drawable.ic_mode_5_light
+                            }
+                        } else {
+                            iconDrawableId
+                        }
+
+                        Image(
+                            painter = painterResource(id = finalIconId),
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                            colorFilter = null
                         )
                     }
                 }
 
-                // Text Content - FONT LEBIH KECIL
+                // Text Content
                 Column(
                     modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(1.dp) // ✅ Dikecilkan dari 2dp
+                    verticalArrangement = Arrangement.spacedBy(1.dp)
                 ) {
                     Text(
                         text = title,
-                        fontSize = 11.sp,        // ✅ Dikecilkan dari 12sp
+                        fontSize = 11.sp,
                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                         color = if (isEnabled) colors.textPrimary else colors.textMuted,
-                        letterSpacing = 0.1.sp,  // ✅ Dikecilkan dari 0.2sp
+                        letterSpacing = 0.1.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
                         text = description,
-                        fontSize = 8.sp,         // ✅ Dikecilkan dari 9sp
+                        fontSize = 8.sp,
                         color = if (isEnabled) colors.textSecondary else colors.textMuted.copy(alpha = 0.6f),
-                        letterSpacing = 0.05.sp, // ✅ Dikecilkan dari 0.1sp
+                        letterSpacing = 0.05.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
 
-                // Checkmark indicator - UKURAN LEBIH KECIL
+                // Checkmark indicator
                 if (isSelected) {
                     Box(
                         modifier = Modifier
-                            .size(18.dp) // ✅ Dikecilkan dari 20dp
+                            .size(18.dp)
                             .background(
                                 color = accentColor.copy(alpha = 0.2f),
                                 shape = CircleShape
@@ -9299,7 +9847,7 @@ private fun EnhancedModeMenuItem(
                             imageVector = Icons.Default.Check,
                             contentDescription = null,
                             tint = accentColor,
-                            modifier = Modifier.size(11.dp) // ✅ Dikecilkan dari 12dp
+                            modifier = Modifier.size(11.dp)
                         )
                     }
                 }
@@ -9308,7 +9856,6 @@ private fun EnhancedModeMenuItem(
     }
 }
 
-// ✅ ENHANCED DIVIDER - Tetap sama
 @Composable
 private fun EnhancedDivider(colors: DashboardColors) {
     Box(
@@ -9340,7 +9887,6 @@ private fun getModeDisplayName(mode: TradingMode): String {
         TradingMode.AI_SIGNAL -> "AI Signal Mode"
     }
 }
-
 @Composable
 private fun AISignalContent(
     isActive: Boolean,
@@ -9382,6 +9928,12 @@ private fun AISignalContent(
                     val recentOrders = aiSignalOrders.takeLast(6).reversed()
                     val lastTrend = recentOrders.firstOrNull()?.trend?.uppercase() ?: "-"
 
+                                        val displayTrend = when (lastTrend) {
+                        "CALL" -> "BUY"
+                        "PUT" -> "SELL"
+                        else -> lastTrend
+                    }
+
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -9399,7 +9951,7 @@ private fun AISignalContent(
                         )
 
                         Text(
-                            text = "Latest trend: $lastTrend",
+                            text = "Latest trend: $displayTrend",
                             fontSize = 8.sp,
                             color = colors.textSecondary,
                             textAlign = TextAlign.Center,
@@ -9432,11 +9984,12 @@ private fun AISignalContent(
                             label = "pulseAlpha"
                         )
 
-                        Icon(
-                            imageVector = Icons.Default.Send,
+                        // Menggunakan ic_mode_6
+                        Image(
+                            painter = painterResource(id = R.drawable.ic_mode_6),
                             contentDescription = null,
-                            tint = colors.wifiGreen.copy(alpha = pulseAlpha),
-                            modifier = Modifier.size(24.dp)
+                            modifier = Modifier.size(24.dp),
+                            colorFilter = ColorFilter.tint(colors.wifiGreen.copy(alpha = pulseAlpha))
                         )
 
                         Text(
@@ -9448,8 +10001,16 @@ private fun AISignalContent(
                             lineHeight = 14.sp
                         )
 
+                        // ✅ UBAH: Tampilkan teks berdasarkan signal terakhir
+                        val lastSignalTrend = aiSignalOrders.lastOrNull()?.trend?.uppercase()
+                        val waitingText = when (lastSignalTrend) {
+                            "CALL", "BUY" -> "Signal Detected Buy"
+                            "PUT", "SELL" -> "Signal Detected Sell"
+                            else -> "Waiting signal"
+                        }
+
                         Text(
-                            text = "Waiting Telegram signal",
+                            text = waitingText,
                             fontSize = 8.sp,
                             color = colors.textSecondary,
                             textAlign = TextAlign.Center,
@@ -9474,7 +10035,7 @@ private fun AISignalContent(
                         Spacer(modifier = Modifier.height(13.dp))
 
                         Text(
-                            text = "Telegram Signal Bot",
+                            text = "AI Signal Bot",
                             fontSize = 10.sp,
                             color = colors.textPrimary,
                             fontWeight = FontWeight.Medium,
@@ -9565,7 +10126,7 @@ fun AISignalInfoCard(
         colors = CardDefaults.cardColors(
             containerColor = colors.cardBackground
         ),
-        border = BorderStroke(0.5.dp, Color(0xFFE91E63).copy(alpha = 0.2f))
+        border = BorderStroke(0.5.dp, Color(0xFFE91E63).copy(alpha = 0.4f))
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -9588,11 +10149,12 @@ fun AISignalInfoCard(
                         border = BorderStroke(1.dp, Color(0xFFE91E63).copy(alpha = 0.3f))
                     ) {
                         Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.Default.Send,
+                            // ✅ GANTI: Gunakan ic_mode_6
+                            Image(
+                                painter = painterResource(id = R.drawable.ic_mode_6),
                                 contentDescription = null,
-                                tint = Color(0xFFE91E63),
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(18.dp),
+                                colorFilter = ColorFilter.tint(Color(0xFFE91E63))
                             )
                         }
                     }
@@ -9808,6 +10370,12 @@ private fun AISignalOrderRow(
     order: AISignalOrder,
     colors: DashboardColors
 ) {
+    val displayTrend = when (order.trend.uppercase()) {
+        "CALL" -> "BUY"
+        "PUT" -> "SELL"
+        else -> order.trend.uppercase()
+    }
+
     val trendColor = if (order.trend.lowercase() in listOf("call", "buy"))
         Color(0xFF10B981)
     else
@@ -9866,7 +10434,7 @@ private fun AISignalOrderRow(
                             modifier = Modifier.size(12.dp)
                         )
                         Text(
-                            text = order.trend.uppercase(),
+                            text = displayTrend,
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
                             color = trendColor
@@ -9910,7 +10478,7 @@ private fun AISignalStatusFooter(colors: DashboardColors) {
                 modifier = Modifier.size(14.dp)
             )
             Text(
-                text = "Monitoring Telegram signals via FCM",
+                text = "Monitoring AI signals via FCM",
                 fontSize = 10.sp,
                 color = Color(0xFFE91E63),
                 fontWeight = FontWeight.Medium
@@ -9921,6 +10489,15 @@ private fun AISignalStatusFooter(colors: DashboardColors) {
 
 @Composable
 private fun AISignalWaitingState(colors: DashboardColors) {
+    var progress by remember { mutableStateOf(0f) }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(50)
+            progress = (progress + 0.01f) % 1f
+        }
+    }
+
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = colors.surface.copy(alpha = 0.5f),
@@ -9929,40 +10506,99 @@ private fun AISignalWaitingState(colors: DashboardColors) {
         Column(
             modifier = Modifier.padding(20.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            val infiniteTransition = rememberInfiniteTransition(label = "")
-            val pulseAlpha by infiniteTransition.animateFloat(
-                initialValue = 0.5f,
-                targetValue = 1f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(1200),
-                    repeatMode = RepeatMode.Reverse
-                ),
-                label = "pulse"
-            )
-
-            CircularProgressIndicator(
-                modifier = Modifier.size(32.dp),
-                color = Color(0xFFE91E63).copy(alpha = pulseAlpha),
-                strokeWidth = 3.dp
-            )
+            // ✅ HAPUS: Icon ic_mode_6 dari sini
+            // Animated icon with pulse - DIHAPUS
 
             Text(
-                text = "Waiting for Telegram signals...",
+                text = "Waiting for AI signals...",
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Medium,
                 color = colors.textPrimary
             )
 
-            Text(
-                text = "FCM connection active",
-                fontSize = 10.sp,
-                color = colors.textSecondary
-            )
+            // Animated Progress Bar
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(6.dp)
+                        .clip(RoundedCornerShape(3.dp))
+                        .background(colors.surface)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(progress)
+                            .height(6.dp)
+                            .background(
+                                brush = Brush.horizontalGradient(
+                                    colors = listOf(
+                                        Color(0xFFE91E63),
+                                        Color(0xFFF06292),
+                                        Color(0xFFE91E63)
+                                    )
+                                ),
+                                shape = RoundedCornerShape(3.dp)
+                            )
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "Monitoring FCM",
+                        fontSize = 9.sp,
+                        color = colors.textSecondary
+                    )
+                    Text(
+                        text = "${(progress * 100).toInt()}%",
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFE91E63)
+                    )
+                }
+            }
+
+            // Connection status
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                val infiniteTransition = rememberInfiniteTransition(label = "")
+                val pulseAlpha by infiniteTransition.animateFloat(
+                    initialValue = 0.5f,
+                    targetValue = 1f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(1200),
+                        repeatMode = RepeatMode.Reverse
+                    ),
+                    label = "pulse"
+                )
+
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .background(
+                            color = Color(0xFF10B981).copy(alpha = pulseAlpha),
+                            shape = CircleShape
+                        )
+                )
+                Text(
+                    text = "FCM connection active",
+                    fontSize = 10.sp,
+                    color = colors.textSecondary
+                )
+            }
         }
     }
 }
+
 
 @Composable
 private fun AISignalInactiveState(colors: DashboardColors) {
@@ -14225,3 +14861,4 @@ private fun getPreviewOrders(input: String): List<Pair<String, String>> {
         emptyList()
     }
 }
+

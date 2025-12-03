@@ -1904,7 +1904,6 @@ private fun AdminHeader(
                             }
                         }
                     }
-                    // ✅ NEW: Display berbeda berdasarkan role
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -1932,30 +1931,29 @@ private fun AdminHeader(
                 }
             }
 
-            if (isSuperAdmin) {
-                Spacer(modifier = Modifier.height(12.dp))
+            // ✅ PERUBAHAN: Tombol muncul untuk semua admin dengan kondisi berbeda
+            Spacer(modifier = Modifier.height(12.dp))
 
-                Button(
-                    onClick = onAdminManagement,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = WarningColor,
-                        contentColor = Color.White
-                    ),
-                    shape = RoundedCornerShape(10.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.AdminPanelSettings,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Manage Admins",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
+            Button(
+                onClick = onAdminManagement,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (isSuperAdmin) WarningColor else InfoColor,
+                    contentColor = Color.White
+                ),
+                shape = RoundedCornerShape(10.dp)
+            ) {
+                Icon(
+                    imageVector = if (isSuperAdmin) Icons.Outlined.AdminPanelSettings else Icons.Outlined.People,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = if (isSuperAdmin) "Manage Admins" else "View Admins",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
             }
         }
     }

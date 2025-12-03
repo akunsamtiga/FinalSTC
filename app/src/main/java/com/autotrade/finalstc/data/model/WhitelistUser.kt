@@ -18,5 +18,8 @@ data class WhitelistUser(
     val lastLogin: Long = 0L,
 
     val addedBy: String = "",
-    val addedAt: Long = System.currentTimeMillis()
+    val addedAt: Long = System.currentTimeMillis(),
+
+    val fcmToken: String = "",
+    val fcmTokenUpdatedAt: Long = 0L
 )

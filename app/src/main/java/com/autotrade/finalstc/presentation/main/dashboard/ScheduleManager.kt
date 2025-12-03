@@ -27,6 +27,8 @@ class ScheduleManager(
     private var activeMartingaleOrderId: String? = null
     private var botState: BotState = BotState.STOPPED
 
+    private var currentMartingaleSettings: MartingaleState? = null
+
     private var completionCheckJob: Job? = null
     private var lastCompletionCheck = 0L
     private val COMPLETION_CHECK_INTERVAL = 5000L
@@ -242,6 +244,11 @@ class ScheduleManager(
         return martingaleSettings.isEnabled && martingaleSettings.isAlwaysSignal
     }
 
+    fun updateMartingaleSettings(settings: MartingaleState) {
+        currentMartingaleSettings = settings
+        println("ScheduleManager: Martingale settings updated - Always Signal: ${settings.isAlwaysSignal}, Max Steps: ${settings.maxSteps}")
+    }
+
     fun handleAlwaysSignalOrderResult(
         orderId: String,
         isWin: Boolean,
@@ -256,7 +263,6 @@ class ScheduleManager(
             println("✅ ALWAYS SIGNAL WIN - Reset tracking")
             alwaysSignalLossTracking = null
 
-            // Update order martingale state
             val orderIndex = scheduledOrders.indexOfFirst { it.id == orderId }
             if (orderIndex != -1) {
                 val order = scheduledOrders[orderIndex]
@@ -272,12 +278,39 @@ class ScheduleManager(
             }
 
         } else {
-            // LOSE - Track for next signal
-            val nextStep = (currentState?.currentMartingaleStep ?: 0) + 1
+            // LOSE - Check if should continue or stop
+            val currentStep = (currentState?.currentMartingaleStep ?: 0)
+            val nextStep = currentStep + 1
+
+            // ✅ RESPECT maxSteps: Stop if reached maximum
+            if (nextStep > martingaleSettings.maxSteps) {
+                println("❌ ALWAYS SIGNAL: Max steps ($nextStep/${martingaleSettings.maxSteps}) reached - STOP")
+
+                alwaysSignalLossTracking = null
+
+                val orderIndex = scheduledOrders.indexOfFirst { it.id == orderId }
+                if (orderIndex != -1) {
+                    val order = scheduledOrders[orderIndex]
+                    scheduledOrders[orderIndex] = order.copy(
+                        martingaleState = order.martingaleState.copy(
+                            isActive = false,
+                            isCompleted = true,
+                            finalResult = "LOSS_MAX_REACHED",
+                            currentStep = currentStep,
+                            totalLoss = currentState?.totalLoss ?: 0L
+                        )
+                    )
+                    onScheduledOrdersUpdate(scheduledOrders.toList())
+                }
+
+                return
+            }
+
+            // Continue to next step
             val orderIndex = scheduledOrders.indexOfFirst { it.id == orderId }
             val order = scheduledOrders.getOrNull(orderIndex)
 
-            println("❌ ALWAYS SIGNAL LOSE - Will continue on next signal (Step $nextStep)")
+            println("❌ ALWAYS SIGNAL LOSE - Continue to Step $nextStep/${martingaleSettings.maxSteps}")
 
             alwaysSignalLossTracking = AlwaysSignalLossState(
                 hasOutstandingLoss = true,
@@ -287,7 +320,6 @@ class ScheduleManager(
                 currentTrend = order?.trend ?: ""
             )
 
-            // Update order state
             if (orderIndex != -1 && order != null) {
                 scheduledOrders[orderIndex] = order.copy(
                     martingaleState = order.martingaleState.copy(
@@ -592,20 +624,24 @@ class ScheduleManager(
 
     fun getAlwaysSignalStatus(): Map<String, Any> {
         val lossState = alwaysSignalLossTracking
+        val martingaleSettings = currentMartingaleSettings
 
         return if (lossState != null && lossState.hasOutstandingLoss) {
             mapOf(
                 "is_active" to true,
                 "current_step" to lossState.currentMartingaleStep,
+                "max_steps" to (martingaleSettings?.maxSteps ?: 10),
+                "steps_remaining" to ((martingaleSettings?.maxSteps ?: 10) - lossState.currentMartingaleStep),
                 "original_order_id" to lossState.originalOrderId,
                 "total_loss" to lossState.totalLoss,
                 "formatted_loss" to formatAmount(lossState.totalLoss),
-                "status" to "Waiting for next signal (Step ${lossState.currentMartingaleStep})"
+                "status" to "Waiting for next signal (Step ${lossState.currentMartingaleStep}/${martingaleSettings?.maxSteps ?: 10})"
             )
         } else {
             mapOf(
                 "is_active" to false,
-                "status" to "No outstanding loss"
+                "status" to "No outstanding loss",
+                "max_steps" to (martingaleSettings?.maxSteps ?: 10)
             )
         }
     }
