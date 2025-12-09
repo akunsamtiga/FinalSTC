@@ -520,8 +520,14 @@ fun DashboardScreen(
 
     LaunchedEffect(uiState.lastTradeResult) {
         uiState.lastTradeResult?.let { result ->
-            // Only show toast for completed trades (not execution confirmations)
-            if (result.executionType in listOf("MARTINGALE_WIN", "MARTINGALE_MAX_REACHED", "TRADE_CLOSED")) {
+
+            val eligibleTypes = listOf(
+                "MARTINGALE_WIN",
+                "MARTINGALE_MAX_REACHED",
+                "TRADE_CLOSED"
+            )
+
+            if (result.executionType in eligibleTypes) {
                 val isWin = result.success || result.executionType == "MARTINGALE_WIN"
 
                 tradeResultData = TradeResultToastData(
@@ -536,10 +542,16 @@ fun DashboardScreen(
 
                 showTradeResultToast = true
 
-                // Auto dismiss after 5 seconds
                 delay(5000)
                 showTradeResultToast = false
             }
+        }
+    }
+
+    LaunchedEffect(showTradeResultToast) {
+        if (!showTradeResultToast) {
+            delay(300)
+            dashboardViewModel.clearLastTradeResult()
         }
     }
 
@@ -679,6 +691,8 @@ fun DashboardScreen(
                                         )
                             )
 
+                            // Di dalam DashboardScreen.kt, update bagian TradingModeCard
+
                             TradingModeCard(
                                 modifier = Modifier.weight(0.3f),
                                 scheduleInput = uiState.scheduleInput,
@@ -722,6 +736,7 @@ fun DashboardScreen(
                                 aiSignalOrders = aiSignalOrders,
                                 onStartAISignal = dashboardViewModel::startAISignalMode,
                                 onStopAISignal = dashboardViewModel::stopAISignalMode,
+                                lastTradeResult = uiState.lastTradeResult
                             )
                         }
 
@@ -739,7 +754,16 @@ fun DashboardScreen(
                             onRefreshBalance = dashboardViewModel::loadBalance,
                             onCurrencyChange = dashboardViewModel::setSelectedCurrency,
                             onMartingaleStepsChange = dashboardViewModel::setMartingaleMaxSteps,
-                            onMartingaleAlwaysSignalToggle = dashboardViewModel::setMartingaleAlwaysSignal,
+                            onMartingaleAlwaysSignalToggle = { enabled ->
+                                // ✅ PREVENT ALWAYS SIGNAL TOGGLE JIKA AI SIGNAL MODE AKTIF
+                                if (uiState.isAISignalModeActive) {
+                                    // Show error atau info
+                                    dashboardViewModel.clearError()
+                                    // Optionally show toast/snackbar
+                                } else {
+                                    dashboardViewModel.setMartingaleAlwaysSignal(enabled)
+                                }
+                            },
                             onBaseAmountChange = dashboardViewModel::setMartingaleBaseAmount,
                             onMartingaleToggle = dashboardViewModel::setMartingaleEnabled,
                             onMultiplierTypeChange = dashboardViewModel::setMartingaleMultiplierType,
@@ -748,7 +772,9 @@ fun DashboardScreen(
                             currentLanguage = currentLanguage,
                             baseAmountInput = uiState.baseAmountInput,
                             onBaseAmountInputChange = dashboardViewModel::updateBaseAmountInput,
-                            tradingMode = uiState.tradingMode
+                            tradingMode = uiState.tradingMode,
+                            // ✅ TAMBAH PARAMETER BARU
+                            isAISignalModeActive = uiState.isAISignalModeActive
                         )
 
                         StopLossProfitCard(
@@ -829,28 +855,17 @@ fun DashboardScreen(
         }
 
         if (whitelistCheckState is WhitelistCheckState.Verified) {
-            // ✅ CONNECTION TOAST - Selalu di posisi top: 16dp
             FloatingConnectionToast(
                 isConnected = uiState.isWebSocketConnected,
                 connectionStatus = uiState.connectionStatus,
                 colors = colors
             )
 
-            // ✅ ERROR TOAST - Cek apakah connection toast sedang visible
-            val isConnectionToastVisible = remember(uiState.isWebSocketConnected, uiState.connectionStatus) {
-                // Connection toast visible jika ada perubahan status
-                derivedStateOf {
-                    // Logika untuk detect apakah connection toast sedang muncul
-                    // Bisa disesuaikan dengan kondisi yang ada di FloatingConnectionToast
-                    uiState.isWebSocketConnected || uiState.connectionStatus.isNotEmpty()
-                }
-            }
-
             FloatingErrorToast(
                 error = uiState.error,
                 onDismiss = dashboardViewModel::clearError,
                 colors = colors,
-                isConnectionToastVisible = isConnectionToastVisible.value
+                isConnectionToastVisible = uiState.isWebSocketConnected || uiState.connectionStatus.isNotEmpty()
             )
 
             FloatingTradeResultToast(
@@ -862,7 +877,6 @@ fun DashboardScreen(
                     tradeResultData = null
                 }
             )
-
         }
 
         if (showAssetDialog) {
@@ -1202,10 +1216,12 @@ private fun WhitelistFailedScreen(
     onRetry: () -> Unit,
     onLogout: () -> Unit,
     colors: DashboardColors,
-    viewModel: DashboardViewModel = hiltViewModel() // ✅ TAMBAH PARAMETER
+    viewModel: DashboardViewModel = hiltViewModel()
 ) {
-    val context = androidx.compose.ui.platform.LocalContext.current // ✅ TAMBAH
-    val whatsappNumber by viewModel.whatsappNumber.collectAsStateWithLifecycle() // ✅ TAMBAH
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    // ✅ PERUBAHAN: Buat URL WhatsApp statis atau ambil dari resource
+    val whatsappUrl = "https://wa.me/6285959860015" // URL default
 
     Box(
         modifier = Modifier
@@ -1271,16 +1287,20 @@ private fun WhitelistFailedScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // ✅ UBAH: Tombol "Coba Lagi" menjadi "Hubungi Admin"
                     if (reason != "NO_SESSION") {
                         OutlinedButton(
                             onClick = {
-                                // ✅ BUKA WHATSAPP
-                                val waUrl = "https://wa.me/$whatsappNumber"
-                                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
-                                    data = android.net.Uri.parse(waUrl)
+                                // ✅ PERUBAHAN: Gunakan whatsappUrl yang sudah didefinisikan
+                                try {
+                                    val intent = android.content.Intent(
+                                        android.content.Intent.ACTION_VIEW
+                                    ).apply {
+                                        data = android.net.Uri.parse(whatsappUrl)
+                                    }
+                                    context.startActivity(intent)
+                                } catch (e: Exception) {
+                                    Log.e("WhitelistFailedScreen", "Failed to open WhatsApp: ${e.message}")
                                 }
-                                context.startActivity(intent)
                             },
                             modifier = Modifier.weight(1f),
                             colors = ButtonDefaults.outlinedButtonColors(
@@ -1289,7 +1309,17 @@ private fun WhitelistFailedScreen(
                             border = BorderStroke(1.dp, colors.accentPrimary2main),
                             shape = RoundedCornerShape(12.dp)
                         ) {
-                            Text("Hubungi") // ✅ UBAH TEXT
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Phone,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Hubungi Admin")
+                            }
                         }
                     }
 
@@ -1315,7 +1345,7 @@ private fun WhitelistFailedScreen(
                     Spacer(modifier = Modifier.height(8.dp))
 
                     Text(
-                        text = "💡 Tip: Hubungi administrator melalui WhatsApp atau email untuk mengaktifkan akses Anda",
+                        text = "💡 Tip: Hubungi administrator melalui WhatsApp untuk mengaktifkan akses Anda",
                         fontSize = 12.sp,
                         color = colors.textMuted,
                         textAlign = TextAlign.Center,
@@ -1326,7 +1356,6 @@ private fun WhitelistFailedScreen(
         }
     }
 }
-
 
 @Composable
 fun HeaderSection(
@@ -1620,72 +1649,6 @@ private fun EnhancedConnectionToast(
 }
 
 @Composable
-private fun FloatingErrorToast(
-    error: String?,
-    onDismiss: () -> Unit,
-    colors: DashboardColors,
-    isConnectionToastVisible: Boolean = false
-) {
-    var showToast by remember { mutableStateOf(false) }
-    var currentError by remember { mutableStateOf<String?>(null) }
-
-    LaunchedEffect(error) {
-        if (error != null && error != currentError) {
-            currentError = error
-            showToast = true
-            delay(5000)
-            showToast = false
-            delay(300)
-            onDismiss()
-        } else if (error == null) {
-            showToast = false
-            currentError = null
-        }
-    }
-
-    val topPadding by animateDpAsState(
-        targetValue = if (isConnectionToastVisible) 80.dp else 16.dp,
-        animationSpec = tween(300, easing = FastOutSlowInEasing),
-        label = "errorToastPosition"
-    )
-
-    AnimatedVisibility(
-        visible = showToast && currentError != null,
-        enter = fadeIn(tween(300)) + slideInVertically(
-            initialOffsetY = { -it },
-            animationSpec = tween(500, easing = FastOutSlowInEasing)
-        ),
-        exit = fadeOut(tween(300)) + slideOutVertically(
-            targetOffsetY = { -it },
-            animationSpec = tween(400, easing = FastOutSlowInEasing)
-        ),
-        modifier = Modifier
-            .fillMaxWidth()
-            .wrapContentHeight()
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(
-                    top = topPadding,
-                    start = 16.dp,
-                    end = 16.dp
-                ),
-            contentAlignment = Alignment.TopCenter
-        ) {
-            EnhancedErrorToast(
-                errorMessage = currentError ?: "",
-                onDismiss = {
-                    showToast = false
-                    onDismiss()
-                },
-                colors = colors
-            )
-        }
-    }
-}
-
-@Composable
 private fun EnhancedErrorToast(
     errorMessage: String,
     onDismiss: () -> Unit,
@@ -1840,20 +1803,37 @@ private fun EnhancedErrorToast(
 }
 
 @Composable
-private fun FloatingTradeResultToast(
-    show: Boolean,
-    data: TradeResultToastData?,
+private fun FloatingErrorToast(
+    error: String?,
+    onDismiss: () -> Unit,
     colors: DashboardColors,
-    onDismiss: () -> Unit
+    isConnectionToastVisible: Boolean = false
 ) {
+    var showToast by remember { mutableStateOf(false) }
+    var currentError by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(error) {
+        if (error != null && error != currentError) {
+            currentError = error
+            showToast = true
+            delay(5000)
+            showToast = false
+            delay(300)
+            onDismiss()
+        } else if (error == null) {
+            showToast = false
+            currentError = null
+        }
+    }
+
     AnimatedVisibility(
-        visible = show && data != null,
+        visible = showToast && currentError != null,
         enter = fadeIn(tween(300)) + slideInVertically(
-            initialOffsetY = { it },
+            initialOffsetY = { -it },
             animationSpec = tween(500, easing = FastOutSlowInEasing)
         ),
         exit = fadeOut(tween(300)) + slideOutVertically(
-            targetOffsetY = { it },
+            targetOffsetY = { -it },
             animationSpec = tween(400, easing = FastOutSlowInEasing)
         ),
         modifier = Modifier
@@ -1863,8 +1843,51 @@ private fun FloatingTradeResultToast(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 80.dp, start = 16.dp, end = 16.dp),
-            contentAlignment = Alignment.BottomCenter
+                .padding(
+                    top = if (isConnectionToastVisible) 80.dp else 16.dp, // ✅ ADJUST POSITION
+                    start = 16.dp,
+                    end = 16.dp
+                ),
+            contentAlignment = Alignment.TopCenter
+        ) {
+            EnhancedErrorToast(
+                errorMessage = currentError ?: "",
+                onDismiss = {
+                    showToast = false
+                    onDismiss()
+                },
+                colors = colors
+            )
+        }
+    }
+}
+
+@Composable
+private fun FloatingTradeResultToast(
+    show: Boolean,
+    data: TradeResultToastData?,
+    colors: DashboardColors,
+    onDismiss: () -> Unit
+) {
+    AnimatedVisibility(
+        visible = show && data != null,
+        enter = fadeIn(tween(300)) + slideInVertically(
+            initialOffsetY = { -it }, // ✅ UBAH: dari bottom (it) ke top (-it)
+            animationSpec = tween(500, easing = FastOutSlowInEasing)
+        ),
+        exit = fadeOut(tween(300)) + slideOutVertically(
+            targetOffsetY = { -it }, // ✅ UBAH: dari bottom (it) ke top (-it)
+            animationSpec = tween(400, easing = FastOutSlowInEasing)
+        ),
+        modifier = Modifier
+            .fillMaxWidth()
+            .wrapContentHeight()
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 16.dp, start = 16.dp, end = 16.dp), // ✅ UBAH: dari bottom ke top
+            contentAlignment = Alignment.TopCenter // ✅ UBAH: dari BottomCenter ke TopCenter
         ) {
             data?.let {
                 EnhancedTradeResultToast(
@@ -1877,7 +1900,6 @@ private fun FloatingTradeResultToast(
     }
 }
 
-// 4. ✅ ADD: Enhanced Trade Result Toast UI
 @Composable
 private fun EnhancedTradeResultToast(
     data: TradeResultToastData,
@@ -4619,8 +4641,7 @@ fun MaxStepSelectionDialog(
                                         }
                                     }
 
-                                    // ✅ Info Card 2: Warning untuk Non-Schedule Mode
-                                    if (currentMode != TradingMode.SCHEDULE) {
+                                    if (currentMode != TradingMode.SCHEDULE && currentMode != TradingMode.AI_SIGNAL) {
                                         Surface(
                                             modifier = Modifier.fillMaxWidth(),
                                             color = colors.errorColor.copy(alpha = 0.1f),
@@ -4639,8 +4660,9 @@ fun MaxStepSelectionDialog(
                                                     modifier = Modifier.size(18.dp)
                                                 )
                                                 Text(
-                                                    text = "⚠️ Always Signal mode is only available for Schedule mode. It will be automatically disabled when you switch to other trading modes.",
-                                                    fontSize = 10.sp,
+                                                    text = "Always Signal mode is only available for Schedule mode and AI Signal mode. It will be automatically disabled when you switch to other trading modes.",
+                                                    fontSize = 9.sp,
+                                                    maxLines = 3,
                                                     color = colors.textSecondary,
                                                     lineHeight = 14.sp
                                                 )
@@ -5395,6 +5417,7 @@ fun MaxStepSelectionDialog(
                                             text = previewData.third,
                                             fontSize = 8.sp,
                                             fontWeight = FontWeight.Bold,
+                                            lineHeight = 14.sp,
                                             color = colors.dialogPreviewAccent
                                         )
                                     }
@@ -5592,6 +5615,7 @@ fun TradingSettingsCard(
     onRefreshBalance: () -> Unit,
     onCurrencyChange: (CurrencyType) -> Unit,
     onMartingaleStepsChange: (Int) -> Unit,
+    onMartingaleAlwaysSignalToggle: (Boolean) -> Unit,
     onBaseAmountChange: (Long) -> Unit,
     onMartingaleToggle: (Boolean) -> Unit,
     onMultiplierTypeChange: (MultiplierType) -> Unit,
@@ -5600,8 +5624,8 @@ fun TradingSettingsCard(
     currentLanguage: String = "id",
     baseAmountInput: String = "",
     onBaseAmountInputChange: (String) -> Unit = {},
-    onMartingaleAlwaysSignalToggle: (Boolean) -> Unit,
-    tradingMode: TradingMode
+    tradingMode: TradingMode,
+    isAISignalModeActive: Boolean = false // ✅ PARAMETER BARU
 ) {
     var showQuickAmountDropdown by remember { mutableStateOf(false) }
     var showMaxStepDialog by remember { mutableStateOf(false) }
@@ -5647,7 +5671,7 @@ fun TradingSettingsCard(
             )
 
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                // ✅ HEADER ROW: Account Configuration + Refresh Button
+                // Header ROW: Account Configuration + Refresh Button
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -5662,7 +5686,7 @@ fun TradingSettingsCard(
                         color = colors.textPrimary
                     )
 
-                    // ✅ Refresh Balance Button - di pojok kanan atas (HANYA ICON)
+                    // Refresh Balance Button
                     IconButton(
                         onClick = onRefreshBalance,
                         modifier = Modifier.size(32.dp)
@@ -5671,12 +5695,12 @@ fun TradingSettingsCard(
                             imageVector = Icons.Default.Refresh,
                             contentDescription = "Refresh Balance",
                             tint = if (isDemoAccount) colors.warningColor else colors.successColor,
-                            modifier = Modifier.size(20.dp)  // ✅ Icon lebih besar
+                            modifier = Modifier.size(20.dp)
                         )
                     }
                 }
 
-                // ✅ UPDATED ROW - Balance menggantikan Duration
+                // Row: Account Type + Balance
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -5758,8 +5782,7 @@ fun TradingSettingsCard(
                             onDismissRequest = { showAccountDropdown = false },
                             modifier = Modifier
                                 .background(
-                                    colors.cardBackground,
-                                    shape = RoundedCornerShape(12.dp)
+                                    colors.cardBackground
                                 )
                                 .wrapContentWidth()
                         ) {
@@ -5834,12 +5857,12 @@ fun TradingSettingsCard(
                         }
                     }
 
+                    // Balance Card
                     Card(
                         modifier = Modifier
                             .weight(0.6f)
                             .height(44.dp)
                             .clickable {
-                                // ✅ TOGGLE HIDE/SHOW SAAT DIKLIK
                                 isBalanceHidden = !isBalanceHidden
                             },
                         colors = CardDefaults.cardColors(
@@ -5868,7 +5891,6 @@ fun TradingSettingsCard(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
-                                // ✅ ICON BERUBAH SESUAI STATUS
                                 Icon(
                                     imageVector = if (isBalanceHidden)
                                         Icons.Default.VisibilityOff
@@ -5899,7 +5921,6 @@ fun TradingSettingsCard(
                                         else
                                             balanceInfo.realBalance
 
-                                        // ✅ TEXT BERUBAH: ***** atau ANGKA ASLI
                                         Text(
                                             text = if (isBalanceHidden)
                                                 "*****"
@@ -5985,7 +6006,7 @@ fun TradingSettingsCard(
                         expanded = showCurrencyDropdown,
                         onDismissRequest = { showCurrencyDropdown = false },
                         modifier = Modifier
-                            .background(colors.cardBackground, RoundedCornerShape(12.dp))
+                            .background(colors.cardBackground)
                             .heightIn(max = 500.dp)
                             .widthIn(min = 280.dp)
                     ) {
@@ -6151,15 +6172,15 @@ fun TradingSettingsCard(
                     val currentCurrency = currencySettings.selectedCurrency
 
                     LaunchedEffect(currencySettings.baseAmountInCents) {
-                        if (baseAmountInput.isEmpty()) { // ✅ UBAH rawAmountInput jadi baseAmountInput
+                        if (baseAmountInput.isEmpty()) {
                             placeholderAmount = currencySettings.baseAmountInCents
                         }
                     }
 
                     OutlinedTextField(
-                        value = baseAmountInput, // ✅ UBAH dari rawAmountInput
+                        value = baseAmountInput,
                         onValueChange = { input ->
-                            onBaseAmountInputChange(input) // ✅ UBAH dari rawAmountInput = input
+                            onBaseAmountInputChange(input)
 
                             val amount = currentCurrency.parseUserInput(input)
                             if (amount != null && amount >= currentCurrency.minAmountInCents) {
@@ -6248,7 +6269,6 @@ fun TradingSettingsCard(
                             onDismissRequest = { showQuickAmountDropdown = false },
                             modifier = Modifier.background(
                                 colors.cardBackground,
-                                shape = RoundedCornerShape(12.dp)
                             )
                         ) {
                             val quickAmounts = getQuickAmountsForCurrency(currentCurrency)
@@ -6276,7 +6296,7 @@ fun TradingSettingsCard(
                                     },
                                     onClick = {
                                         onBaseAmountChange(amount)
-                                        onBaseAmountInputChange(currentCurrency.formatAmount(amount)) // ✅ UBAH
+                                        onBaseAmountInputChange(currentCurrency.formatAmount(amount))
                                         placeholderAmount = amount
                                         showQuickAmountDropdown = false
                                     }
@@ -6352,11 +6372,11 @@ fun TradingSettingsCard(
 
                     OutlinedCard(
                         onClick = {
-                            if (canModify && martingaleSettings.isEnabled) { // ✅ HAPUS kondisi !martingaleSettings.isAlwaysSignal
+                            if (canModify && martingaleSettings.isEnabled) {
                                 showMaxStepDialog = true
                             }
                         },
-                        enabled = canModify && martingaleSettings.isEnabled, // ✅ HAPUS kondisi !martingaleSettings.isAlwaysSignal
+                        enabled = canModify && martingaleSettings.isEnabled,
                         modifier = Modifier
                             .weight(1f)
                             .height(44.dp),
@@ -6395,7 +6415,6 @@ fun TradingSettingsCard(
                                 horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
                                 if (martingaleSettings.isAlwaysSignal) {
-                                    // Mode Always Signal: Tampilkan simbol infinity
                                     Text(
                                         text = "∞",
                                         fontSize = 18.sp,
@@ -6403,14 +6422,12 @@ fun TradingSettingsCard(
                                         color = colors.warningColor
                                     )
                                 } else {
-                                    // Mode Normal: Tampilkan angka step + icon edit
                                     Text(
                                         text = martingaleSettings.maxSteps.toString(),
                                         fontSize = 14.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = colors.textPrimary
                                     )
-                                    // ✅ Icon edit tetap muncul
                                     if (martingaleSettings.isEnabled) {
                                         Icon(
                                             imageVector = Icons.Default.Edit,
@@ -6427,7 +6444,6 @@ fun TradingSettingsCard(
             }
         }
     }
-
     if (showMaxStepDialog) {
         MaxStepSelectionDialog(
             currentMaxSteps = martingaleSettings.maxSteps,
@@ -6440,7 +6456,10 @@ fun TradingSettingsCard(
             onMultiplierTypeChange = onMultiplierTypeChange,
             onMultiplierValueChange = onMultiplierValueChange,
             onAlwaysSignalToggle = { enabled ->
-                onMartingaleAlwaysSignalToggle(enabled)
+                // ✅ PREVENT TOGGLE JIKA AI SIGNAL MODE AKTIF
+                if (!isAISignalModeActive) {
+                    onMartingaleAlwaysSignalToggle(enabled)
+                }
             },
             colors = colors,
             onDismiss = { showMaxStepDialog = false }
@@ -9422,7 +9441,6 @@ private fun TradingModeSelector(
                 }
             }
 
-            // ✅ DROPDOWN DENGAN UKURAN LEBIH KECIL
             DropdownMenu(
                 expanded = showModeDropdown,
                 onDismissRequest = { showModeDropdown = false },
@@ -9431,13 +9449,11 @@ private fun TradingModeSelector(
                     .heightIn(max = 360.dp)
                     .shadow(
                         elevation = 20.dp,
-                        shape = RoundedCornerShape(14.dp),
                         ambientColor = Color.Black.copy(alpha = 0.2f),
                         spotColor = Color.Black.copy(alpha = 0.3f)
                     )
                     .background(
                         color = colors.cardBackground,
-                        shape = RoundedCornerShape(14.dp)
                     )
                     .border(
                         width = 1.dp,
@@ -9448,7 +9464,7 @@ private fun TradingModeSelector(
                                 colors.chartLine2.copy(alpha = 0.1f)
                             )
                         ),
-                        shape = RoundedCornerShape(14.dp)
+                        shape = RoundedCornerShape(0.dp),
                     )
             ) {
                 Column(
@@ -9461,7 +9477,6 @@ private fun TradingModeSelector(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 10.dp, vertical = 6.dp),
-                        shape = RoundedCornerShape(8.dp),
                         color = Color.Transparent
                     ) {
                         Box(
@@ -9887,20 +9902,23 @@ private fun getModeDisplayName(mode: TradingMode): String {
         TradingMode.AI_SIGNAL -> "AI Signal Mode"
     }
 }
+
 @Composable
 private fun AISignalContent(
     isActive: Boolean,
     aiSignalOrders: List<AISignalOrder>,
     canModify: Boolean,
+    lastTradeResult: TradeResult?,
     onStartAISignal: () -> Unit,
     onStopAISignal: () -> Unit,
     colors: DashboardColors
 ) {
+
     Column(
         verticalArrangement = Arrangement.spacedBy(8.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
-        // Status Card
+
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(
@@ -9915,25 +9933,81 @@ private fun AISignalContent(
                 else colors.borderColor
             )
         ) {
+
             Column(
                 modifier = Modifier.padding(8.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
+
                 // ======================================================================
-                // MODE AKTIF + ADA ORDER → LAST SIGNALS
+                // MODE AKTIF + ADA ORDER → Determine status
                 // ======================================================================
                 if (isActive && aiSignalOrders.isNotEmpty()) {
+
                     Spacer(modifier = Modifier.height(2.dp))
 
-                    val recentOrders = aiSignalOrders.takeLast(6).reversed()
-                    val lastTrend = recentOrders.firstOrNull()?.trend?.uppercase() ?: "-"
+                    val latestOrder = aiSignalOrders.lastOrNull()
 
-                                        val displayTrend = when (lastTrend) {
-                        "CALL" -> "BUY"
-                        "PUT" -> "SELL"
-                        else -> lastTrend
+                    // 🔥 Ambil MARTINGALE dari TRADE RESULT
+                    val martingaleFromResult = lastTradeResult?.isMartingaleAttempt == true
+                    val martingaleStepResult = lastTradeResult?.martingaleStep ?: 0
+
+                    // ==================================================================
+                    // STATUS RESOLVER (UPDATED)
+                    // ==================================================================
+                    val (statusText, statusColor, showIcon) = when {
+
+                        // 1. Pending
+                        latestOrder == null || !latestOrder.isExecuted -> {
+                            Triple("Pending", colors.warningColor, true)
+                        }
+
+                        // 2. MARTINGALE dari Trade Result (OVERRIDE)
+                        martingaleFromResult && martingaleStepResult > 0 -> {
+                            Triple(
+                                "M $martingaleStepResult",
+                                colors.warningColor,
+                                true
+                            )
+                        }
+
+                        // 3. WIN / LOSE
+                        !latestOrder.result.isNullOrEmpty() -> {
+                            when (latestOrder.result.uppercase()) {
+                                "WIN", "WON" -> Triple("Win", colors.successColor, false)
+                                "LOSE", "LOSS", "LOST" -> Triple("Lose", colors.errorColor, false)
+                                else -> Triple("Monitoring", colors.warningColor, true)
+                            }
+                        }
+
+                        // 4. Monitoring
+                        latestOrder.isExecuted -> {
+                            Triple("Monitoring", colors.successColor, true)
+                        }
+
+                        // 5. Fallback
+                        else -> {
+                            Triple("Pending", colors.warningColor, true)
+                        }
                     }
 
+                    // ==================================================================
+                    // AUTO HIDE RESULT (WIN/LOSE)
+                    // ==================================================================
+                    var shouldShowResult by remember { mutableStateOf(true) }
+                    val hasResult = !latestOrder?.result.isNullOrEmpty()
+
+                    LaunchedEffect(latestOrder?.id, latestOrder?.result) {
+                        if (hasResult && (statusText == "Win" || statusText == "Lose")) {
+                            shouldShowResult = true
+                            delay(3000L)
+                            shouldShowResult = false
+                        }
+                    }
+
+                    // ==================================================================
+                    // UI BLOCK
+                    // ==================================================================
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -9941,24 +10015,111 @@ private fun AISignalContent(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        Text(
-                            text = "Last Signals Active",
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = colors.textPrimary,
-                            textAlign = TextAlign.Center,
-                            lineHeight = 14.sp
-                        )
+                        when {
 
-                        Text(
-                            text = "Latest trend: $displayTrend",
-                            fontSize = 8.sp,
-                            color = colors.textSecondary,
-                            textAlign = TextAlign.Center,
-                            lineHeight = 14.sp
-                        )
+                            // Setelah result hilang ⇒ Waiting AI Signal
+                            hasResult && !shouldShowResult -> {
+                                Icon(
+                                    imageVector = Icons.Default.HourglassEmpty,
+                                    contentDescription = null,
+                                    tint = colors.textSecondary,
+                                    modifier = Modifier.size(24.dp)
+                                )
 
-                        Spacer(modifier = Modifier.height(13.dp))
+                                Text(
+                                    text = "Waiting AI Signal",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = colors.textPrimary,
+                                    textAlign = TextAlign.Center,
+                                    lineHeight = 14.sp
+                                )
+
+                                Text(
+                                    text = "Ready for next signal",
+                                    fontSize = 8.sp,
+                                    color = colors.textSecondary,
+                                    textAlign = TextAlign.Center,
+                                    lineHeight = 14.sp
+
+                                )
+                            }
+
+                            else -> {
+                                // Ikon rotasi (Monitoring / Pending / Martingale)
+                                if (showIcon) {
+                                    val infiniteTransition = rememberInfiniteTransition(label = "ai_animation")
+
+                                    val rotation by infiniteTransition.animateFloat(
+                                        initialValue = 0f,
+                                        targetValue = 360f,
+                                        animationSpec = infiniteRepeatable(
+                                            animation = tween(4000, easing = LinearEasing),
+                                            repeatMode = RepeatMode.Restart
+                                        ),
+                                        label = "rotation"
+                                    )
+
+                                    val pulseAlpha by infiniteTransition.animateFloat(
+                                        initialValue = 0.5f,
+                                        targetValue = 1f,
+                                        animationSpec = infiniteRepeatable(
+                                            animation = tween(1200, easing = LinearEasing),
+                                            repeatMode = RepeatMode.Reverse
+                                        ),
+                                        label = "pulseAlpha"
+                                    )
+
+                                    Image(
+                                        painter = painterResource(id = R.drawable.ic_mode_6),
+                                        contentDescription = null,
+                                        modifier = Modifier
+                                            .size(24.dp)
+                                            .graphicsLayer { rotationZ = rotation },
+                                        colorFilter = ColorFilter.tint(colors.wifiGreen.copy(alpha = pulseAlpha))
+                                    )
+
+                                } else {
+                                    Icon(
+                                        imageVector = if (statusText == "Win") Icons.Default.CheckCircle else Icons.Default.Cancel,
+                                        contentDescription = null,
+                                        tint = statusColor,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+
+                                Text(
+                                    text = "Status Signal",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = colors.textPrimary,
+                                    textAlign = TextAlign.Center,
+                                    lineHeight = 14.sp
+
+                                )
+
+                                Text(
+                                    text = "Trade Result",
+                                    fontSize = 8.sp,
+                                    color = colors.textSecondary,
+                                    textAlign = TextAlign.Center,
+                                    lineHeight = 14.sp
+
+                                )
+
+                                Text(
+                                    text = statusText,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = statusColor,
+                                    textAlign = TextAlign.Center,
+                                    lineHeight = 14.sp
+
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(11.dp))
                     }
                 }
 
@@ -9966,6 +10127,7 @@ private fun AISignalContent(
                 // MODE AKTIF + BELUM ADA ORDER
                 // ======================================================================
                 else if (isActive && aiSignalOrders.isEmpty()) {
+
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -9973,7 +10135,18 @@ private fun AISignalContent(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        val infiniteTransition = rememberInfiniteTransition(label = "")
+                        val infiniteTransition = rememberInfiniteTransition(label = "ai_animation")
+
+                        val rotation by infiniteTransition.animateFloat(
+                            initialValue = 0f,
+                            targetValue = 360f,
+                            animationSpec = infiniteRepeatable(
+                                animation = tween(4000, easing = LinearEasing),
+                                repeatMode = RepeatMode.Restart
+                            ),
+                            label = "rotation"
+                        )
+
                         val pulseAlpha by infiniteTransition.animateFloat(
                             initialValue = 0.5f,
                             targetValue = 1f,
@@ -9984,37 +10157,32 @@ private fun AISignalContent(
                             label = "pulseAlpha"
                         )
 
-                        // Menggunakan ic_mode_6
                         Image(
                             painter = painterResource(id = R.drawable.ic_mode_6),
                             contentDescription = null,
-                            modifier = Modifier.size(24.dp),
+                            modifier = Modifier
+                                .size(24.dp)
+                                .graphicsLayer { rotationZ = rotation },
                             colorFilter = ColorFilter.tint(colors.wifiGreen.copy(alpha = pulseAlpha))
                         )
 
                         Text(
-                            text = "AI Signal Active",
+                            text = "AI Generate",
                             fontSize = 10.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = colors.textPrimary,
                             textAlign = TextAlign.Center,
                             lineHeight = 14.sp
+
                         )
 
-                        // ✅ UBAH: Tampilkan teks berdasarkan signal terakhir
-                        val lastSignalTrend = aiSignalOrders.lastOrNull()?.trend?.uppercase()
-                        val waitingText = when (lastSignalTrend) {
-                            "CALL", "BUY" -> "Signal Detected Buy"
-                            "PUT", "SELL" -> "Signal Detected Sell"
-                            else -> "Waiting signal"
-                        }
-
                         Text(
-                            text = waitingText,
+                            text = "Waiting for signal",
                             fontSize = 8.sp,
                             color = colors.textSecondary,
                             textAlign = TextAlign.Center,
                             lineHeight = 14.sp
+
                         )
 
                         Spacer(modifier = Modifier.height(15.dp))
@@ -10025,6 +10193,7 @@ private fun AISignalContent(
                 // MODE NON-AKTIF
                 // ======================================================================
                 else {
+
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -10032,6 +10201,7 @@ private fun AISignalContent(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
+
                         Spacer(modifier = Modifier.height(13.dp))
 
                         Text(
@@ -10039,16 +10209,18 @@ private fun AISignalContent(
                             fontSize = 10.sp,
                             color = colors.textPrimary,
                             fontWeight = FontWeight.Medium,
-                            lineHeight = 14.sp,
-                            textAlign = TextAlign.Center
+                            textAlign = TextAlign.Center,
+                            lineHeight = 14.sp
+
                         )
 
                         Text(
                             text = "Auto execution via FCM",
                             fontSize = 8.sp,
                             color = colors.textSecondary,
-                            lineHeight = 14.sp,
-                            textAlign = TextAlign.Center
+                            textAlign = TextAlign.Center,
+                            lineHeight = 14.sp
+
                         )
 
                         Spacer(modifier = Modifier.height(14.dp))
@@ -10061,43 +10233,38 @@ private fun AISignalContent(
         // CONTROL BUTTONS
         // ======================================================================
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+
             Button(
                 onClick = onStartAISignal,
                 enabled = !isActive && canModify,
-                modifier = Modifier.fillMaxWidth().height(36.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(36.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = colors.errorColor,
-                    contentColor = colors.TextPrimary1,
-                    disabledContainerColor = colors.botButtonDisabledBg,
+                    containerColor = colors.successColor,
+                    contentColor = Color.White,
                     disabledContentColor = colors.textMuted,
                 ),
                 shape = RoundedCornerShape(6.dp)
             ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Start", fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
-                }
+                Text("Start AI Signal", fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
             }
 
             Button(
                 onClick = onStopAISignal,
                 enabled = isActive,
-                modifier = Modifier.fillMaxWidth().height(36.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(36.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = colors.errorColor,
-                    contentColor = colors.TextPrimary1,
+                    contentColor = Color.White,
+                    disabledContainerColor = colors.botButtonDisabledBg,
                     disabledContentColor = colors.textMuted
                 ),
                 shape = RoundedCornerShape(6.dp)
             ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Stop", fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
-                }
+                Text("Stop AI Signal", fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
             }
         }
     }
@@ -13233,7 +13400,7 @@ fun TradingModeCard(
     aiSignalOrders: List<AISignalOrder>,
     onStartAISignal: () -> Unit,
     onStopAISignal: () -> Unit,
-
+    lastTradeResult: TradeResult?
     ) {
     var showMultilineDialog by remember { mutableStateOf(false) }
     var showViewDialog by remember { mutableStateOf(false) }
@@ -13303,6 +13470,7 @@ fun TradingModeCard(
                             aiSignalOrders = aiSignalOrders,
                             canModify = canModify,
                             onStartAISignal = onStartAISignal,
+                            lastTradeResult = lastTradeResult,
                             onStopAISignal = onStopAISignal,
                             colors = colors
                         )

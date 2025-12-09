@@ -37,8 +37,9 @@ class RegisterViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(RegisterUiState())
     val uiState: StateFlow<RegisterUiState> = _uiState.asStateFlow()
 
-    private val _whatsappNumber = MutableStateFlow("6285959860015")
-    val whatsappNumber: StateFlow<String> = _whatsappNumber.asStateFlow()
+    // ✅ PERUBAHAN: Ubah dari MutableStateFlow<String> ke StateFlow untuk whatsappUrl
+    private val _whatsappUrl = MutableStateFlow("https://wa.me/6285959860015")
+    val whatsappUrl: StateFlow<String> = _whatsappUrl.asStateFlow()
 
     companion object {
         private const val TAG = "RegisterViewModel"
@@ -46,17 +47,19 @@ class RegisterViewModel @Inject constructor(
 
     init {
         loadRegistrationConfig()
-        loadWhatsappNumber()
+        loadWhatsappUrl() // ✅ Ubah nama fungsi
     }
 
-    private fun loadWhatsappNumber() {
+    private fun loadWhatsappUrl() {
         viewModelScope.launch {
             try {
                 val config = firebaseRepository.getRegistrationConfig()
-                _whatsappNumber.value = config.whatsappHelpNumber
-                Log.d(TAG, "WhatsApp number loaded: ${config.whatsappHelpNumber}")
+                _whatsappUrl.value = config.whatsappHelpUrl
+                Log.d(TAG, "WhatsApp URL loaded: ${config.whatsappHelpUrl}")
             } catch (e: Exception) {
-                Log.e(TAG, "Error loading WhatsApp number: ${e.message}")
+                Log.e(TAG, "Error loading WhatsApp URL: ${e.message}")
+                // ✅ Fallback URL jika ada error
+                _whatsappUrl.value = "https://wa.me/6285959860015"
             }
         }
     }
@@ -292,9 +295,33 @@ class RegisterViewModel @Inject constructor(
         }
     }
 
+    // ✅ TAMBAH: Fungsi untuk mendapatkan URL WhatsApp yang aman
+    fun getWhatsAppContactUrl(): String {
+        val url = _whatsappUrl.value
+
+        // ✅ Jika kosong, return default
+        if (url.isBlank()) {
+            return "https://wa.me/6285959860015"
+        }
+
+        // ✅ Jika sudah diawali dengan http/https, return langsung
+        if (url.startsWith("http://") || url.startsWith("https://")) {
+            return url
+        }
+
+        // ✅ Jika hanya nomor telepon (tanpa URL), tambahkan prefix wa.me
+        if (url.matches(Regex("^[0-9+\\s\\-()]+$"))) {
+            return "https://wa.me/${url.replace(Regex("[^0-9+]"), "")}"
+        }
+
+        // ✅ Default fallback
+        return "https://wa.me/6285959860015"
+    }
+
     fun retryLoadConfig() {
         Log.d(TAG, "Retrying to load registration config")
         loadRegistrationConfig()
+        loadWhatsappUrl() // ✅ Juga reload WhatsApp URL
     }
 
     fun clearError() {

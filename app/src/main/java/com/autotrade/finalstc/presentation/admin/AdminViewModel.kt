@@ -482,10 +482,10 @@ class AdminViewModel @Inject constructor(
         }
     }
 
-    fun updateWhatsappNumber(newNumber: String) {
+    fun updateWhatsappUrl(newUrl: String) {
         if (!_uiState.value.isSuperAdmin) {
             _uiState.value = _uiState.value.copy(
-                error = "Akses ditolak: Hanya Super Admin yang dapat mengubah nomor WhatsApp"
+                error = "Akses ditolak: Hanya Super Admin yang dapat mengubah URL WhatsApp"
             )
             return
         }
@@ -493,24 +493,23 @@ class AdminViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 _uiState.value = _uiState.value.copy(isLoadingConfig = true)
-                val cleanNumber = newNumber.replace(Regex("[^0-9]"), "")
-                val success = firebaseRepository.updateWhatsappNumber(cleanNumber, "admin")
+                val success = firebaseRepository.updateWhatsappUrl(newUrl, "admin")
 
                 if (success) {
                     _uiState.value = _uiState.value.copy(
                         isLoadingConfig = false,
-                        successMessage = "Nomor WhatsApp berhasil diperbarui"
+                        successMessage = "URL WhatsApp berhasil diperbarui"
                     )
                 } else {
                     _uiState.value = _uiState.value.copy(
                         isLoadingConfig = false,
-                        error = "Gagal memperbarui nomor WhatsApp"
+                        error = "Gagal memperbarui URL WhatsApp"
                     )
                 }
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoadingConfig = false,
-                    error = "Error memperbarui nomor WhatsApp: ${e.message}"
+                    error = "Error memperbarui URL WhatsApp: ${e.message}"
                 )
             }
         }
@@ -539,8 +538,17 @@ class AdminViewModel @Inject constructor(
         }
     }
 
-    fun validateWhatsappNumber(number: String): Boolean {
-        return firebaseRepository.validateWhatsappNumber(number)
+    fun validateWhatsappUrl(url: String): Boolean {
+        return try {
+            // ✅ FLEKSIBEL: menerima URL umum atau format WhatsApp
+            val urlPattern = Regex(
+                "^(https?://)([a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}(/.*)?|wa\\.me/[0-9]+(\\?text=.*)?)\$",
+                RegexOption.IGNORE_CASE
+            )
+            urlPattern.matches(url)
+        } catch (e: Exception) {
+            false
+        }
     }
 
     fun exportWhitelist(format: String = "json") {

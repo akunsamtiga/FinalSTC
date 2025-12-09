@@ -15,6 +15,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import com.autotrade.finalstc.presentation.components.ImprovedAvatarImage
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -358,6 +359,7 @@ fun ProfileScreen(
                                 modifier = Modifier.size(80.dp),
                                 contentAlignment = Alignment.Center
                             ) {
+                                // ✅ Glow effect background
                                 Box(
                                     modifier = Modifier
                                         .size(80.dp)
@@ -373,6 +375,7 @@ fun ProfileScreen(
                                         )
                                 )
 
+                                // ✅ Border ring
                                 Box(
                                     modifier = Modifier
                                         .size(72.dp)
@@ -389,131 +392,14 @@ fun ProfileScreen(
                                         ),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    if (isLoadingProfile) {
-                                        CircularProgressIndicator(
-                                            modifier = Modifier.size(32.dp),
-                                            color = StatusBlue,
-                                            strokeWidth = 2.dp
-                                        )
-                                    } else {
-                                        val avatarUrl = userProfile?.avatar
-                                        if (!avatarUrl.isNullOrEmpty()) {
-                                            var isLoading by remember { mutableStateOf(true) }
-                                            var isError by remember { mutableStateOf(false) }
-
-                                            Box(
-                                                modifier = Modifier.size(64.dp),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                // Loading shimmer background
-                                                if (isLoading && !isError) {
-                                                    val infiniteTransition = rememberInfiniteTransition(label = "shimmer")
-                                                    val alpha by infiniteTransition.animateFloat(
-                                                        initialValue = 0.3f,
-                                                        targetValue = 0.7f,
-                                                        animationSpec = infiniteRepeatable(
-                                                            animation = tween(1000),
-                                                            repeatMode = RepeatMode.Reverse
-                                                        ),
-                                                        label = "alpha"
-                                                    )
-
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .size(64.dp)
-                                                            .clip(CircleShape)
-                                                            .background(
-                                                                brush = Brush.linearGradient(
-                                                                    colors = listOf(
-                                                                        StatusBlue.copy(alpha = alpha),
-                                                                        WifiGreen.copy(alpha = alpha)
-                                                                    )
-                                                                )
-                                                            ),
-                                                        contentAlignment = Alignment.Center
-                                                    ) {
-                                                        CircularProgressIndicator(
-                                                            modifier = Modifier.size(24.dp),
-                                                            color = Color.White.copy(alpha = 0.8f),
-                                                            strokeWidth = 2.dp
-                                                        )
-                                                    }
-                                                }
-
-                                                // Error fallback icon
-                                                if (isError) {
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .size(64.dp)
-                                                            .clip(CircleShape)
-                                                            .background(
-                                                                brush = Brush.linearGradient(
-                                                                    colors = listOf(
-                                                                        StatusBlue.copy(alpha = 0.2f),
-                                                                        WifiGreen.copy(alpha = 0.2f)
-                                                                    )
-                                                                )
-                                                            ),
-                                                        contentAlignment = Alignment.Center
-                                                    ) {
-                                                        Icon(
-                                                            imageVector = if (isAdmin) Icons.Default.AdminPanelSettings else Icons.Default.Person,
-                                                            contentDescription = null,
-                                                            modifier = Modifier.size(32.dp),
-                                                            tint = Color.White
-                                                        )
-                                                    }
-                                                }
-
-                                                // Actual image
-                                                AsyncImage(
-                                                    model = ImageRequest.Builder(context)
-                                                        .data("https://stockity.id/$avatarUrl")
-                                                        .crossfade(true)
-                                                        .listener(
-                                                            onStart = { isLoading = true },
-                                                            onSuccess = { _, _ ->
-                                                                isLoading = false
-                                                                isError = false
-                                                            },
-                                                            onError = { _, _ ->
-                                                                isLoading = false
-                                                                isError = true
-                                                            }
-                                                        )
-                                                        .build(),
-                                                    contentDescription = "User Avatar",
-                                                    modifier = Modifier
-                                                        .size(64.dp)
-                                                        .clip(CircleShape),
-                                                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
-                                                )
-                                            }
-                                        } else {
-                                            // No avatar URL - show default icon
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(64.dp)
-                                                    .background(
-                                                        brush = Brush.linearGradient(
-                                                            colors = listOf(
-                                                                StatusBlue.copy(alpha = 0.2f),
-                                                                WifiGreen.copy(alpha = 0.2f)
-                                                            )
-                                                        ),
-                                                        shape = CircleShape
-                                                    ),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                Icon(
-                                                    imageVector = if (isAdmin) Icons.Default.AdminPanelSettings else Icons.Default.Person,
-                                                    contentDescription = null,
-                                                    modifier = Modifier.size(32.dp),
-                                                    tint = Color.White
-                                                )
-                                            }
-                                        }
-                                    }
+                                    ImprovedAvatarImage(
+                                        avatarUrl = userProfile?.avatar,
+                                        size = 64.dp,
+                                        isAdmin = isAdmin,
+                                        accentColor = StatusBlue,
+                                        backgroundColor = DarkSurface,
+                                        modifier = Modifier.size(64.dp)
+                                    )
                                 }
                             }
 

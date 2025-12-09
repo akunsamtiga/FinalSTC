@@ -30,8 +30,10 @@ class FollowOrderManager(
         private const val PRE_WARM_ADVANCE_MS = 5000L
         private const val NETWORK_BUFFER_MS = 200L
         private const val MAX_PRICE_FETCH_TIME = 5000L
-        private const val CYCLE_RESTART_DELAY = 2000L  // ✅ NEW
-        private const val MIN_EXECUTION_INTERVAL = 1000L  // ✅ NEW: Prevent rapid duplicates
+        private const val CYCLE_RESTART_DELAY = 2000L
+        private const val MIN_EXECUTION_INTERVAL = 1000L
+        private const val MARTINGALE_DELAY_MS = 120_000L
+        private const val DIRECT_LOSS_DELAY_MS = 120_000L
     }
 
     private val retrofit = Retrofit.Builder()
@@ -52,6 +54,7 @@ class FollowOrderManager(
         timeZone = TimeZone.getTimeZone("Asia/Jakarta")
     }
 
+    private var currentCurrency: CurrencyType = CurrencyType.IDR
     private var isFollowModeActive = false
     private val executionMutex = Mutex()
     private var followOrders = mutableListOf<FollowOrder>()
@@ -132,6 +135,7 @@ class FollowOrderManager(
             currentIsDemoAccount = isDemoAccount
             currentMartingaleSettings = martingaleSettings
             followMartingaleSettings = martingaleSettings
+            currentCurrency = CurrencyType.IDR
 
             isFollowModeActive = true
             isCycleInProgress = false
@@ -163,6 +167,11 @@ class FollowOrderManager(
             isFollowModeActive = false
             Result.failure(Exception("Gagal memulai Follow Order: ${e.message}"))
         }
+    }
+
+    fun updateCurrency(currency: CurrencyType) {
+        currentCurrency = currency
+        Log.d(TAG, "FollowOrderManager: Currency updated to ${currency.code}")
     }
 
     private fun startApiPreWarming() {
@@ -619,33 +628,33 @@ class FollowOrderManager(
                 delay(50L)
 
                 executionMutex.withLock {
-                    // ✅ NEW: Enhanced duplicate prevention
+                    // ✅ ENHANCED duplicate prevention
                     if (isExecutionInProgress) {
-                        Log.w(TAG, "Execution already in progress, ignoring immediate call")
+                        Log.w(TAG, "⚠️ Execution already in progress, ignoring")
                         return@withLock
                     }
 
                     val currentTime = getCurrentServerTime()
                     if (currentTime - lastExecutionTime < MIN_EXECUTION_INTERVAL) {
-                        Log.w(TAG, "Too soon since last execution (${currentTime - lastExecutionTime}ms)")
+                        Log.w(TAG, "⚠️ Too soon since last execution (${currentTime - lastExecutionTime}ms)")
                         return@withLock
                     }
 
                     if (!isFollowModeActive || !isCycleInProgress) {
-                        Log.w(TAG, "Mode not active or cycle not in progress")
+                        Log.w(TAG, "⚠️ Mode not active or cycle not in progress")
                         return@withLock
                     }
 
                     val trend = currentCycleTrend
                     if (trend == null) {
-                        Log.w(TAG, "No cached trend available")
+                        Log.w(TAG, "⚠️ No cached trend available")
                         return@withLock
                     }
 
                     val selectedAsset = currentSelectedAsset ?: return@withLock
                     val martingaleSettings = currentMartingaleSettings ?: return@withLock
 
-                    isExecutionInProgress = true  // ✅ NEW
+                    isExecutionInProgress = true
 
                     try {
                         if (isMartingalePendingExecution && currentMartingaleOrder != null) {
@@ -656,7 +665,6 @@ class FollowOrderManager(
                         val orderId = UUID.randomUUID().toString()
                         val executionServerTime = getCurrentServerTime()
 
-                        // ✅ NEW: Set current executing order
                         currentExecutingOrderId = orderId
                         lastExecutionTime = executionServerTime
 
@@ -690,31 +698,41 @@ class FollowOrderManager(
                         Log.d(TAG, "✅ IMMEDIATE ORDER executed: $orderId")
 
                     } catch (e: Exception) {
-                        Log.e(TAG, "Error in immediate execution: ${e.message}", e)
+                        Log.e(TAG, "❌ Error in immediate execution: ${e.message}", e)
                         isExecutionInProgress = false
                         currentExecutingOrderId = null
                     }
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Error in immediate job: ${e.message}", e)
+                Log.e(TAG, "❌ Error in immediate job: ${e.message}", e)
             }
         }
     }
 
     private suspend fun executeImmediateMartingaleUltraFast(selectedAsset: Asset) {
-        val martingaleOrder = currentMartingaleOrder ?: return
-        val martingaleTrend = currentCycleTrend ?: return
+        val martingaleOrder = currentMartingaleOrder ?: run {
+            Log.e(TAG, "❌ No martingale order available")
+            isExecutionInProgress = false
+            return
+        }
+
+        val martingaleTrend = currentCycleTrend ?: run {
+            Log.e(TAG, "❌ No cached trend available for martingale")
+            isExecutionInProgress = false
+            return
+        }
 
         try {
             val orderId = UUID.randomUUID().toString()
             val executionServerTime = getCurrentServerTime()
 
-            // ✅ NEW: Set current executing order
             currentExecutingOrderId = orderId
             lastExecutionTime = executionServerTime
 
             Log.d(TAG, "✅ MARTINGALE ORDER: $orderId")
-            Log.d(TAG, "  Step: ${martingaleOrder.currentStep} | Trend: $martingaleTrend")
+            Log.d(TAG, "   Step: ${martingaleOrder.currentStep}")
+            Log.d(TAG, "   Trend: $martingaleTrend")
+            Log.d(TAG, "   Amount: ${formatAmount(martingaleOrder.nextAmount)}")
 
             val martingaleFollowOrder = FollowOrder(
                 id = orderId,
@@ -747,7 +765,7 @@ class FollowOrderManager(
             Log.d(TAG, "✅ MARTINGALE ORDER executed: $orderId")
 
         } catch (e: Exception) {
-            Log.e(TAG, "Error immediate martingale: ${e.message}", e)
+            Log.e(TAG, "❌ Error immediate martingale: ${e.message}", e)
             isExecutionInProgress = false
             currentExecutingOrderId = null
             isMartingalePendingExecution = false
@@ -849,17 +867,17 @@ class FollowOrderManager(
             stopCurrentMartingale()
             onFollowMartingaleResult(result)
 
-            // ✅ FIX: Add proper delay before restart
-            delay(CYCLE_RESTART_DELAY)
+            // ✅ FIX: IMMEDIATE EXECUTION AFTER MARTINGALE WIN
+            Log.d(TAG, "✅ MARTINGALE WIN - Execute immediate (same trend)")
 
-            if (isFollowModeActive && !isMartingaleActive() && !isCycleRestarting) {
-                Log.d(TAG, "🔄 Starting NEW CYCLE after martingale WIN")
-                startNewCycleWithInstantExecution()
+            if (isFollowModeActive && !isCycleRestarting) {
+                executeImmediateOrderUltraFast()  // ← NO DELAY!
             }
 
         } else {
             Log.d(TAG, "✅ NORMAL WIN - Execute immediate (same trend)")
 
+            // ✅ IMMEDIATE execution after normal win (NO DELAY) - CORRECT
             if (isFollowModeActive && !isCycleRestarting) {
                 executeImmediateOrderUltraFast()
             }
@@ -880,13 +898,16 @@ class FollowOrderManager(
                 startNewFollowMartingaleUltraFast(followOrderId, amount, details, settings)
             }
         } else {
-            Log.d(TAG, "❌ LOSE - Martingale disabled")
+            // ✅ FIX: Reset execution state sebelum delay
+            isExecutionInProgress = false
+            currentExecutingOrderId = null
 
-            // ✅ FIX: Add proper delay before restart
-            delay(CYCLE_RESTART_DELAY)
+            Log.d(TAG, "❌ LOSE - Martingale disabled - Wait 3 minutes before restart")
+
+            delay(DIRECT_LOSS_DELAY_MS)
 
             if (isFollowModeActive && !isCycleRestarting) {
-                Log.d(TAG, "🔄 Starting NEW CYCLE after normal LOSE")
+                Log.d(TAG, "🔄 Starting NEW CYCLE after 3-minute delay (direct loss)")
                 startNewCycleWithInstantExecution()
             }
         }
@@ -899,8 +920,23 @@ class FollowOrderManager(
         settings: MartingaleState
     ) {
         try {
+            // ✅ FIX 1: Reset execution state FIRST
+            isExecutionInProgress = false
+            currentExecutingOrderId = null
+
             val nextStep = 1
-            val nextAmount = settings.getMartingaleAmountForStep(nextStep)
+
+            // ✅ FIX 2: Get CURRENT currency (bukan dari cache)
+            val currentCurrency = currentCurrency
+
+            // ✅ FIX 3: Calculate dengan currency yang benar
+            val nextAmount = try {
+                settings.getMartingaleAmountForStep(nextStep, currentCurrency)
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Error calculating martingale amount: ${e.message}")
+                // Fallback to base amount if calculation fails
+                settings.baseAmount
+            }
 
             currentMartingaleOrder = FollowMartingaleOrder(
                 originalOrderId = followOrderId,
@@ -926,16 +962,25 @@ class FollowOrderManager(
 
             onFollowMartingaleResult(result)
 
-            Log.d(TAG, "🔄 Starting martingale step $nextStep")
+            Log.d(TAG, "🔄 Starting martingale step $nextStep IMMEDIATELY")
+            Log.d(TAG, "   Amount: ${currentCurrency.formatAmount(nextAmount)}")
+            Log.d(TAG, "   Currency: ${currentCurrency.code}")
+
+            // ✅ FIX 4: Small delay untuk stabilitas
+            delay(100)
 
             if (!isCycleRestarting) {
                 executeImmediateOrderUltraFast()
             }
 
         } catch (e: Exception) {
-            Log.e(TAG, "Error starting martingale: ${e.message}", e)
+            Log.e(TAG, "❌ Error starting martingale: ${e.message}", e)
 
-            // ✅ FIX: Add proper delay before restart
+            // ✅ FIX 5: Cleanup on error
+            isExecutionInProgress = false
+            currentExecutingOrderId = null
+            isMartingalePendingExecution = false
+
             delay(CYCLE_RESTART_DELAY)
 
             if (isFollowModeActive && !isCycleRestarting) {
@@ -954,9 +999,25 @@ class FollowOrderManager(
 
         if (nextStep <= settings.maxSteps) {
             try {
-                val nextAmount = settings.getMartingaleAmountForStep(nextStep)
+                // ✅ FIX 1: Reset execution state
+                isExecutionInProgress = false
+                currentExecutingOrderId = null
+
+                // ✅ FIX 2: Get current currency
+                val currentCurrency = currentCurrency
+
+                // ✅ FIX 3: Calculate dengan error handling
+                val nextAmount = try {
+                    settings.getMartingaleAmountForStep(nextStep, currentCurrency)
+                } catch (e: Exception) {
+                    Log.e(TAG, "❌ Error calculating step $nextStep: ${e.message}")
+                    // Fallback calculation
+                    (martingaleOrder.nextAmount * settings.multiplierValue).toLong()
+                }
 
                 Log.d(TAG, "⬆️ Martingale LOSE at step ${martingaleOrder.currentStep}")
+                Log.d(TAG, "   Next step: $nextStep")
+                Log.d(TAG, "   Next amount: ${currentCurrency.formatAmount(nextAmount)}")
 
                 currentMartingaleOrder = martingaleOrder.copy(
                     currentStep = nextStep,
@@ -978,13 +1039,17 @@ class FollowOrderManager(
 
                 onFollowMartingaleResult(result)
 
-                Log.d(TAG, "🔄 Martingale continues to step $nextStep")
+                // ✅ FIX 4: Small delay untuk stabilitas
+                delay(100)
+
+                Log.d(TAG, "🔄 Martingale continues IMMEDIATELY to step $nextStep")
 
                 if (!isCycleRestarting) {
                     executeImmediateOrderUltraFast()
                 }
 
             } catch (e: Exception) {
+                Log.e(TAG, "❌ Martingale step continuation error: ${e.message}", e)
                 handleMartingaleFailure(newTotalLoss, followOrderId)
             }
         } else {
@@ -1011,11 +1076,12 @@ class FollowOrderManager(
         stopCurrentMartingale()
         onFollowMartingaleResult(result)
 
-        // ✅ FIX: Add proper delay before restart
-        delay(CYCLE_RESTART_DELAY)
+        // ✅ ADD 3 MINUTE DELAY AFTER MARTINGALE MAX STEP REACHED
+        Log.d(TAG, "⏳ Waiting 3 minutes before restart after martingale failure...")
+        delay(DIRECT_LOSS_DELAY_MS)
 
         if (isFollowModeActive && !isCycleRestarting) {
-            Log.d(TAG, "🔄 Starting NEW CYCLE after martingale FAILED")
+            Log.d(TAG, "🔄 Starting NEW CYCLE after 3-minute delay (martingale failed)")
             startNewCycleWithInstantExecution()
         }
     }

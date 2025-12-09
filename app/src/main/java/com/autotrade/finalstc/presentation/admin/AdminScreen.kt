@@ -641,14 +641,14 @@ fun AdminScreen(
 
     if (showWhatsAppEditDialog) {
         EditWhatsAppDialog(
-            currentNumber = uiState.registrationConfig.whatsappHelpNumber,
+            currentUrl = uiState.registrationConfig.whatsappHelpUrl,
             isLoading = uiState.isLoadingConfig,
             onDismiss = { showWhatsAppEditDialog = false },
-            onSaveNumber = { newNumber ->
-                viewModel.updateWhatsappNumber(newNumber)
+            onSaveUrl = { newUrl ->
+                viewModel.updateWhatsappUrl(newUrl)
                 showWhatsAppEditDialog = false
             },
-            onValidateNumber = { number -> viewModel.validateWhatsappNumber(number) }
+            onValidateUrl = { url -> viewModel.validateWhatsappUrl(url) }
         )
     }
 }
@@ -3040,216 +3040,26 @@ private fun WhatsAppConfigCard(
                         .padding(16.dp)
                 ) {
                     Text(
-                        text = "Nomor WhatsApp:",
+                        text = "URL WhatsApp:",
                         fontSize = 12.sp,
                         color = TextTertiary,
                         fontWeight = FontWeight.Medium
                     )
                     Spacer(modifier = Modifier.height(4.dp))
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            text = "+${config.whatsappHelpNumber}",
-                            fontSize = 14.sp,
-                            color = SuccessColor,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Surface(
-                            shape = RoundedCornerShape(6.dp),
-                            color = SuccessColor.copy(alpha = 0.15f)
-                        ) {
-                            Text(
-                                text = "Aktif",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = SuccessColor,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                            )
-                        }
-                    }
+                    Text(
+                        text = config.whatsappHelpUrl,
+                        fontSize = 14.sp,
+                        color = SuccessColor,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         text = "Last updated: ${SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).format(Date(config.updatedAt))}",
                         fontSize = 11.sp,
                         color = TextTertiary
                     )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun EditWhatsAppDialog(
-    currentNumber: String,
-    isLoading: Boolean,
-    onDismiss: () -> Unit,
-    onSaveNumber: (String) -> Unit,
-    onValidateNumber: (String) -> Boolean
-) {
-    var number by remember { mutableStateOf(currentNumber) }
-    var isValid by remember { mutableStateOf(true) }
-    var errorMessage by remember { mutableStateOf("") }
-    val keyboardController = LocalSoftwareKeyboardController.current
-
-    LaunchedEffect(number) {
-        if (number.isNotBlank()) {
-            val cleanNumber = number.replace(Regex("[^0-9]"), "")
-            isValid = onValidateNumber(cleanNumber)
-            errorMessage = if (!isValid) {
-                "Nomor tidak valid. Minimal 10 digit, maksimal 15 digit"
-            } else ""
-        }
-    }
-
-    Dialog(onDismissRequest = onDismiss) {
-        Card(
-            colors = CardDefaults.cardColors(containerColor = DarkCard),
-            shape = RoundedCornerShape(20.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(
-                modifier = Modifier.padding(20.dp)
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(bottom = 16.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Phone,
-                        contentDescription = null,
-                        tint = SuccessColor,
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Text(
-                        text = "Edit Nomor WhatsApp",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = TextPrimary
-                    )
-                }
-
-                OutlinedTextField(
-                    value = number,
-                    onValueChange = { number = it },
-                    label = { Text("Nomor WhatsApp", fontSize = 13.sp) },
-                    placeholder = { Text("6285959860015", fontSize = 13.sp) },
-                    modifier = Modifier.fillMaxWidth(),
-                    leadingIcon = {
-                        Text(
-                            text = "+",
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (isValid) AccentPrimary else ErrorColor
-                        )
-                    },
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = if (isValid) AccentPrimary else ErrorColor,
-                        focusedLabelColor = if (isValid) AccentPrimary else ErrorColor,
-                        cursorColor = AccentPrimary,
-                        focusedTextColor = TextPrimary,
-                        unfocusedTextColor = TextSecondary,
-                        errorBorderColor = ErrorColor,
-                        errorLabelColor = ErrorColor
-                    ),
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Number,
-                        imeAction = ImeAction.Done
-                    ),
-                    keyboardActions = KeyboardActions(
-                        onDone = { keyboardController?.hide() }
-                    ),
-                    textStyle = LocalTextStyle.current.copy(fontSize = 14.sp),
-                    isError = !isValid && number.isNotBlank(),
-                    supportingText = if (!isValid && number.isNotBlank()) {
-                        { Text(errorMessage, color = ErrorColor, fontSize = 12.sp) }
-                    } else null
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = InfoColor.copy(alpha = 0.1f)
-                    ),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(12.dp),
-                        verticalAlignment = Alignment.Top
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Info,
-                            contentDescription = null,
-                            tint = InfoColor,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Column {
-                            Text(
-                                text = "Format nomor WhatsApp:",
-                                color = InfoColor,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                lineHeight = 16.sp
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "• Gunakan kode negara (62 untuk Indonesia)\n• Tanpa tanda + di awal\n• Contoh: 6285959860015",
-                                color = InfoColor,
-                                fontSize = 11.sp,
-                                lineHeight = 16.sp
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(20.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    OutlinedButton(
-                        onClick = onDismiss,
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = TextSecondary
-                        ),
-                        shape = RoundedCornerShape(10.dp),
-                        enabled = !isLoading
-                    ) {
-                        Text("Batal", fontSize = 13.sp)
-                    }
-
-                    Button(
-                        onClick = {
-                            if (number.isNotBlank() && isValid) {
-                                val cleanNumber = number.replace(Regex("[^0-9]"), "")
-                                onSaveNumber(cleanNumber)
-                            }
-                        },
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = SuccessColor,
-                            contentColor = Color.White
-                        ),
-                        shape = RoundedCornerShape(10.dp),
-                        enabled = !isLoading && number.isNotBlank() && isValid
-                    ) {
-                        if (isLoading) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(16.dp),
-                                color = Color.White,
-                                strokeWidth = 2.dp
-                            )
-                        } else {
-                            Text("Simpan", fontSize = 13.sp)
-                        }
-                    }
                 }
             }
         }

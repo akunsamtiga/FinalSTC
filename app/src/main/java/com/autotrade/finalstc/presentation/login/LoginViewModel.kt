@@ -45,8 +45,12 @@ class LoginViewModel @Inject constructor(
     val currentLanguage: StateFlow<String> = languageManager.currentLanguage
     val currentCountry: StateFlow<String> = languageManager.currentCountry
 
-    private val _whatsappNumber = mutableStateOf("6285959860015")
-    val whatsappNumber: State<String> = _whatsappNumber
+    private val _whatsappUrl = mutableStateOf("https://wa.me/6285959860015") // ✅ CHANGED
+    val whatsappUrl: State<String> = _whatsappUrl
+
+    companion object {
+        private const val TAG = "LoginViewModel"
+    }
 
     init {
         loadSavedCredentials()
@@ -57,13 +61,14 @@ class LoginViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val config = firebaseRepository.getRegistrationConfig()
-                _whatsappNumber.value = config.whatsappHelpNumber
-                Log.d("LoginViewModel", "WhatsApp number loaded: ${config.whatsappHelpNumber}")
+                _whatsappUrl.value = config.whatsappHelpUrl // ✅ CHANGED
+                Log.d(TAG, "WhatsApp URL loaded: ${config.whatsappHelpUrl}")
             } catch (e: Exception) {
-                Log.e("LoginViewModel", "Error loading WhatsApp number: ${e.message}")
+                Log.e(TAG, "Error loading WhatsApp URL: ${e.message}")
             }
         }
     }
+
 
     private fun loadSavedCredentials() {
         val (savedEmail, savedPassword, rememberMe) = sessionManager.getSavedCredentials()
@@ -171,7 +176,17 @@ class LoginViewModel @Inject constructor(
             )
 
             loginRepository.login(email, password)
-                .onSuccess {
+                .onSuccess { userSession ->
+                    Log.d(TAG, "=" .repeat(60))
+                    Log.d(TAG, "✅ LOGIN SUCCESS")
+                    Log.d(TAG, "=" .repeat(60))
+                    Log.d(TAG, "📧 Email: ${userSession.email}")
+                    Log.d(TAG, "🆔 UserID: ${userSession.userId}")
+                    Log.d(TAG, "📱 DeviceID: ${userSession.deviceId}")
+                    Log.d(TAG, "🔑 AuthToken: ${userSession.authtoken.take(20)}...")
+                    Log.d(TAG, "=" .repeat(60))
+
+                    // Save credentials if remember me is checked
                     sessionManager.saveCredentials(email, password, _uiState.value.rememberMe)
 
                     _uiState.value = _uiState.value.copy(
@@ -181,9 +196,13 @@ class LoginViewModel @Inject constructor(
                         loadingMessage = StringsManager.getLoginSuccess(lang),
                         isStockityLoginSuccess = true
                     )
+
+                    Log.d(TAG, "🎉 Login process completed - User can now navigate to app")
                 }
                 .onFailure { exception ->
                     val errorMessage = categorizeError(exception.message ?: "")
+
+                    Log.e(TAG, "❌ LOGIN FAILED: $errorMessage")
 
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
@@ -195,6 +214,11 @@ class LoginViewModel @Inject constructor(
                 }
         }
     }
+
+    /**
+     * ✅ NEW METHOD: Inject cookies to WebView immediately after login
+     * This ensures WebView is ready with authentication when user navigates to it
+     */
 
     private fun categorizeError(originalError: String): String {
         return when {

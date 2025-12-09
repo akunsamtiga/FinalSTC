@@ -19,6 +19,8 @@ class AISignalTradeMonitor(
     private val onTradeResultDetected: (AISignalTradeResult) -> Unit,
     private val serverTimeService: ServerTimeService
 ) {
+    private val backgroundScope = kotlinx.coroutines.GlobalScope
+
     private val retrofit = Retrofit.Builder()
         .baseUrl("https://api.stockity.id/")
         .addConverterFactory(GsonConverterFactory.create())
@@ -150,7 +152,8 @@ class AISignalTradeMonitor(
     }
 
     private fun startMonitoringLoop() {
-        monitoringJob = scope.launch {
+        // ✅ CHANGE: Use backgroundScope
+        monitoringJob = backgroundScope.launch {
             while (isActive) {
                 try {
                     val currentTime = System.currentTimeMillis()
@@ -198,7 +201,15 @@ class AISignalTradeMonitor(
                 }
             }
         }
+
+        println("=" .repeat(60))
+        println("$TAG: ✅ MONITORING STARTED WITH BACKGROUND SCOPE")
+        println("=" .repeat(60))
+        println("   Will survive app minimize/maximize")
+        println("   Will continue even if activity destroyed")
+        println("=" .repeat(60))
     }
+
 
     private suspend fun checkOrdersViaApi(ordersToCheck: List<AISignalOrderMonitoring>) {
         if (!isActive || ordersToCheck.isEmpty()) return

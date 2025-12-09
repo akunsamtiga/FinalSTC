@@ -13,6 +13,17 @@ enum class TradingMode {
     AI_SIGNAL
 }
 
+enum class AISignalOrderStatus {
+    WAITING,
+    PENDING,
+    EXECUTING,
+    MONITORING,
+    WIN,
+    LOSE,
+    MARTINGALE_STEP,
+    COMPLETED
+}
+
 enum class BotState {
     STOPPED, RUNNING, PAUSED
 }

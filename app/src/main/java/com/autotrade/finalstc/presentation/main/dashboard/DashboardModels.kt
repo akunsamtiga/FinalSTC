@@ -71,7 +71,7 @@ data class DashboardUiState(
                 selectedAsset != null &&
                 isWebSocketConnected &&
                 currencySettings.validate().isSuccess &&
-                martingaleSettings.validate(currencySettings.selectedCurrency).isSuccess  // ✅ VALIDATE MARTINGALE
+                martingaleSettings.validate(currencySettings.selectedCurrency).isSuccess  // ✅ ALWAYS VALIDATE
     }
 
     fun canStopAISignalMode(): Boolean = isAISignalModeActive

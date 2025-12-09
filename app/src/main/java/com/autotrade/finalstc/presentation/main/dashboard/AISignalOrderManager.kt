@@ -9,15 +9,16 @@ import org.json.JSONObject
 import java.util.*
 
 class AISignalOrderManager(
-    private val scope: CoroutineScope,
     private val onAISignalOrdersUpdate: (List<AISignalOrder>) -> Unit,
     private val onExecuteAISignalTrade: (String, String, Long, Boolean, Int) -> Unit,
     private val onModeStatusUpdate: (String) -> Unit,
     private val telegramSignalService: TelegramSignalService,
     private val serverTimeService: ServerTimeService,
+    private val scope: CoroutineScope,
     private val aiSignalTradeMonitor: AISignalTradeMonitor,
     private val onAISignalTradeStatsUpdate: ((tradeId: String, orderId: String, result: String) -> Unit)? = null
 ) {
+    private val backgroundScope = kotlinx.coroutines.GlobalScope
 
     private var pendingOrders = mutableListOf<AISignalOrder>()
     private var isActive = false
@@ -26,7 +27,7 @@ class AISignalOrderManager(
     private var isDemoAccount = true
     private var baseAmount = 1_400_000L
 
-    // ✅ FIXED: Add currency tracking
+    private var alwaysSignalLossTracking: AlwaysSignalLossState? = null
     private var currentCurrency: CurrencyType = CurrencyType.IDR
 
     private val EXECUTION_CHECK_INTERVAL_MS = 100L
@@ -38,6 +39,13 @@ class AISignalOrderManager(
     // Martingale tracking
     private val activeMartingaleOrders = mutableMapOf<String, MartingaleSequenceInfo>()
 
+    data class AlwaysSignalLossState(
+        val hasOutstandingLoss: Boolean = false,
+        val currentMartingaleStep: Int = 0,
+        val originalOrderId: String = "",
+        val totalLoss: Long = 0L,
+        val currentTrend: String = ""
+    )
     data class MartingaleSequenceInfo(
         val orderId: String,
         val currentStep: Int,
@@ -52,7 +60,21 @@ class AISignalOrderManager(
         private const val TAG = "AISignalOrderManager"
     }
 
-    // ✅ FIXED: Update currency method
+    fun isInitialized(): Boolean = isActive
+
+    // ✅ NEW: Method untuk restore pending orders
+    fun restorePendingOrders(orders: List<AISignalOrder>) {
+        if (!isActive) return
+
+        pendingOrders.clear()
+        pendingOrders.addAll(orders.filter { !it.isExecuted })
+        pendingOrders.sortBy { it.executionTime }
+
+        onAISignalOrdersUpdate(pendingOrders.toList())
+
+        Log.d(TAG, "✅ Restored ${pendingOrders.size} pending AI Signal orders")
+    }
+
     fun updateCurrency(currency: CurrencyType) {
         currentCurrency = currency
         println("$TAG: Currency updated to ${currency.code}")
@@ -65,27 +87,98 @@ class AISignalOrderManager(
         martingaleStep: Int,
         details: Map<String, Any>
     ) {
-        println("=" .repeat(60))
-        println("🎯 AI SIGNAL RESULT PROCESSING")
-        println("=" .repeat(60))
-        println("   Parent Order: $parentOrderId")
-        println("   Is Martingale: $isMartingale")
-        println("   Step: $martingaleStep")
-        println("   Result: ${if (isWin) "WIN ✅" else "LOSE ❌"}")
+        println("AI Signal Result: ${if (isWin) "WIN" else "LOSE"} - Step: $martingaleStep")
+
+        val resultStatus = if (isWin) AISignalOrderStatus.WIN else AISignalOrderStatus.LOSE
+        val resultText = if (isWin) "WIN" else "LOSE"
+
+        executedOrdersMap[parentOrderId]?.let { order ->
+            executedOrdersMap[parentOrderId] = order.copy(
+                result = resultText,
+                status = resultStatus
+            )
+        }
+
+        val orderIndex = pendingOrders.indexOfFirst { it.id == parentOrderId }
+        if (orderIndex != -1) {
+            pendingOrders[orderIndex] = pendingOrders[orderIndex].copy(
+                result = resultText,
+                status = resultStatus
+            )
+            onAISignalOrdersUpdate(pendingOrders.toList())
+        }
+
+        scope.launch {
+            delay(3000)
+
+            val waitingIndex = pendingOrders.indexOfFirst { it.id == parentOrderId }
+            if (waitingIndex != -1) {
+                pendingOrders[waitingIndex] = pendingOrders[waitingIndex].copy(
+                    status = AISignalOrderStatus.WAITING
+                )
+                onAISignalOrdersUpdate(pendingOrders.toList())
+            }
+        }
+
+        val settings = martingaleSettings
+        val lossState = alwaysSignalLossTracking
+
+        if (settings != null && settings.isAlwaysSignal && lossState != null && lossState.hasOutstandingLoss) {
+            if (isWin) {
+                println("Always Signal WIN - Reset tracking")
+                alwaysSignalLossTracking = null
+
+                if (onAISignalTradeStatsUpdate != null) {
+                    val tradeId = details["trade_id"] as? String ?: "ai_signal_always_win_${parentOrderId}_${System.currentTimeMillis()}"
+                    onAISignalTradeStatsUpdate(tradeId, parentOrderId, "WIN")
+                }
+
+                val winAmount = details["win_amount"] as? Long ?: 0L
+                val totalRecovered = winAmount - lossState.totalLoss
+                val formattedRecovery = currentCurrency.formatAmount(totalRecovered)
+                onModeStatusUpdate("Always Signal WIN at Step ${lossState.currentMartingaleStep} - Recovery: $formattedRecovery")
+            } else {
+                val nextStep = lossState.currentMartingaleStep + 1
+
+                if (nextStep > settings.maxSteps) {
+                    println("Max steps reached - RESET")
+                    alwaysSignalLossTracking = null
+
+                    if (onAISignalTradeStatsUpdate != null) {
+                        val tradeId = details["trade_id"] as? String ?: "ai_signal_always_fail_${parentOrderId}_${System.currentTimeMillis()}"
+                        onAISignalTradeStatsUpdate(tradeId, parentOrderId, "LOSE")
+                    }
+
+                    val formattedLoss = currentCurrency.formatAmount(lossState.totalLoss)
+                    onModeStatusUpdate("Always Signal: Max steps reached - Total Loss: $formattedLoss")
+                } else {
+                    println("Always Signal will continue on next signal (Step $nextStep/${settings.maxSteps})")
+
+                    val order = executedOrdersMap[parentOrderId] ?: pendingOrders.find { it.id == parentOrderId }
+                    val currentAmount = order?.amount ?: 0L
+
+                    alwaysSignalLossTracking = lossState.copy(
+                        currentMartingaleStep = nextStep,
+                        totalLoss = lossState.totalLoss + currentAmount
+                    )
+
+                    val formattedLoss = currentCurrency.formatAmount(alwaysSignalLossTracking!!.totalLoss)
+                    onModeStatusUpdate("Always Signal LOSE - Continue on next signal - Total Loss: $formattedLoss")
+                }
+            }
+
+            return
+        }
 
         if (isMartingale) {
             val martingaleInfo = activeMartingaleOrders[parentOrderId]
 
             if (martingaleInfo != null) {
                 handleMartingaleResult(parentOrderId, martingaleInfo, isWin, details)
-            } else {
-                println("   ⚠️ WARNING: Martingale info not found for $parentOrderId")
             }
         } else {
             handleInitialTradeResult(parentOrderId, isWin, details)
         }
-
-        println("=" .repeat(60))
     }
 
     private fun handleInitialTradeResult(
@@ -100,42 +193,63 @@ class AISignalOrderManager(
             return
         }
 
+        val settings = martingaleSettings
+
         if (isWin) {
             println("   ✅ AI Signal Initial Trade WIN")
 
-            // ✅ UPDATE: Add WIN stats tracking
+            // ✅ RESET Always Signal tracking on WIN
+            alwaysSignalLossTracking = null
+
             if (onAISignalTradeStatsUpdate != null) {
                 val tradeId = details["trade_id"] as? String ?: "ai_signal_${orderId}_${System.currentTimeMillis()}"
                 onAISignalTradeStatsUpdate(tradeId, orderId, "WIN")
             }
 
-            // ✅ NEW: Update status with WIN info
             val winAmount = details["win_amount"] as? Long ?: 0L
             val formattedWin = currentCurrency.formatAmount(winAmount)
             onModeStatusUpdate("✅ AI Signal WIN - Profit: $formattedWin - Ready for next signal")
 
         } else {
-            val settings = martingaleSettings
-
             if (settings != null && settings.isEnabled) {
-                println("   ❌ AI Signal LOSE - Starting martingale...")
+                // ✅ CHECK: Always Signal mode?
+                if (settings.isAlwaysSignal) {
+                    println("   ❌ AI Signal LOSE - Always Signal: Continue on next signal")
 
-                // ✅ NEW: Show LOSE with martingale info
-                val lossAmount = order.amount
-                val formattedLoss = currentCurrency.formatAmount(lossAmount)
-                onModeStatusUpdate("❌ AI Signal LOSE - Loss: $formattedLoss - Starting Martingale Step 1")
+                    // Track loss for always signal
+                    alwaysSignalLossTracking = AlwaysSignalLossState(
+                        hasOutstandingLoss = true,
+                        currentMartingaleStep = 0,
+                        originalOrderId = orderId,
+                        totalLoss = order.amount,
+                        currentTrend = order.trend
+                    )
 
-                startMartingaleSequence(orderId, order, settings)
+                    if (onAISignalTradeStatsUpdate != null) {
+                        val tradeId = details["trade_id"] as? String ?: "ai_signal_${orderId}_${System.currentTimeMillis()}"
+                        onAISignalTradeStatsUpdate(tradeId, orderId, "LOSE")
+                    }
+
+                    val lossAmount = order.amount
+                    val formattedLoss = currentCurrency.formatAmount(lossAmount)
+                    onModeStatusUpdate("❌ AI Signal LOSE - Loss: $formattedLoss - Always Signal: Will continue on next signal (Step 1/${settings.maxSteps})")
+                } else {
+                    println("   ❌ AI Signal LOSE - Starting standard martingale...")
+
+                    val lossAmount = order.amount
+                    val formattedLoss = currentCurrency.formatAmount(lossAmount)
+                    onModeStatusUpdate("❌ AI Signal LOSE - Loss: $formattedLoss - Starting Martingale Step 1")
+
+                    startMartingaleSequence(orderId, order, settings)
+                }
             } else {
                 println("   ❌ AI Signal Direct LOSE (martingale disabled)")
 
-                // ✅ UPDATE: Add direct LOSE stats tracking
                 if (onAISignalTradeStatsUpdate != null) {
                     val tradeId = details["trade_id"] as? String ?: "ai_signal_${orderId}_${System.currentTimeMillis()}"
                     onAISignalTradeStatsUpdate(tradeId, orderId, "LOSE")
                 }
 
-                // ✅ NEW: Show direct LOSE info
                 val lossAmount = order.amount
                 val formattedLoss = currentCurrency.formatAmount(lossAmount)
                 onModeStatusUpdate("❌ AI Signal LOSE - Loss: $formattedLoss - Waiting for next signal")
@@ -150,8 +264,14 @@ class AISignalOrderManager(
         martingaleSettings: MartingaleState
     ): Result<String> {
         return try {
+            // ✅ Jika sudah active, just update settings
             if (isActive) {
-                return Result.failure(Exception("AI Signal mode already active"))
+                Log.d(TAG, "⚠️ AI Signal already active, updating settings...")
+                this.selectedAsset = asset
+                this.isDemoAccount = isDemoAccount
+                this.baseAmount = baseAmount
+                this.martingaleSettings = martingaleSettings
+                return Result.success("AI Signal mode settings updated")
             }
 
             this.selectedAsset = asset
@@ -161,25 +281,12 @@ class AISignalOrderManager(
             this.isActive = true
 
             println("=" .repeat(60))
-            println("🤖 AI SIGNAL MODE STARTED (DEDICATED MONITORING)")
+            println("🤖 AI SIGNAL MODE STARTED")
             println("=" .repeat(60))
             println("📊 Asset: ${asset.name}")
             println("💰 Base Amount: ${currentCurrency.formatAmount(baseAmount)}")
             println("💱 Currency: ${currentCurrency.code}")
             println("🦾 Account: ${if (isDemoAccount) "Demo" else "Real"}")
-            println("📡 Connection: FCM")
-            println("📍 Monitoring: AISignalTradeMonitor (Dedicated)")
-            println("   - Independent monitoring system")
-            println("   - WebSocket Priority Detection")
-            println("   - API Polling Fallback")
-            println("   - 50ms ultra-fast intervals")
-            println("📊 Stats Tracking: ${if (onAISignalTradeStatsUpdate != null) "ENABLED" else "DISABLED"}")
-            println("🎲 Martingale: ${if (martingaleSettings.isEnabled) "ENABLED" else "DISABLED"}")
-            if (martingaleSettings.isEnabled) {
-                println("   Max Steps: ${martingaleSettings.maxSteps}")
-                println("   Multiplier: ${martingaleSettings.multiplierValue}${if (martingaleSettings.multiplierType == MultiplierType.PERCENTAGE) "%" else "x"}")
-                println("   Sequence: ${martingaleSettings.getFormattedSequence()}")
-            }
             println("=" .repeat(60))
 
             com.autotrade.finalstc.service.TradingSignalMessagingService.setAISignalModeActive(true)
@@ -197,8 +304,6 @@ class AISignalOrderManager(
             Result.failure(e)
         }
     }
-
-    // AISignalOrderManager.kt - UPDATE stopAISignalMode()
 
     fun stopAISignalMode(): Result<String> {
         return try {
@@ -248,26 +353,77 @@ class AISignalOrderManager(
     }
 
     fun handleNewSignal(signal: TelegramSignal) {
-        if (!isActive) return
+        if (!isActive) {
+            println("⚠️ AI Signal inactive - signal ignored")
+            return
+        }
 
-        // ✅ CHECK: Skip signal if martingale is active
-        if (activeMartingaleOrders.isNotEmpty()) {
-            println("=" .repeat(60))
-            println("⚠️ SIGNAL SKIPPED - MARTINGALE ACTIVE")
-            println("=" .repeat(60))
-            println("   Active martingale sequences: ${activeMartingaleOrders.size}")
-            activeMartingaleOrders.forEach { (orderId, info) ->
-                println("   - Order: $orderId, Step: ${info.currentStep}/${info.maxSteps}")
-            }
-            println("   New signal: ${signal.trend.uppercase()} - IGNORED")
-            println("=" .repeat(60))
+        val settings = martingaleSettings
+        val lossState = alwaysSignalLossTracking
 
-            onModeStatusUpdate("⚠️ Signal skipped - Martingale in progress")
+        // ✅ FIX: Check if martingale active (non-Always Signal mode)
+        if (activeMartingaleOrders.isNotEmpty() && settings?.isAlwaysSignal == false) {
+            println("⚠️ Signal skipped - Standard Martingale active")
+            onModeStatusUpdate("Signal skipped - Martingale in progress")
             return
         }
 
         val asset = selectedAsset ?: return
 
+        // ✅ ALWAYS SIGNAL: Continue martingale if loss outstanding
+        if (settings != null && settings.isAlwaysSignal && lossState != null && lossState.hasOutstandingLoss) {
+            val nextStep = lossState.currentMartingaleStep + 1
+
+            if (nextStep > settings.maxSteps) {
+                println("⚠️ Always Signal: Max steps reached - RESET")
+                alwaysSignalLossTracking = null
+                return
+            }
+
+            try {
+                val nextAmount = settings.getMartingaleAmountForStep(nextStep, currentCurrency)
+
+                val order = AISignalOrder(
+                    id = UUID.randomUUID().toString(),
+                    assetRic = asset.ric,
+                    assetName = asset.name,
+                    trend = signal.trend,
+                    amount = nextAmount,
+                    executionTime = signal.executionTime,
+                    receivedAt = signal.receivedAt,
+                    originalMessage = "${signal.originalMessage} (Step $nextStep)",
+                    isExecuted = false,
+                    status = AISignalOrderStatus.MARTINGALE_STEP,
+                    martingaleStep = nextStep,
+                    maxMartingaleSteps = settings.maxSteps
+                )
+
+                pendingOrders.add(order)
+                pendingOrders.sortBy { it.executionTime }
+                onAISignalOrdersUpdate(pendingOrders.toList())
+
+                alwaysSignalLossTracking = lossState.copy(
+                    currentMartingaleStep = nextStep
+                )
+
+                val formattedAmount = currentCurrency.formatAmount(nextAmount)
+                onModeStatusUpdate("Martingale Step $nextStep/${settings.maxSteps} - Amount: $formattedAmount")
+
+                // ✅ FIX: IMMEDIATELY check if should execute NOW
+                backgroundScope.launch {
+                    delay(100) // Small delay to ensure order is registered
+                    checkAndExecutePendingOrders()
+                }
+
+            } catch (e: Exception) {
+                println("❌ Error calculating Always Signal amount: ${e.message}")
+                alwaysSignalLossTracking = null
+            }
+
+            return
+        }
+
+        // ✅ INITIAL ORDER
         val order = AISignalOrder(
             id = UUID.randomUUID().toString(),
             assetRic = asset.ric,
@@ -277,29 +433,38 @@ class AISignalOrderManager(
             executionTime = signal.executionTime,
             receivedAt = signal.receivedAt,
             originalMessage = signal.originalMessage,
-            isExecuted = false
+            isExecuted = false,
+            status = AISignalOrderStatus.PENDING,
+            martingaleStep = 0,
+            maxMartingaleSteps = settings?.maxSteps ?: 0
         )
 
         pendingOrders.add(order)
         pendingOrders.sortBy { it.executionTime }
 
-        println("=" .repeat(60))
-        println("📩 NEW AI SIGNAL RECEIVED")
-        println("=" .repeat(60))
-        println("   ID: ${order.id}")
+        println("=".repeat(60))
+        println("🎯 NEW AI SIGNAL RECEIVED")
+        println("=".repeat(60))
         println("   Trend: ${signal.trend.uppercase()}")
-        println("   Original: ${signal.originalMessage}")
-        println("   Received at: ${formatTime(signal.receivedAt)}")
-        println("   Will execute at: ${formatTime(signal.executionTime)}")
-        println("   Delay: ${signal.getDelaySeconds()}s")
-        println("=" .repeat(60))
+        println("   Execute at: ${formatTime(signal.executionTime)}")
+        println("   Delay: ${(signal.executionTime - signal.receivedAt) / 1000}s")
+        println("   Current time: ${formatTime(serverTimeService.getCurrentServerTimeMillis())}")
+        println("=".repeat(60))
 
         onAISignalOrdersUpdate(pendingOrders.toList())
-        onModeStatusUpdate("📩 Signal received: ${signal.trend.uppercase()} at ${signal.getFormattedExecutionTime()}")
+        onModeStatusUpdate("Signal received: ${signal.trend.uppercase()} at ${signal.getFormattedExecutionTime()}")
+
+        // ✅ FIX: IMMEDIATELY check if should execute NOW
+        backgroundScope.launch {
+            delay(100) // Small delay to ensure order is registered
+            checkAndExecutePendingOrders()
+        }
     }
 
+
     private fun startExecutionMonitoring() {
-        executionJob = scope.launch {
+        // ✅ CHANGE: Use backgroundScope instead of scope
+        executionJob = backgroundScope.launch {
             while (isActive) {
                 try {
                     checkAndExecutePendingOrders()
@@ -310,7 +475,11 @@ class AISignalOrderManager(
                 }
             }
         }
+
+        println("✅ Execution monitoring started with background scope")
+        println("   This will survive activity lifecycle changes")
     }
+
 
     private fun stopExecutionMonitoring() {
         executionJob?.cancel()
@@ -319,52 +488,166 @@ class AISignalOrderManager(
 
     private suspend fun checkAndExecutePendingOrders() {
         val currentTime = serverTimeService.getCurrentServerTimeMillis()
+
+        // ✅ FIX: Log every check for debugging
+        val pendingCount = pendingOrders.count { !it.isExecuted }
+        if (pendingCount > 0) {
+            println("🔍 Checking $pendingCount pending orders (current: ${formatTime(currentTime)})")
+        }
+
         val ordersToExecute = pendingOrders.filter { order ->
-            !order.isExecuted &&
+            val shouldExecute = !order.isExecuted &&
                     currentTime >= (order.executionTime - EXECUTION_ADVANCE_MS)
+
+            if (shouldExecute) {
+                println("=".repeat(60))
+                println("⏰ ORDER READY FOR EXECUTION")
+                println("=".repeat(60))
+                println("   Order ID: ${order.id}")
+                println("   Trend: ${order.trend}")
+                println("   Execution time: ${formatTime(order.executionTime)}")
+                println("   Current time: ${formatTime(currentTime)}")
+                println("   Advance window: ${EXECUTION_ADVANCE_MS}ms")
+                println("=".repeat(60))
+            }
+
+            shouldExecute
+        }
+
+        if (ordersToExecute.isNotEmpty()) {
+            println("📋 Executing ${ordersToExecute.size} orders NOW")
         }
 
         ordersToExecute.forEach { order ->
-            executeOrder(order)
+            try {
+                executeOrder(order)
+            } catch (e: Exception) {
+                println("❌ Error executing order ${order.id}: ${e.message}")
+                e.printStackTrace()
+            }
         }
     }
 
+
     private fun executeOrder(order: AISignalOrder) {
-        println("=" .repeat(60))
+        println("=".repeat(60))
         println("🚀 EXECUTING AI SIGNAL ORDER")
-        println("=" .repeat(60))
-        println("   ID: ${order.id}")
-        println("   Trend: ${order.trend.uppercase()}")
+        println("=".repeat(60))
+        println("   Order ID: ${order.id}")
+        println("   Trend: ${order.trend}")
         println("   Amount: ${currentCurrency.formatAmount(order.amount)}")
-        println("   Currency: ${currentCurrency.code}")
-        println("   Scheduled: ${formatTime(order.executionTime)}")
-        println("   Actual: ${formatTime(serverTimeService.getCurrentServerTimeMillis())}")
-        println("   Monitoring: AISignalTradeMonitor will start")
-        println("=" .repeat(60))
+        println("   Martingale Step: ${order.martingaleStep}")
+        println("=".repeat(60))
 
         val orderIndex = pendingOrders.indexOfFirst { it.id == order.id }
         if (orderIndex != -1) {
-            val executedOrder = order.copy(isExecuted = true)
-            pendingOrders[orderIndex] = executedOrder
-            executedOrdersMap[order.id] = executedOrder
+            val executingOrder = order.copy(
+                isExecuted = true,
+                status = AISignalOrderStatus.EXECUTING
+            )
+            pendingOrders[orderIndex] = executingOrder
+            executedOrdersMap[order.id] = executingOrder
             onAISignalOrdersUpdate(pendingOrders.toList())
         }
 
-        // ✅ EXECUTE INITIAL TRADE (not martingale)
-        onExecuteAISignalTrade(order.trend, order.id, order.amount, false, 0)
+        // ✅ FIX: Execute with retry mechanism
+        var executionAttempt = 0
+        val maxAttempts = 3
 
-        onModeStatusUpdate("🚀 Executing: ${order.trend.uppercase()} - ${currentCurrency.formatAmount(order.amount)}")
+        fun attemptExecution() {
+            executionAttempt++
+            println("📤 Execution attempt $executionAttempt/$maxAttempts")
 
-        scope.launch {
-            delay(300000L)
+            try {
+                onExecuteAISignalTrade(
+                    order.trend,
+                    order.id,
+                    order.amount,
+                    order.martingaleStep > 0,
+                    order.martingaleStep
+                )
+
+                println("✅ Trade execution call successful")
+
+                // Update to MONITORING status
+                backgroundScope.launch {
+                    delay(2000)
+
+                    val monitoringIndex = pendingOrders.indexOfFirst { it.id == order.id }
+                    if (monitoringIndex != -1) {
+                        val monitoringOrder = pendingOrders[monitoringIndex].copy(
+                            status = AISignalOrderStatus.MONITORING
+                        )
+                        pendingOrders[monitoringIndex] = monitoringOrder
+                        executedOrdersMap[order.id] = monitoringOrder
+                        onAISignalOrdersUpdate(pendingOrders.toList())
+                    }
+                }
+
+            } catch (e: Exception) {
+                println("❌ Execution attempt $executionAttempt failed: ${e.message}")
+
+                if (executionAttempt < maxAttempts) {
+                    println("🔄 Retrying in ${executionAttempt}s...")
+                    backgroundScope.launch {
+                        delay(executionAttempt * 1000L)
+                        attemptExecution()
+                    }
+                } else {
+                    println("❌ All execution attempts failed for order ${order.id}")
+                    onModeStatusUpdate("Execution failed: ${order.trend.uppercase()} - All retries exhausted")
+                }
+            }
+        }
+
+        attemptExecution()
+
+        onModeStatusUpdate("Executing: ${order.trend.uppercase()} - ${currentCurrency.formatAmount(order.amount)}")
+
+        // Cleanup old orders
+        backgroundScope.launch {
+            delay(300000L) // 5 minutes
             val fiveMinutesAgo = serverTimeService.getCurrentServerTimeMillis() - 300000L
+            val beforeCount = pendingOrders.size
+
             pendingOrders.removeAll { it.isExecuted && it.executionTime < fiveMinutesAgo }
             executedOrdersMap.entries.removeIf { (_, order) ->
                 order.isExecuted && order.executionTime < fiveMinutesAgo
             }
-            onAISignalOrdersUpdate(pendingOrders.toList())
+
+            val afterCount = pendingOrders.size
+            if (beforeCount != afterCount) {
+                println("🧹 Cleaned ${beforeCount - afterCount} old orders")
+                onAISignalOrdersUpdate(pendingOrders.toList())
+            }
         }
     }
+
+    fun getExecutionDebugInfo(): Map<String, Any> {
+        val currentTime = serverTimeService.getCurrentServerTimeMillis()
+
+        return mapOf(
+            "is_active" to isActive,
+            "is_initialized" to isInitialized(),
+            "pending_orders" to pendingOrders.size,
+            "executed_orders" to pendingOrders.count { it.isExecuted },
+            "current_server_time" to formatTime(currentTime),
+            "execution_advance_ms" to EXECUTION_ADVANCE_MS,
+            "execution_check_interval_ms" to EXECUTION_CHECK_INTERVAL_MS,
+            "execution_job_active" to (executionJob?.isActive == true),
+            "next_pending_orders" to pendingOrders.filter { !it.isExecuted }.map { order ->
+                mapOf(
+                    "id" to order.id,
+                    "trend" to order.trend,
+                    "execution_time" to formatTime(order.executionTime),
+                    "time_until_execution" to (order.executionTime - currentTime) / 1000,
+                    "status" to order.status.name,
+                    "is_executed" to order.isExecuted
+                )
+            }
+        )
+    }
+
 
     private fun startMartingaleSequence(
         orderId: String,
@@ -570,7 +853,8 @@ class AISignalOrderManager(
             executionTime = currentTime,
             receivedAt = currentTime,
             originalMessage = "Martingale Step $step",
-            isExecuted = true
+            isExecuted = true,
+            result = null  // ✅ TAMBAH INI - Will be updated later
         )
 
         pendingOrders.add(martingaleOrder)
@@ -597,6 +881,23 @@ class AISignalOrderManager(
         val telegramStatus = telegramSignalService.getStatus()
         val monitorStatus = aiSignalTradeMonitor.getMonitoringStatus()
 
+        val alwaysSignalStatus = if (martingaleSettings?.isAlwaysSignal == true) {
+            val lossState = alwaysSignalLossTracking
+            if (lossState != null && lossState.hasOutstandingLoss) {
+                mapOf(
+                    "is_active" to true,
+                    "current_step" to lossState.currentMartingaleStep,
+                    "max_steps" to (martingaleSettings?.maxSteps ?: 0),
+                    "total_loss" to currentCurrency.formatAmount(lossState.totalLoss),
+                    "status" to "Waiting for next signal (Step ${lossState.currentMartingaleStep}/${martingaleSettings?.maxSteps ?: 0})"
+                )
+            } else {
+                mapOf("is_active" to false, "status" to "No outstanding loss")
+            }
+        } else {
+            mapOf("is_active" to false, "mode" to "standard_martingale")
+        }
+
         return mapOf(
             "is_active" to isActive,
             "total_orders" to totalOrders,
@@ -605,6 +906,8 @@ class AISignalOrderManager(
             "active_martingale_sequences" to activeMartingaleCount,
             "martingale_enabled" to (martingaleSettings?.isEnabled ?: false),
             "martingale_max_steps" to (martingaleSettings?.maxSteps ?: 0),
+            "martingale_always_signal" to (martingaleSettings?.isAlwaysSignal ?: false),
+            "always_signal_status" to alwaysSignalStatus,
             "execution_check_interval_ms" to EXECUTION_CHECK_INTERVAL_MS,
             "execution_advance_ms" to EXECUTION_ADVANCE_MS,
             "telegram_status" to telegramStatus,
@@ -676,6 +979,7 @@ class AISignalOrderManager(
         pendingOrders.clear()
         executedOrdersMap.clear()
         activeMartingaleOrders.clear()
+        alwaysSignalLossTracking = null  // ✅ ADD THIS
         martingaleSettings = null
 
         aiSignalTradeMonitor.stopMonitoring()
@@ -693,31 +997,36 @@ data class AISignalOrder(
     val originalMessage: String,
     val isExecuted: Boolean = false,
     val isSkipped: Boolean = false,
-    val skipReason: String? = null
+    val skipReason: String? = null,
+    val result: String? = null,
+    val status: AISignalOrderStatus = AISignalOrderStatus.WAITING,
+    val martingaleStep: Int = 0,
+    val maxMartingaleSteps: Int = 0
 ) {
     fun getStatusDisplay(): String {
-        return when {
-            isSkipped -> "Skipped: ${skipReason ?: "Unknown"}"
-            isExecuted -> "Executed"
-            else -> {
+        return when (status) {
+            AISignalOrderStatus.WAITING -> "Waiting for signal"
+            AISignalOrderStatus.PENDING -> {
                 val delay = (executionTime - System.currentTimeMillis()) / 1000
-                if (delay > 0) {
-                    "Pending - Execute in ${delay}s"
-                } else {
-                    "Ready to execute"
-                }
+                "Execute in ${delay}s"
             }
+            AISignalOrderStatus.EXECUTING -> "Executing trade..."
+            AISignalOrderStatus.MONITORING -> "Monitoring result..."
+            AISignalOrderStatus.WIN -> "WIN"
+            AISignalOrderStatus.LOSE -> "LOSE"
+            AISignalOrderStatus.MARTINGALE_STEP -> "Martingale Step $martingaleStep/$maxMartingaleSteps"
+            AISignalOrderStatus.COMPLETED -> "Completed"
         }
     }
 
     fun getExecutionTimeFormatted(): String {
-        val calendar = Calendar.getInstance()
+        val calendar = java.util.Calendar.getInstance()
         calendar.timeInMillis = executionTime
         return String.format(
             "%02d:%02d:%02d",
-            calendar.get(Calendar.HOUR_OF_DAY),
-            calendar.get(Calendar.MINUTE),
-            calendar.get(Calendar.SECOND)
+            calendar.get(java.util.Calendar.HOUR_OF_DAY),
+            calendar.get(java.util.Calendar.MINUTE),
+            calendar.get(java.util.Calendar.SECOND)
         )
     }
 }

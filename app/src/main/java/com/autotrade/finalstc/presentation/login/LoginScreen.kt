@@ -405,8 +405,7 @@ fun LoginScreen(
                     ) {
                         OutlinedButton(
                             onClick = {
-                                val waNumber = viewModel.whatsappNumber.value
-                                val waUrl = "https://wa.me/$waNumber"
+                                val waUrl = viewModel.whatsappUrl.value // ✅ CHANGED: langsung pakai URL
                                 val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
                                     data = android.net.Uri.parse(waUrl)
                                 }

@@ -78,19 +78,38 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
 
-        // ✅ Check AI Signal status and restore notifications if needed
         val isAISignalActive = getAISignalStatus()
+        val isLoggedIn = loginRepository.isLoggedIn()
 
         Log.d(TAG, "=" .repeat(60))
         Log.d(TAG, "📱 APP RESUMED")
         Log.d(TAG, "=" .repeat(60))
         Log.d(TAG, "   AI Signal Status: ${if (isAISignalActive) "ACTIVE ✅" else "INACTIVE ❌"}")
-        Log.d(TAG, "   User Logged In: ${loginRepository.isLoggedIn()}")
+        Log.d(TAG, "   User Logged In: $isLoggedIn")
 
-        // ✅ Restore AI Signal notifications if mode is active
-        if (isAISignalActive && loginRepository.isLoggedIn()) {
-            Log.d(TAG, "   🔔 Restoring AI Signal notifications...")
+        // ✅ CRITICAL: Restore AI Signal notifications if active
+        if (isAISignalActive && isLoggedIn) {
+            Log.d(TAG, "   🔔 Restoring AI Signal Mode notifications...")
             com.autotrade.finalstc.service.TradingSignalMessagingService.setAISignalModeActive(true)
+
+            // ✅ Re-subscribe to topic if needed (idempotent operation)
+            try {
+                com.google.firebase.messaging.FirebaseMessaging.getInstance()
+                    .subscribeToTopic("trading_signals")
+                    .addOnSuccessListener {
+                        Log.d(TAG, "   ✅ Re-subscribed to trading_signals topic")
+                    }
+                    .addOnFailureListener { e ->
+                        Log.e(TAG, "   ❌ Failed to re-subscribe: ${e.message}")
+                    }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error re-subscribing: ${e.message}")
+            }
+
+            Log.d(TAG, "   ✅ AI Signal notifications restored successfully")
+            Log.d(TAG, "   ✅ Bot will continue receiving signals in background")
+        } else {
+            Log.d(TAG, "   🔇 AI Signal not active - No restoration needed")
         }
         Log.d(TAG, "=" .repeat(60))
     }
@@ -98,52 +117,66 @@ class MainActivity : ComponentActivity() {
     override fun onPause() {
         super.onPause()
 
-        // ✅ Check AI Signal status, NOT login status
         val isAISignalActive = getAISignalStatus()
 
         Log.d(TAG, "=" .repeat(60))
         Log.d(TAG, "📱 APP PAUSED")
         Log.d(TAG, "=" .repeat(60))
         Log.d(TAG, "   AI Signal Status: ${if (isAISignalActive) "ACTIVE ✅" else "INACTIVE ❌"}")
-        Log.d(TAG, "   User Logged In: ${loginRepository.isLoggedIn()}")
 
-        // ✅ Only disable notifications if AI Signal Mode is NOT active
-        if (!isAISignalActive) {
-            Log.d(TAG, "   🔇 AI Signal inactive - Disabling notifications")
-            com.autotrade.finalstc.service.TradingSignalMessagingService.setAISignalModeActive(false)
-        } else {
-            Log.d(TAG, "   🔔 AI Signal ACTIVE - Keeping notifications enabled")
+        // ✅ CRITICAL: NEVER disable AI Signal on pause
+        if (isAISignalActive) {
+            Log.d(TAG, "   🔔 AI Signal ACTIVE - ALL SYSTEMS REMAIN RUNNING")
+            Log.d(TAG, "   🔔 FCM: ACTIVE")
+            Log.d(TAG, "   🔔 Execution Monitoring: ACTIVE")
+            Log.d(TAG, "   🔔 Telegram Service: ACTIVE")
+            Log.d(TAG, "   🔔 Bot will continue in background")
+            // DO NOT call any stop/pause functions
         }
         Log.d(TAG, "=" .repeat(60))
     }
 
-    // MainActivity.kt - UPDATE onDestroy dan tambah method baru
 
     override fun onDestroy() {
         super.onDestroy()
 
-        // ✅ CHECK: Hanya clear jika user BENAR-BENAR TIDAK LOGIN
-        if (!loginRepository.isLoggedIn()) {
-            Log.d(TAG, "App destroyed and not logged in - Full cleanup")
-            clearAISignalStatus()
-            clearFCMTokenFromFirestore() // ✅ TAMBAH INI
-            unsubscribeFromFCMTopic()     // ✅ TAMBAH INI
-            com.autotrade.finalstc.service.TradingSignalMessagingService.setAISignalModeActive(false)
-        } else {
-            // ✅ NEW: Bahkan saat user login, tetap clear jika AI Signal tidak aktif
-            val isAISignalActive = getAISignalStatus()
-            if (!isAISignalActive) {
-                Log.d(TAG, "App destroyed, user logged in but AI Signal NOT active - Clearing FCM")
+        val isLoggedIn = loginRepository.isLoggedIn()
+        val isAISignalActive = getAISignalStatus()
+
+        Log.d(TAG, "=" .repeat(60))
+        Log.d(TAG, "💀 APP DESTROY CHECK")
+        Log.d(TAG, "=" .repeat(60))
+        Log.d(TAG, "   Logged In: $isLoggedIn")
+        Log.d(TAG, "   AI Signal Active: $isAISignalActive")
+
+        when {
+            !isLoggedIn -> {
+                Log.d(TAG, "   🔄 Case 1: Not logged in - Full cleanup")
+                clearAISignalStatus()
                 clearFCMTokenFromFirestore()
                 unsubscribeFromFCMTopic()
                 com.autotrade.finalstc.service.TradingSignalMessagingService.setAISignalModeActive(false)
-            } else {
-                Log.d(TAG, "App destroyed but AI Signal ACTIVE - Preserving FCM setup")
+            }
+            isLoggedIn && !isAISignalActive -> {
+                Log.d(TAG, "   🔄 Case 2: Logged in but AI Signal inactive")
+                clearFCMTokenFromFirestore()
+                unsubscribeFromFCMTopic()
+                com.autotrade.finalstc.service.TradingSignalMessagingService.setAISignalModeActive(false)
+            }
+            isLoggedIn && isAISignalActive -> {
+                // ✅ CRITICAL: AI Signal active - PRESERVE EVERYTHING
+                Log.d(TAG, "   ✅ Case 3: AI Signal ACTIVE - PRESERVING ALL")
+                Log.d(TAG, "   ✅ FCM Token: PRESERVED")
+                Log.d(TAG, "   ✅ Topic subscription: PRESERVED")
+                Log.d(TAG, "   ✅ Notifications: ENABLED")
+                Log.d(TAG, "   ✅ Background execution: GUARANTEED")
+                // DO NOT clear anything
             }
         }
+        Log.d(TAG, "=" .repeat(60))
     }
 
-    // ✅ NEW METHOD: Clear FCM token from Firestore
+
     private fun clearFCMTokenFromFirestore() {
         kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             try {

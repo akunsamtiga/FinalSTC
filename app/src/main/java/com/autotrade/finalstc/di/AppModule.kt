@@ -29,14 +29,12 @@ object AppModule {
 
     private const val BASE_URL = "https://api.stockity.id/"
 
-    // Firebase Providers
     @Provides
     @Singleton
     fun provideFirebaseFirestore(): FirebaseFirestore {
         return Firebase.firestore
     }
 
-    // Network Providers
     @Provides
     @Singleton
     fun provideOkHttpClient(): OkHttpClient {
@@ -46,9 +44,18 @@ object AppModule {
 
         return OkHttpClient.Builder()
             .addInterceptor(loggingInterceptor)
-            .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS)
-            .writeTimeout(30, TimeUnit.SECONDS)
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(15, TimeUnit.SECONDS)
+            .writeTimeout(15, TimeUnit.SECONDS)
+            .callTimeout(20, TimeUnit.SECONDS)
+            .retryOnConnectionFailure(true)
+            .connectionPool(
+                okhttp3.ConnectionPool(
+                    maxIdleConnections = 5,
+                    keepAliveDuration = 5,
+                    timeUnit = TimeUnit.MINUTES
+                )
+            )
             .build()
     }
 
@@ -86,7 +93,6 @@ object AppModule {
         return retrofit.create(BalanceApiService::class.java)
     }
 
-    // Repository Providers
     @Provides
     @Singleton
     fun provideTradingHistoryRepository(

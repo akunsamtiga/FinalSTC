@@ -170,6 +170,12 @@ class DashboardViewModel @Inject constructor(
             }
         }
 
+        viewModelScope.launch {
+            // Tunggu sebentar agar initialization managers selesai
+            delay(1000)
+            restoreActiveModes()
+        }
+
         loadUserProfile()
         syncServerTime()
         fetchAssetsFromApi()
@@ -182,6 +188,132 @@ class DashboardViewModel @Inject constructor(
         loadBalance()
         startBalanceRefresh()
         sessionManager.emitCurrentCurrency()
+
+    }
+
+    // Di init block DashboardViewModel, GANTI bagian restoreActiveModes():
+
+    private fun restoreActiveModes() {
+        val context = application.applicationContext
+        val prefs = context.getSharedPreferences("ai_signal_prefs", android.content.Context.MODE_PRIVATE)
+        val wasAISignalActive = prefs.getBoolean("is_ai_signal_active", false)
+
+        if (wasAISignalActive) {
+            Log.d("DashboardViewModel", "=" .repeat(60))
+            Log.d("DashboardViewModel", "🔄 RESTORING AI SIGNAL MODE FROM PREVIOUS SESSION")
+            Log.d("DashboardViewModel", "=" .repeat(60))
+
+            val assetToUse = _uiState.value.selectedAsset ?: _assets.value.firstOrNull()
+
+            if (assetToUse != null) {
+                _uiState.value = _uiState.value.copy(
+                    isAISignalModeActive = true,
+                    tradingMode = TradingMode.AI_SIGNAL,
+                    selectedAsset = assetToUse,
+                    aiSignalOrderStatus = "🔄 Restoring AI Signal Mode...",
+                    connectionStatus = "Restoring active session..."
+                )
+
+                viewModelScope.launch {
+                    try {
+                        // ✅ 1. Ensure WebSocket connected
+                        if (!webSocketManager.isConnectionHealthy()) {
+                            Log.d("DashboardViewModel", "WebSocket not healthy, reconnecting...")
+                            webSocketManager.forceReconnect()
+
+                            var attempts = 0
+                            while (!webSocketManager.isRequiredChannelsReady() && attempts < 15) {
+                                delay(1000)
+                                attempts++
+                            }
+
+                            if (!webSocketManager.isRequiredChannelsReady()) {
+                                Log.e("DashboardViewModel", "❌ Failed to restore WebSocket connection")
+                                stopAISignalModeInternal()
+                                return@launch
+                            }
+                        }
+
+                        Log.d("DashboardViewModel", "✅ WebSocket ready for restoration")
+
+                        // ✅ 2. Re-enable AI Signal notifications (CRITICAL)
+                        Log.d("DashboardViewModel", "🔔 Re-enabling AI Signal notifications...")
+                        com.autotrade.finalstc.service.TradingSignalMessagingService.setAISignalModeActive(true)
+                        Log.d("DashboardViewModel", "✅ Notifications re-enabled")
+
+                        // ✅ 3. Start telegram monitoring
+                        Log.d("DashboardViewModel", "📡 Starting Telegram monitoring...")
+                        telegramSignalService.startMonitoring()
+                        Log.d("DashboardViewModel", "✅ Telegram monitoring started")
+
+                        // ✅ 4. Start AI trade monitor
+                        Log.d("DashboardViewModel", "👁️ Starting AI trade monitor...")
+                        aiSignalTradeMonitor.startMonitoring()
+                        Log.d("DashboardViewModel", "✅ AI trade monitor started")
+
+                        // ✅ 5. Re-initialize AISignalOrderManager
+                        Log.d("DashboardViewModel", "🚀 Re-initializing AI Signal Order Manager...")
+                        val result = aiSignalOrderManager.startAISignalMode(
+                            asset = assetToUse,
+                            isDemoAccount = _uiState.value.isDemoAccount,
+                            baseAmount = _uiState.value.martingaleSettings.baseAmount,
+                            martingaleSettings = _uiState.value.martingaleSettings
+                        )
+
+                        result.fold(
+                            onSuccess = {
+                                _uiState.value = _uiState.value.copy(
+                                    aiSignalOrderStatus = "🤖 AI Signal Restored & Active",
+                                    connectionStatus = "Connected - AI Signal Mode Active"
+                                )
+                                Log.d("DashboardViewModel", "=" .repeat(60))
+                                Log.d("DashboardViewModel", "✅ AI SIGNAL MODE SUCCESSFULLY RESTORED")
+                                Log.d("DashboardViewModel", "=" .repeat(60))
+                                Log.d("DashboardViewModel", "   🔔 Notifications: ACTIVE")
+                                Log.d("DashboardViewModel", "   📡 Telegram: MONITORING")
+                                Log.d("DashboardViewModel", "   👁️ Trade Monitor: ACTIVE")
+                                Log.d("DashboardViewModel", "   🌐 WebSocket: CONNECTED")
+                                Log.d("DashboardViewModel", "   ✅ Bot: READY TO RECEIVE SIGNALS")
+                                Log.d("DashboardViewModel", "=" .repeat(60))
+                            },
+                            onFailure = { e ->
+                                Log.e("DashboardViewModel", "❌ Failed to restore AI Signal: ${e.message}")
+                                stopAISignalModeInternal()
+                            }
+                        )
+
+                    } catch (e: Exception) {
+                        Log.e("DashboardViewModel", "❌ Error restoring AI Signal: ${e.message}", e)
+                        stopAISignalModeInternal()
+                    }
+                }
+            } else {
+                Log.w("DashboardViewModel", "⚠️ No asset available, clearing AI Signal status")
+                saveAISignalStatusToPrefs(false)
+            }
+        } else {
+            Log.d("DashboardViewModel", "ℹ️ AI Signal was not active - no restoration needed")
+        }
+    }
+
+    // ✅ TAMBAHKAN helper method untuk stop internal (tambahkan di DashboardViewModel)
+    private fun stopAISignalModeInternal() {
+        _uiState.value = _uiState.value.copy(
+            isAISignalModeActive = false,
+            tradingMode = TradingMode.SCHEDULE,
+            aiSignalOrderStatus = "AI Signal inactive - Restore failed",
+            connectionStatus = "Connected"
+        )
+        saveAISignalStatusToPrefs(false)
+
+        try {
+            com.autotrade.finalstc.service.TradingSignalMessagingService.setAISignalModeActive(false)
+            telegramSignalService.stopMonitoring()
+            aiSignalTradeMonitor.stopMonitoring()
+            aiSignalOrderManager.stopAISignalMode()
+        } catch (e: Exception) {
+            Log.e("DashboardViewModel", "Error in stopAISignalModeInternal: ${e.message}")
+        }
     }
 
     private fun checkWhitelistStatus() {
@@ -313,6 +445,7 @@ class DashboardViewModel @Inject constructor(
                     tradeManager.updateCurrency(currencyType)
                     martingaleManager.updateCurrency(currencyType)
                     scheduleManager.updateCurrency(currencyType)
+                    followOrderManager.updateCurrency(currencyType)
                     aiSignalOrderManager.updateCurrency(currencyType)  // ✅ ADD THIS
 
                     Log.d("DashboardViewModel", "Currency updated to: ${currencyType.code}")
@@ -634,10 +767,10 @@ class DashboardViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val config = firebaseRepository.getRegistrationConfig()
-                _whatsappNumber.value = config.whatsappHelpNumber
-                Log.d("DashboardViewModel", "WhatsApp number loaded: ${config.whatsappHelpNumber}")
+                _whatsappNumber.value = config.whatsappHelpUrl
+                Log.d("DashboardViewModel", "URL loaded: ${config.whatsappHelpUrl}")
             } catch (e: Exception) {
-                Log.e("DashboardViewModel", "Error loading WhatsApp number: ${e.message}")
+                Log.e("DashboardViewModel", "Error loading URL: ${e.message}")
                 // Keep default value
             }
         }
@@ -1782,6 +1915,7 @@ class DashboardViewModel @Inject constructor(
                     error = null
                 )
 
+                // Stop other modes
                 if (currentState.botState != BotState.STOPPED) stopBot()
                 if (currentState.isFollowModeActive) stopFollowMode()
                 if (currentState.isIndicatorModeActive) stopIndicatorMode()
@@ -1792,12 +1926,15 @@ class DashboardViewModel @Inject constructor(
 
                 stopLossProfitManager.startNewSession()
 
-                // ✅ CRITICAL: Save FCM token HANYA saat AI Signal Mode distart
+                // ✅ CRITICAL: Save FCM token
                 Log.d("DashboardViewModel", "🔔 AI Signal Mode starting - Saving FCM token...")
                 try {
                     val app = application as? TradingApplication
                     app?.saveFCMTokenManually()
                     Log.d("DashboardViewModel", "✅ FCM token save initiated")
+
+                    // ✅ Wait a bit for token to save
+                    delay(2000)
                 } catch (e: Exception) {
                     Log.e("DashboardViewModel", "❌ Error saving FCM token: ${e.message}", e)
                 }
@@ -1806,7 +1943,7 @@ class DashboardViewModel @Inject constructor(
                     asset = selectedAsset,
                     isDemoAccount = currentState.isDemoAccount,
                     baseAmount = currentState.martingaleSettings.baseAmount,
-                    martingaleSettings = currentState.martingaleSettings  // ✅ TAMBAH INI
+                    martingaleSettings = currentState.martingaleSettings
                 )
 
                 result.fold(
@@ -1820,10 +1957,17 @@ class DashboardViewModel @Inject constructor(
                             error = null
                         )
 
-                        // ✅ SAVE AI Signal status to SharedPreferences
+                        // ✅ SAVE AI Signal status
                         saveAISignalStatusToPrefs(true)
 
-                        Log.d("DashboardViewModel", "AI Signal mode started successfully")
+                        Log.d("DashboardViewModel", "=" .repeat(60))
+                        Log.d("DashboardViewModel", "✅ AI SIGNAL MODE STARTED SUCCESSFULLY")
+                        Log.d("DashboardViewModel", "=" .repeat(60))
+                        Log.d("DashboardViewModel", "   🔔 Notifications: ENABLED")
+                        Log.d("DashboardViewModel", "   📡 Telegram: MONITORING")
+                        Log.d("DashboardViewModel", "   🌐 WebSocket: CONNECTED")
+                        Log.d("DashboardViewModel", "   🔋 Background: GUARANTEED")
+                        Log.d("DashboardViewModel", "=" .repeat(60))
                     },
                     onFailure = { exception ->
                         _uiState.value = currentState.copy(
@@ -1842,9 +1986,6 @@ class DashboardViewModel @Inject constructor(
             }
         }
     }
-
-    // Update stopAISignalMode()
-    // DashboardViewModel.kt - UPDATE stopAISignalMode()
 
     fun stopAISignalMode() {
         val currentState = _uiState.value
@@ -1936,21 +2077,39 @@ class DashboardViewModel @Inject constructor(
         martingaleStep: Int
     ) {
         val currentState = _uiState.value
-        if (!currentState.isAISignalModeActive) return
+        if (!currentState.isAISignalModeActive) {
+            println("⚠️ AI Signal inactive - execution aborted")
+            return
+        }
 
-        val selectedAsset = currentState.selectedAsset ?: return
+        val selectedAsset = currentState.selectedAsset ?: run {
+            println("❌ No asset selected - execution aborted")
+            return
+        }
 
-        println("=" .repeat(60))
+        println("=".repeat(60))
         println("🚀 EXECUTING AI SIGNAL WITH DEDICATED MONITOR")
-        println("=" .repeat(60))
+        println("=".repeat(60))
         println("   Parent Order ID: $orderId")
         println("   Is Martingale: $isMartingale")
         println("   Step: $martingaleStep")
         println("   Amount: ${currentState.currencySettings.selectedCurrency.formatAmount(amount)}")
         println("   Currency: ${currentState.currencySettings.selectedCurrency.code}")
-        println("=" .repeat(60))
 
-        // ✅ CREATE MONITORING ID CONSISTENT WITH MANAGER
+        // ✅ FIX: Check connection but DON'T block execution
+        val isConnected = currentState.isWebSocketConnected
+        val channelsReady = webSocketManager.isRequiredChannelsReady()
+
+        println("   WebSocket Connected: $isConnected")
+        println("   Channels Ready: $channelsReady")
+
+        if (!isConnected || !channelsReady) {
+            println("⚠️ WARNING: Connection not optimal but CONTINUING execution")
+            println("   Trade will still be sent - monitoring may be affected")
+        }
+        println("=".repeat(60))
+
+        // ✅ CREATE MONITORING ID
         val monitoringOrderId = if (isMartingale) {
             "${orderId}_martingale_${martingaleStep}"
         } else {
@@ -1968,25 +2127,55 @@ class DashboardViewModel @Inject constructor(
             martingaleStep = martingaleStep
         )
 
-        // ✅ EXECUTE TRADE
-        if (isMartingale) {
-            tradeManager.executeMartingaleTrade(
-                assetRic = selectedAsset.ric,
-                trend = trend,
-                amount = amount,
-                isDemoAccount = currentState.isDemoAccount,
-                scheduledOrderId = orderId,
-                martingaleStep = martingaleStep
+        // ✅ EXECUTE TRADE (NO CONNECTION BLOCK)
+        try {
+            if (isMartingale) {
+                tradeManager.executeMartingaleTrade(
+                    assetRic = selectedAsset.ric,
+                    trend = trend,
+                    amount = amount,
+                    isDemoAccount = currentState.isDemoAccount,
+                    scheduledOrderId = orderId,
+                    martingaleStep = martingaleStep
+                )
+            } else {
+                tradeManager.executeScheduledTrade(
+                    assetRic = selectedAsset.ric,
+                    trend = trend,
+                    amount = amount,
+                    isDemoAccount = currentState.isDemoAccount,
+                    scheduledOrderId = orderId,
+                    startTimeMillis = serverTimeService.getCurrentServerTimeMillis()
+                )
+            }
+
+            println("✅ Trade execution initiated successfully")
+
+        } catch (e: Exception) {
+            println("❌ Trade execution error: ${e.message}")
+            e.printStackTrace()
+
+            // Don't fail silently - update UI
+            _uiState.value = currentState.copy(
+                aiSignalOrderStatus = "Execution error: ${e.message?.take(50)}"
+            )
+        }
+    }
+
+    fun getAISignalExecutionDebug(): Map<String, Any> {
+        return if (_uiState.value.isAISignalModeActive) {
+            val baseInfo = aiSignalOrderManager.getExecutionDebugInfo()
+            val performanceStats = aiSignalOrderManager.getPerformanceStats()
+
+            baseInfo + mapOf(
+                "performance" to performanceStats,
+                "websocket_connected" to _uiState.value.isWebSocketConnected,
+                "websocket_channels_ready" to webSocketManager.isRequiredChannelsReady(),
+                "telegram_status" to telegramSignalService.getStatus(),
+                "monitor_status" to aiSignalTradeMonitor.getMonitoringStatus()
             )
         } else {
-            tradeManager.executeScheduledTrade(
-                assetRic = selectedAsset.ric,
-                trend = trend,
-                amount = amount,
-                isDemoAccount = currentState.isDemoAccount,
-                scheduledOrderId = orderId,
-                startTimeMillis = serverTimeService.getCurrentServerTimeMillis()
-            )
+            mapOf("is_active" to false, "message" to "AI Signal mode not active")
         }
     }
 
@@ -2036,8 +2225,11 @@ class DashboardViewModel @Inject constructor(
         martingaleStep: Int = 0
     ) {
         val currentState = _uiState.value
+
+        // 1. Cek Mode Aktif
         if (!currentState.isAISignalModeActive) return
 
+        // 2. Cek Stop Loss / Profit
         val (shouldPreventTrade, preventReason) = stopLossProfitManager.shouldPreventNewTrade(
             currentState.stopLossSettings,
             currentState.stopProfitSettings
@@ -2050,10 +2242,44 @@ class DashboardViewModel @Inject constructor(
 
         val selectedAsset = currentState.selectedAsset ?: return
 
+        // ✅ FIX: AUTO-RECONNECT LOGIC
+        // Jika WebSocket tidak terhubung atau channel belum siap
         if (!currentState.isWebSocketConnected || !webSocketManager.isRequiredChannelsReady()) {
-            Log.w("DashboardViewModel", "WebSocket not ready for AI Signal Trade")
+            Log.w("DashboardViewModel", "⚠️ WebSocket not ready. Attempting emergency reconnect for signal execution...")
+
+            // Luncurkan coroutine untuk reconnect & retry
+            viewModelScope.launch {
+                // Paksa reconnect
+                webSocketManager.forceReconnect()
+
+                // Tunggu 2 detik agar koneksi stabil
+                delay(2000)
+
+                // Cek lagi apakah sudah siap
+                if (webSocketManager.isConnectionHealthy() && webSocketManager.isRequiredChannelsReady()) {
+                    Log.d("DashboardViewModel", "✅ Emergency reconnect success. Executing pending signal...")
+
+                    // Jalankan eksekusi trade
+                    performTradeExecution(trend, orderId, amount, isMartingaleTrade, martingaleStep, selectedAsset)
+                } else {
+                    Log.e("DashboardViewModel", "❌ Failed to reconnect for signal execution. Signal dropped.")
+                }
+            }
             return
         }
+
+        performTradeExecution(trend, orderId, amount, isMartingaleTrade, martingaleStep, selectedAsset)
+    }
+
+    private fun performTradeExecution(
+        trend: String,
+        orderId: String,
+        amount: Long,
+        isMartingaleTrade: Boolean,
+        martingaleStep: Int,
+        selectedAsset: Asset // Pass asset langsung agar konsisten
+    ) {
+        val currentState = _uiState.value
 
         // ✅ FIX: Create monitoring order ID ONCE - use this everywhere
         val monitoringOrderId = if (isMartingaleTrade) {
@@ -2066,15 +2292,16 @@ class DashboardViewModel @Inject constructor(
         Log.d("DashboardViewModel", "🚀 EXECUTING AI SIGNAL ${if (isMartingaleTrade) "MARTINGALE" else "INITIAL"} ORDER")
         Log.d("DashboardViewModel", "=" .repeat(60))
         Log.d("DashboardViewModel", "   Parent Order ID: $orderId")
-        Log.d("DashboardViewModel", "   Monitoring Order ID: $monitoringOrderId")  // ✅ NEW
+        Log.d("DashboardViewModel", "   Monitoring Order ID: $monitoringOrderId")
         Log.d("DashboardViewModel", "   Trend: $trend")
-        Log.d("DashboardViewModel", "   Amount: ${formatAmount(amount)}")
+        Log.d("DashboardViewModel", "   Amount: ${formatAmount(amount)}") // Pastikan fungsi formatAmount bisa diakses
         Log.d("DashboardViewModel", "   Is Martingale: $isMartingaleTrade")
         if (isMartingaleTrade) {
             Log.d("DashboardViewModel", "   Martingale Step: $martingaleStep")
         }
         Log.d("DashboardViewModel", "=" .repeat(60))
 
+        // Update UI State
         _uiState.value = currentState.copy(
             activeAISignalOrderId = orderId,
             aiSignalOrderStatus = if (isMartingaleTrade) {
@@ -2095,7 +2322,7 @@ class DashboardViewModel @Inject constructor(
 
         // ✅ START MONITORING WITH FULL MARTINGALE ORDER ID
         continuousTradeMonitor.startMonitoringScheduledOrder(
-            scheduledOrderId = monitoringOrderId,  // ✅ USE FULL ID
+            scheduledOrderId = monitoringOrderId,
             trend = trend,
             amount = amount,
             assetRic = selectedAsset.ric,
@@ -2106,7 +2333,7 @@ class DashboardViewModel @Inject constructor(
 
         Log.d("DashboardViewModel", "   ✅ Monitoring started: $monitoringOrderId")
 
-        // ✅ CRITICAL FIX: EXECUTE WITH SAME MONITORING ID
+        // ✅ EXECUTE WITH SAME MONITORING ID
         if (isMartingaleTrade) {
             Log.d("DashboardViewModel", "   📤 Executing via executeMartingaleTrade")
             tradeManager.executeMartingaleTrade(
@@ -2114,7 +2341,7 @@ class DashboardViewModel @Inject constructor(
                 trend = trend,
                 amount = amount,
                 isDemoAccount = currentState.isDemoAccount,
-                scheduledOrderId = monitoringOrderId,  // ✅ CHANGED: Use monitoring ID, not parent ID
+                scheduledOrderId = monitoringOrderId,
                 martingaleStep = martingaleStep
             )
         } else {
@@ -3889,11 +4116,46 @@ class DashboardViewModel @Inject constructor(
                     println("   📋 Order ID: $scheduledOrderId")
                 }
 
-                println("   📤 Forwarding to AISignalOrderManager:")
-                println("      - Parent Order ID: $parentOrderId")
-                println("      - Is Martingale: $isMartingale")
-                println("      - Step: $martingaleStep")
-                println("      - Result: ${if (isWin) "WIN" else "LOSE"}")
+                // ✅ CREATE TRADE RESULT FOR TOAST
+                val tradeResult = TradeResult(
+                    success = isWin,
+                    message = if (isWin) {
+                        if (isMartingale) "AI Signal Martingale WIN at step $martingaleStep!"
+                        else "AI Signal trade won!"
+                    } else {
+                        if (isMartingale) "AI Signal Martingale LOSE at step $martingaleStep"
+                        else "AI Signal trade lost"
+                    },
+                    orderId = parentOrderId,
+                    isMartingaleAttempt = isMartingale,
+                    martingaleStep = martingaleStep,
+                    details = details + mapOf(
+                        "amount" to (details["amount"] ?: 0L),
+                        "trend" to (details["trend"] ?: "unknown")
+                    ),
+                    executionType = when {
+                        isMartingale && isWin -> "MARTINGALE_WIN"
+                        isMartingale && !isWin -> "MARTINGALE_MAX_REACHED"
+                        else -> "TRADE_CLOSED"
+                    }
+                )
+
+                println("   📤 Created TradeResult for toast:")
+                println("      ExecutionType: ${tradeResult.executionType}")
+                println("      Message: ${tradeResult.message}")
+
+                // ✅ SET LAST TRADE RESULT TO TRIGGER TOAST
+                _uiState.value = currentState.copy(
+                    lastTradeResult = tradeResult,
+                    activeAISignalOrderId = null,
+                    aiSignalOrderStatus = if (isWin)
+                        "✅ AI Signal WIN - Waiting for next signal"
+                    else
+                        "❌ AI Signal LOSE - Processing..."
+                )
+
+                println("✅ lastTradeResult SET - Toast should trigger now")
+                println("=" .repeat(60))
 
                 // ✅ FORWARD TO AI SIGNAL ORDER MANAGER
                 aiSignalOrderManager.handleAISignalTradeResultFromMonitor(
@@ -3903,18 +4165,6 @@ class DashboardViewModel @Inject constructor(
                     martingaleStep = martingaleStep,
                     details = details
                 )
-
-                // ✅ UPDATE UI STATUS
-                _uiState.value = _uiState.value.copy(
-                    activeAISignalOrderId = null,
-                    aiSignalOrderStatus = if (isWin)
-                        "✅ AI Signal WIN - Waiting for next signal"
-                    else
-                        "❌ AI Signal LOSE - Processing..."
-                )
-
-                println("✅ AI Signal trade result forwarded to AISignalOrderManager")
-                println("=" .repeat(60))
             }
 
             currentState.isIndicatorModeActive -> {
@@ -4075,6 +4325,11 @@ class DashboardViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    fun clearLastTradeResult() {
+        _uiState.value = _uiState.value.copy(lastTradeResult = null)
+        println("🧹 lastTradeResult cleared")
     }
 
     private fun startInstantMartingaleForLostOrder(scheduledOrderId: String, lossReason: String) {

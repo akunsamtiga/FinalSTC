@@ -16,7 +16,7 @@ import javax.inject.Singleton
 class TelegramSignalService @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
-    private var scope: CoroutineScope? = null
+    private var scope: CoroutineScope? = kotlinx.coroutines.GlobalScope
     private var onSignalReceived: ((TelegramSignal) -> Unit)? = null
     private var onStatusUpdate: ((String) -> Unit)? = null
     private var serverTimeService: ServerTimeService? = null
@@ -27,6 +27,8 @@ class TelegramSignalService @Inject constructor(
         private const val TAG = "TelegramSignalService"
         private const val TOPIC_NAME = "trading_signals"
     }
+
+    fun isMonitoringActive(): Boolean = isActive
 
     fun initialize(
         scope: CoroutineScope,
@@ -48,22 +50,33 @@ class TelegramSignalService @Inject constructor(
 
     fun startMonitoring() {
         if (isActive) {
-            Log.w(TAG, "⚠️ Monitoring already active")
+            Log.w(TAG, "⚠️ Monitoring already active, re-validating...")
+            // Re-validate subscription
+            kotlinx.coroutines.GlobalScope.launch {
+                try {
+                    FirebaseMessaging.getInstance()
+                        .subscribeToTopic(TOPIC_NAME)
+                        .await()
+                    Log.d(TAG, "✅ Re-validated topic subscription")
+                } catch (e: Exception) {
+                    Log.e(TAG, "❌ Failed to re-validate: ${e.message}")
+                }
+            }
             return
         }
 
-        scope?.launch {
+        // ✅ CHANGE: Use GlobalScope
+        kotlinx.coroutines.GlobalScope.launch {
             try {
                 isActive = true
                 onStatusUpdate?.invoke("🔄 Initializing FCM...")
 
                 fcmToken = FirebaseMessaging.getInstance().token.await()
                 Log.d(TAG, "=" .repeat(60))
-                Log.d(TAG, "📱 FCM TOKEN RETRIEVED")
+                Log.d(TAG, "📱 FCM TOKEN RETRIEVED (GLOBAL SCOPE)")
                 Log.d(TAG, "=" .repeat(60))
                 Log.d(TAG, "Token: $fcmToken")
-                Log.d(TAG, "Token length: ${fcmToken?.length}")
-                Log.d(TAG, "Token preview: ${fcmToken?.take(20)}...${fcmToken?.takeLast(20)}")
+                Log.d(TAG, "Scope: BACKGROUND (survives lifecycle)")
                 Log.d(TAG, "=" .repeat(60))
 
                 onStatusUpdate?.invoke("🔄 Subscribing to topic...")
@@ -72,12 +85,8 @@ class TelegramSignalService @Inject constructor(
                     .subscribeToTopic(TOPIC_NAME)
                     .await()
 
-                Log.d(TAG, "✅ Subscribed to topic: $TOPIC_NAME")
-                Log.d(TAG, "🎯 Ready to receive signals from Python bridge")
-                Log.d(TAG, "📡 Topic: $TOPIC_NAME")
-                Log.d(TAG, "🔔 Notifications: ENABLED")
-
-                onStatusUpdate?.invoke("✅ Connected - Listening via FCM")
+                Log.d(TAG, "✅ Subscribed to topic: $TOPIC_NAME (BACKGROUND)")
+                onStatusUpdate?.invoke("✅ Connected - Listening via FCM (Background)")
 
             } catch (e: Exception) {
                 Log.e(TAG, "❌ Error starting monitoring: ${e.message}", e)
@@ -86,8 +95,6 @@ class TelegramSignalService @Inject constructor(
             }
         }
     }
-
-    // TelegramSignalService.kt - UPDATE stopMonitoring()
 
     fun stopMonitoring() {
         if (!isActive) return

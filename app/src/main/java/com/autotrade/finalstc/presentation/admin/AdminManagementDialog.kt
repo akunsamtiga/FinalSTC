@@ -388,7 +388,7 @@ fun AdminManagementDialog(
                             }
 
                             Text(
-                                text = "+${uiState.registrationConfig.whatsappHelpNumber}",
+                                text = "${uiState.registrationConfig.whatsappHelpUrl}",
                                 fontSize = 11.sp,
                                 color = SuccessColor,
                                 fontWeight = FontWeight.Medium
@@ -534,14 +534,14 @@ fun AdminManagementDialog(
 
     if (showWhatsAppEditDialog) {
         EditWhatsAppDialog(
-            currentNumber = uiState.registrationConfig.whatsappHelpNumber,
+            currentUrl = uiState.registrationConfig.whatsappHelpUrl, // ✅ CHANGED
             isLoading = uiState.isLoadingConfig,
             onDismiss = { showWhatsAppEditDialog = false },
-            onSaveNumber = { newNumber ->
-                viewModel.updateWhatsappNumber(newNumber)
+            onSaveUrl = { newUrl -> // ✅ CHANGED
+                viewModel.updateWhatsappUrl(newUrl)
                 showWhatsAppEditDialog = false
             },
-            onValidateNumber = { number -> viewModel.validateWhatsappNumber(number) }
+            onValidateUrl = { url -> viewModel.validateWhatsappUrl(url) } // ✅ CHANGED
         )
     }
 }
@@ -1404,24 +1404,23 @@ private fun EditRegistrationUrlDialog(
 }
 
 @Composable
-private fun EditWhatsAppDialog(
-    currentNumber: String,
+fun EditWhatsAppDialog(
+    currentUrl: String,
     isLoading: Boolean,
     onDismiss: () -> Unit,
-    onSaveNumber: (String) -> Unit,
-    onValidateNumber: (String) -> Boolean
+    onSaveUrl: (String) -> Unit,
+    onValidateUrl: (String) -> Boolean
 ) {
-    var number by remember { mutableStateOf(currentNumber) }
+    var url by remember { mutableStateOf(currentUrl) }
     var isValid by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf("") }
     val keyboardController = LocalSoftwareKeyboardController.current
 
-    LaunchedEffect(number) {
-        if (number.isNotBlank()) {
-            val cleanNumber = number.replace(Regex("[^0-9]"), "")
-            isValid = onValidateNumber(cleanNumber)
+    LaunchedEffect(url) {
+        if (url.isNotBlank()) {
+            isValid = onValidateUrl(url)
             errorMessage = if (!isValid) {
-                "Nomor tidak valid. Minimal 10 digit, maksimal 15 digit"
+                "URL tidak valid. Gunakan format: https://example.com atau https://wa.me/628xxxx"
             } else ""
         }
     }
@@ -1447,27 +1446,24 @@ private fun EditWhatsAppDialog(
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(
-                        text = "Edit Nomor WhatsApp",
-                        fontSize = 18.sp,
+                        text = "Edit URL Kontak Bantuan",
+                        fontSize = 18.sp, // ✅ Nama lebih umum
                         fontWeight = FontWeight.Bold,
                         color = TextPrimary
                     )
                 }
 
                 OutlinedTextField(
-                    value = number,
-                    onValueChange = { number = it },
-                    label = { Text("Nomor WhatsApp", fontSize = 13.sp) },
-                    placeholder = { Text("6285959860015", fontSize = 13.sp) },
-                    modifier = Modifier.fillMaxWidth(),
-                    leadingIcon = {
+                    value = url,
+                    onValueChange = { url = it },
+                    label = { Text("URL Kontak", fontSize = 13.sp) }, // ✅ Label umum
+                    placeholder = {
                         Text(
-                            text = "+",
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (isValid) AccentPrimary else ErrorColor
+                            "https://wa.me/6285959860015 atau https://website-bantuan.com",
+                            fontSize = 13.sp
                         )
                     },
+                    modifier = Modifier.fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = if (isValid) AccentPrimary else ErrorColor,
                         focusedLabelColor = if (isValid) AccentPrimary else ErrorColor,
@@ -1478,16 +1474,22 @@ private fun EditWhatsAppDialog(
                         errorLabelColor = ErrorColor
                     ),
                     keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Number,
+                        keyboardType = KeyboardType.Uri,
                         imeAction = ImeAction.Done
                     ),
                     keyboardActions = KeyboardActions(
                         onDone = { keyboardController?.hide() }
                     ),
                     textStyle = LocalTextStyle.current.copy(fontSize = 14.sp),
-                    isError = !isValid && number.isNotBlank(),
-                    supportingText = if (!isValid && number.isNotBlank()) {
-                        { Text(errorMessage, color = ErrorColor, fontSize = 12.sp) }
+                    isError = !isValid && url.isNotBlank(),
+                    supportingText = if (!isValid && url.isNotBlank()) {
+                        {
+                            Text(
+                                errorMessage,
+                                color = ErrorColor,
+                                fontSize = 12.sp
+                            )
+                        }
                     } else null
                 )
 
@@ -1512,7 +1514,7 @@ private fun EditWhatsAppDialog(
                         Spacer(modifier = Modifier.width(8.dp))
                         Column {
                             Text(
-                                text = "Format nomor WhatsApp:",
+                                text = "URL Kontak Bantuan yang fleksibel:",
                                 color = InfoColor,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.SemiBold,
@@ -1520,10 +1522,16 @@ private fun EditWhatsAppDialog(
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "• Gunakan kode negara (62 untuk Indonesia)\n• Tanpa tanda + di awal\n• Contoh: 6285959860015",
+                                text = "• Website: https://example.com/help\n• WhatsApp: https://wa.me/6285959860015\n• Telegram: https://t.me/username\n• Email: mailto:help@example.com\n• Form: https://forms.google.com/...",
                                 color = InfoColor,
                                 fontSize = 11.sp,
                                 lineHeight = 16.sp
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Pastikan URL valid dan dapat diakses oleh pengguna.",
+                                color = InfoColor,
+                                fontSize = 11.sp,
                             )
                         }
                     }
@@ -1549,9 +1557,8 @@ private fun EditWhatsAppDialog(
 
                     Button(
                         onClick = {
-                            if (number.isNotBlank() && isValid) {
-                                val cleanNumber = number.replace(Regex("[^0-9]"), "")
-                                onSaveNumber(cleanNumber)
+                            if (url.isNotBlank() && isValid) {
+                                onSaveUrl(url)
                             }
                         },
                         modifier = Modifier.weight(1f),
@@ -1560,7 +1567,7 @@ private fun EditWhatsAppDialog(
                             contentColor = Color.White
                         ),
                         shape = RoundedCornerShape(10.dp),
-                        enabled = !isLoading && number.isNotBlank() && isValid
+                        enabled = !isLoading && url.isNotBlank() && isValid
                     ) {
                         if (isLoading) {
                             CircularProgressIndicator(

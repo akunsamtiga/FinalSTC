@@ -158,7 +158,6 @@ class SessionManager @Inject constructor(
             apply()
         }
 
-        // âœ… EMIT perubahan currency (non-suspending)
         kotlinx.coroutines.GlobalScope.launch {
             _currencyFlow.emit(iso)
         }
@@ -177,13 +176,11 @@ class SessionManager @Inject constructor(
             apply()
         }
 
-        // âœ… EMIT perubahan currency
         kotlinx.coroutines.GlobalScope.launch {
             _currencyFlow.emit(iso)
         }
     }
 
-    // âœ… TAMBAH: Method untuk emit initial value
     fun emitCurrentCurrency() {
         kotlinx.coroutines.GlobalScope.launch {
             val currentIso = getCurrencyIso()

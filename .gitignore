@@ -56,6 +56,7 @@ buildSrc/.gradle/
 /logs/
 *.hprof
 app/src/main/java/com/autotrade/finalstc/data/api
-app/src/main/java/com/autotrade/finalstc/data/repository
+app/src/main/java/com/autotrade/finalstc/di/AppModule.kt
+app/src/main/java/com/autotrade/finalstc/presentation/main/dashboard/WebSocketManager.kt
 .env
 *.env

@@ -17,7 +17,6 @@ data class AdminUser(
     val createdBy: String = "",
     val lastLogin: Long = 0L,
 
-    // ✅ ADD THESE FIELDS
     val fcmToken: String = "",
     val fcmTokenUpdatedAt: Long = 0L
 )

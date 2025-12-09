@@ -41,10 +41,11 @@ class TradingSignalMessagingService : FirebaseMessagingService() {
             Log.d(TAG, "=" .repeat(60))
             Log.d(TAG, "   Status: ${if (isActive) "ACTIVE ✅" else "INACTIVE ❌"}")
             Log.d(TAG, "   Notifications: ${if (isActive) "ENABLED ✅" else "DISABLED ❌"}")
-            Log.d(TAG, "   Signals will: ${if (isActive) "Show notification + process" else "Only process (no notification)"}")
+            Log.d(TAG, "   FCM Messages: ${if (isActive) "WILL SHOW NOTIFICATION + PROCESS" else "ONLY PROCESS (NO NOTIFICATION)"}")
+            Log.d(TAG, "   Background: ${if (isActive) "BOT RUNS IN BACKGROUND" else "NO BACKGROUND OPERATION"}")
             Log.d(TAG, "=" .repeat(60))
         }
-
+        
         fun ensureTopicSubscription() {
             com.google.firebase.messaging.FirebaseMessaging.getInstance()
                 .subscribeToTopic(TOPIC_NAME)

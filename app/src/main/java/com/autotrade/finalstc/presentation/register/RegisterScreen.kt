@@ -267,7 +267,7 @@ fun RegisterScreen(
     val currentTheme by themeViewModel.currentTheme.collectAsStateWithLifecycle()
     val colors = currentTheme.colors
 
-    val whatsappNumber by viewModel.whatsappNumber.collectAsState()
+    val whatsappUrl by viewModel.whatsappUrl.collectAsState()
 
     var hasClickedDaftar by remember { mutableStateOf(false) }
     var isWebFullyLoaded by remember { mutableStateOf(false) }
@@ -667,13 +667,23 @@ fun RegisterScreen(
                 )
             },
             confirmButton = {
+                // ✅ PERUBAHAN: Langsung gunakan whatsappUrl dari ViewModel
                 Button(
                     onClick = {
-                        val waUrl = "https://wa.me/$whatsappNumber"
-                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
-                            data = android.net.Uri.parse(waUrl)
+                        Log.d("RegisterScreen", "Opening WhatsApp URL: $whatsappUrl")
+
+                        val intent = android.content.Intent(
+                            android.content.Intent.ACTION_VIEW
+                        ).apply {
+                            data = android.net.Uri.parse(whatsappUrl)
                         }
-                        context.startActivity(intent)
+
+                        try {
+                            context.startActivity(intent)
+                        } catch (e: Exception) {
+                            Log.e("RegisterScreen", "Failed to open WhatsApp: ${e.message}")
+                        }
+
                         viewModel.clearSaveError()
                     },
                     colors = ButtonDefaults.buttonColors(

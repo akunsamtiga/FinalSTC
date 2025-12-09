@@ -6,6 +6,8 @@ data class UserSession(
     val authtoken: String,
     val userId: String,
     val deviceId: String,
+    val webAuthToken: String? = null,
+    val webDeviceId: String? = null,
     val email: String,
     val userTimezone: String,
     val userAgent: String,
