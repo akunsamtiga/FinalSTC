@@ -736,7 +736,9 @@ fun DashboardScreen(
                                 aiSignalOrders = aiSignalOrders,
                                 onStartAISignal = dashboardViewModel::startAISignalMode,
                                 onStopAISignal = dashboardViewModel::stopAISignalMode,
-                                lastTradeResult = uiState.lastTradeResult
+                                lastTradeResult = uiState.lastTradeResult,
+                                canStartMultiMomentum = uiState.canStartMultiMomentumMode(),
+                                canStartAISignal = uiState.canStartAISignalMode()
                             )
                         }
 
@@ -1219,9 +1221,7 @@ private fun WhitelistFailedScreen(
     viewModel: DashboardViewModel = hiltViewModel()
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
-
-    // ✅ PERUBAHAN: Buat URL WhatsApp statis atau ambil dari resource
-    val whatsappUrl = "https://wa.me/6285959860015" // URL default
+    val whatsappUrl = "https://wa.me/6285959860015"
 
     Box(
         modifier = Modifier
@@ -1290,7 +1290,6 @@ private fun WhitelistFailedScreen(
                     if (reason != "NO_SESSION") {
                         OutlinedButton(
                             onClick = {
-                                // ✅ PERUBAHAN: Gunakan whatsappUrl yang sudah didefinisikan
                                 try {
                                     val intent = android.content.Intent(
                                         android.content.Intent.ACTION_VIEW
@@ -1302,7 +1301,7 @@ private fun WhitelistFailedScreen(
                                     Log.e("WhitelistFailedScreen", "Failed to open WhatsApp: ${e.message}")
                                 }
                             },
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier.weight(3f), // ✅ 75% width
                             colors = ButtonDefaults.outlinedButtonColors(
                                 contentColor = colors.accentPrimary2main
                             ),
@@ -1310,14 +1309,9 @@ private fun WhitelistFailedScreen(
                             shape = RoundedCornerShape(12.dp)
                         ) {
                             Row(
-                                verticalAlignment = Alignment.CenterVertically
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Phone,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
                                 Text("Hubungi Admin")
                             }
                         }
@@ -1325,18 +1319,12 @@ private fun WhitelistFailedScreen(
 
                     Button(
                         onClick = onLogout,
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(1f), // ✅ 25% width
                         colors = ButtonDefaults.buttonColors(
                             containerColor = colors.accentPrimary
                         ),
                         shape = RoundedCornerShape(12.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.ExitToApp,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
                         Text("Logout")
                     }
                 }
@@ -1401,28 +1389,6 @@ fun HeaderSection(
 }
 
 
-@Composable
-fun FadingGradientLine(
-    modifier: Modifier = Modifier,
-    height: Dp = 2.dp
-) {
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(height)
-            .background(
-                brush = Brush.horizontalGradient(
-                    colors = listOf(
-                        Color.Transparent,
-                        Color(0xFFF94144),
-                        Color(0xFFF3722C),
-                        Color(0xFF43AA8B),
-                        Color.Transparent
-                    )
-                )
-            )
-    )
-}
 
 @Composable
 private fun FloatingConnectionToast(
@@ -3340,43 +3306,6 @@ fun DigitalClockRow(
 
 
 
-@Composable
-fun SynchronizedWinLoseStatsRow(
-    todayStats: TodayStats,
-    isLoading: Boolean
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        StatCard(
-            modifier = Modifier.weight(1f),
-            icon = Icons.Default.TrendingUp,
-            value = todayStats.winCount,
-            label = "Win",
-            color = WifiGreen,
-            isLoading = isLoading
-        )
-
-        StatCard(
-            modifier = Modifier.weight(1f),
-            icon = Icons.Default.Remove,
-            value = todayStats.drawCount,
-            label = "Draw",
-            color = AccentWarning,
-            isLoading = isLoading
-        )
-
-        StatCard(
-            modifier = Modifier.weight(1f),
-            icon = Icons.Default.TrendingDown,
-            value = todayStats.loseCount,
-            label = "Lose",
-            color = AccentSecondary,
-            isLoading = isLoading
-        )
-    }
-}
 
 @Composable
 fun ThemeToggleCard(
@@ -3515,81 +3444,6 @@ fun StatCard(
                 ),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
-            )
-        }
-    }
-}
-
-@Composable
-fun AssetAndStatsCard(
-    modifier: Modifier = Modifier,
-    selectedAsset: Asset?,
-    canModify: Boolean,
-    onAddAsset: () -> Unit,
-    todayStats: TodayStats,
-    isLoading: Boolean,
-    isDemoAccount: Boolean,
-    colors: DashboardColors
-) {
-    Card(
-        modifier = modifier,
-        colors = CardDefaults.cardColors(
-            containerColor = Color(0xFF2D2D2D)
-        ),
-        border = BorderStroke(0.5.dp, Color(0xFF4A4A4A)),
-        shape = RoundedCornerShape(24.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            WinLoseStatsRow(
-                todayStats = todayStats,
-                isLoading = isLoading,
-                isDemoAccount = isDemoAccount
-            )
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Asset",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = TextPrimary
-                )
-
-                IconButton(
-                    onClick = onAddAsset,
-                    enabled = canModify,
-                    modifier = Modifier.size(28.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = "Add Asset",
-                        tint = if (canModify) AccentPrimary else TextMuted,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-            }
-
-            if (selectedAsset != null) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = DarkSurface
-                    ),
-                    shape = RoundedCornerShape(24.dp),
-                    border = BorderStroke(1.dp, AccentPrimary.copy(alpha = 0.2f))
-                ) {
-                }
-            }
-
-            TradingLineChart(
-                selectedAsset = selectedAsset,
-                colors = colors
             )
         }
     }
@@ -7111,46 +6965,6 @@ fun StopLossProfitCard(
 
 
 @Composable
-fun WinLoseStatsRow(
-    todayStats: TodayStats,
-    isLoading: Boolean,
-    isDemoAccount: Boolean
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        StatCard(
-            modifier = Modifier.weight(1f),
-            icon = Icons.Default.TrendingUp,
-            value = todayStats.winCount,
-            label = "Win",
-            color = WifiGreen,
-            isLoading = isLoading
-        )
-
-        StatCard(
-            modifier = Modifier.weight(1f),
-            icon = Icons.Default.Remove,
-            value = todayStats.drawCount,
-            label = "Draw",
-            color = AccentWarning,
-            isLoading = isLoading
-        )
-
-        StatCard(
-            modifier = Modifier.weight(1f),
-            icon = Icons.Default.TrendingDown,
-            value = todayStats.loseCount,
-            label = "Loss",
-            color = AccentSecondary,
-            isLoading = isLoading
-        )
-    }
-}
-
-
-@Composable
 fun ErrorCard(
     error: String,
     onDismiss: () -> Unit,
@@ -9372,8 +9186,6 @@ fun ScheduleListItem(
     }
 }
 
-
-
 @Composable
 private fun TradingModeSelector(
     currentMode: TradingMode,
@@ -9382,6 +9194,8 @@ private fun TradingModeSelector(
     isFollowModeActive: Boolean,
     isIndicatorModeActive: Boolean,
     isCTCModeActive: Boolean,
+    isMultiMomentumModeActive: Boolean,
+    isAISignalModeActive: Boolean,
     botState: BotState,
     colors: DashboardColors,
     currentLanguage: String = "id",
@@ -9406,8 +9220,8 @@ private fun TradingModeSelector(
 
         Box(modifier = Modifier.fillMaxWidth()) {
             OutlinedCard(
-                onClick = { if (canModify) showModeDropdown = true },
-                enabled = canModify,
+                onClick = { showModeDropdown = true },
+                enabled = true,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(44.dp),
@@ -9434,7 +9248,7 @@ private fun TradingModeSelector(
                         else StringsManager.getSelectTradingMode(currentLanguage),
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Medium,
-                        color = if (canModify) colors.textPrimary else colors.textMuted,
+                        color = colors.textPrimary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -9452,9 +9266,7 @@ private fun TradingModeSelector(
                         ambientColor = Color.Black.copy(alpha = 0.2f),
                         spotColor = Color.Black.copy(alpha = 0.3f)
                     )
-                    .background(
-                        color = colors.cardBackground,
-                    )
+                    .background(color = colors.cardBackground)
                     .border(
                         width = 1.dp,
                         brush = Brush.verticalGradient(
@@ -9472,7 +9284,7 @@ private fun TradingModeSelector(
                         .fillMaxWidth()
                         .padding(vertical = 6.dp)
                 ) {
-                    // ✅ HEADER DENGAN UKURAN LEBIH KECIL
+                    // Header
                     Surface(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -9561,126 +9373,128 @@ private fun TradingModeSelector(
 
                     Spacer(modifier = Modifier.height(3.dp))
 
-                    // ✅ MENU ITEMS
+                    // ✅ SCHEDULE MODE - Bisa jalan dengan AI Signal & Momentum
                     EnhancedModeMenuItem(
-                        iconDrawableId = R.drawable.ic_mode_1,
+                        icon = R.drawable.ic_mode_1,
                         title = "Signal Mode",
                         description = "Manual signal input",
                         isSelected = isModeSelected && currentMode == TradingMode.SCHEDULE,
-                        isEnabled = !isFollowModeActive && !isIndicatorModeActive && !isCTCModeActive,
+                        isEnabled = !isFollowModeActive &&
+                                !isIndicatorModeActive &&
+                                !isCTCModeActive &&
+                                !isAISignalModeActive, // ✅ TAMBAH INI: Disable jika AI Signal active
                         accentColor = Color(0xFF3B82F6),
                         colors = colors,
                         onClick = {
-                            if (!isFollowModeActive && !isIndicatorModeActive && !isCTCModeActive) {
-                                onModeChange(TradingMode.SCHEDULE)
-                            }
+                            onModeChange(TradingMode.SCHEDULE)
                             showModeDropdown = false
                         }
                     )
 
+
                     EnhancedDivider(colors = colors)
 
+                    // ✅ FOLLOW MODE - Exclusive
                     EnhancedModeMenuItem(
-                        iconDrawableId = R.drawable.ic_mode_2,
+                        icon = R.drawable.ic_mode_2,
                         title = "Fastrade FTT Mode",
                         description = "Fast trade execution",
                         isSelected = isModeSelected && currentMode == TradingMode.FOLLOW_ORDER,
-                        isEnabled = botState == BotState.STOPPED && !isIndicatorModeActive && !isCTCModeActive,
+                        isEnabled = canModify &&
+                                botState == BotState.STOPPED &&
+                                !isIndicatorModeActive &&
+                                !isCTCModeActive &&
+                                !isMultiMomentumModeActive &&
+                                !isAISignalModeActive,
                         accentColor = Color(0xFF10B981),
                         colors = colors,
                         onClick = {
-                            val canSelect = botState == BotState.STOPPED && !isIndicatorModeActive && !isCTCModeActive
-                            if (canSelect) {
-                                onModeChange(TradingMode.FOLLOW_ORDER)
-                            }
+                            onModeChange(TradingMode.FOLLOW_ORDER)
                             showModeDropdown = false
                         }
                     )
 
                     EnhancedDivider(colors = colors)
 
+                    // ✅ INDICATOR MODE - Exclusive
                     EnhancedModeMenuItem(
-                        iconDrawableId = R.drawable.ic_mode_3,
+                        icon = R.drawable.ic_mode_3,
                         title = "Analysis Strategy Mode",
                         description = "Technical analysis based",
                         isSelected = isModeSelected && currentMode == TradingMode.INDICATOR_ORDER,
-                        isEnabled = botState == BotState.STOPPED && !isFollowModeActive && !isCTCModeActive,
+                        isEnabled = canModify &&
+                                botState == BotState.STOPPED &&
+                                !isFollowModeActive &&
+                                !isCTCModeActive &&
+                                !isMultiMomentumModeActive &&
+                                !isAISignalModeActive,
                         accentColor = Color(0xFF9C27B0),
                         colors = colors,
                         onClick = {
-                            val canSelect = botState == BotState.STOPPED && !isFollowModeActive && !isCTCModeActive
-                            if (canSelect) {
-                                onModeChange(TradingMode.INDICATOR_ORDER)
-                            }
+                            onModeChange(TradingMode.INDICATOR_ORDER)
                             showModeDropdown = false
                         }
                     )
 
                     EnhancedDivider(colors = colors)
 
+                    // ✅ CTC MODE - Exclusive
                     EnhancedModeMenuItem(
-                        iconDrawableId = R.drawable.ic_mode_4,
+                        icon = R.drawable.ic_mode_4,
                         title = "Fastrade CTC Mode",
                         description = "Ultra-fast execution",
                         isSelected = isModeSelected && currentMode == TradingMode.CTC_ORDER,
-                        isEnabled = botState == BotState.STOPPED && !isFollowModeActive && !isIndicatorModeActive,
+                        isEnabled = canModify &&
+                                botState == BotState.STOPPED &&
+                                !isFollowModeActive &&
+                                !isIndicatorModeActive &&
+                                !isMultiMomentumModeActive &&
+                                !isAISignalModeActive,
                         accentColor = Color(0xFFFF6B35),
                         colors = colors,
                         onClick = {
-                            val canSelect = botState == BotState.STOPPED && !isFollowModeActive && !isIndicatorModeActive
-                            if (canSelect) {
-                                onModeChange(TradingMode.CTC_ORDER)
-                            }
+                            onModeChange(TradingMode.CTC_ORDER)
                             showModeDropdown = false
                         }
                     )
 
                     EnhancedDivider(colors = colors)
 
+                    // ✅ MULTI MOMENTUM - Bisa jalan dengan Schedule & AI Signal
                     EnhancedModeMenuItem(
-                        iconDrawableId = R.drawable.ic_mode_5,
+                        icon = R.drawable.ic_mode_5,
                         title = "Momentum Mode",
                         description = "Parallel momentum analysis",
                         isSelected = isModeSelected && currentMode == TradingMode.MULTI_MOMENTUM,
-                        isEnabled = botState == BotState.STOPPED &&
-                                !isFollowModeActive &&
+                        isEnabled = !isFollowModeActive &&
                                 !isIndicatorModeActive &&
                                 !isCTCModeActive,
+                        // ✅ TIDAK ADA PERUBAHAN - Momentum tetap bebas
                         accentColor = Color(0xFF00BCD4),
                         colors = colors,
                         onClick = {
-                            val canSelect = botState == BotState.STOPPED &&
-                                    !isFollowModeActive &&
-                                    !isIndicatorModeActive &&
-                                    !isCTCModeActive
-                            if (canSelect) {
-                                onModeChange(TradingMode.MULTI_MOMENTUM)
-                            }
+                            onModeChange(TradingMode.MULTI_MOMENTUM)
                             showModeDropdown = false
                         }
                     )
 
+
                     EnhancedDivider(colors = colors)
 
+                    // ✅ AI SIGNAL MODE - Bisa jalan dengan Schedule & Momentum
                     EnhancedModeMenuItem(
-                        iconDrawableId = R.drawable.ic_mode_6,
+                        icon = R.drawable.ic_mode_6,
                         title = "AI Signal Mode",
                         description = "AI signal automation",
                         isSelected = isModeSelected && currentMode == TradingMode.AI_SIGNAL,
-                        isEnabled = botState == BotState.STOPPED &&
-                                !isFollowModeActive &&
+                        isEnabled = !isFollowModeActive &&
                                 !isIndicatorModeActive &&
-                                !isCTCModeActive,
+                                !isCTCModeActive &&
+                                botState != BotState.RUNNING, // ✅ TAMBAH INI: Disable jika Schedule running
                         accentColor = Color(0xFFE91E63),
                         colors = colors,
                         onClick = {
-                            val canSelect = botState == BotState.STOPPED &&
-                                    !isFollowModeActive &&
-                                    !isIndicatorModeActive &&
-                                    !isCTCModeActive
-                            if (canSelect) {
-                                onModeChange(TradingMode.AI_SIGNAL)
-                            }
+                            onModeChange(TradingMode.AI_SIGNAL)
                             showModeDropdown = false
                         }
                     )
@@ -9691,9 +9505,21 @@ private fun TradingModeSelector(
     }
 }
 
+private fun getModeDisplayName(mode: TradingMode): String {
+    return when (mode) {
+        TradingMode.SCHEDULE -> "Signal Mode"
+        TradingMode.FOLLOW_ORDER -> "Fastrade FTT Mode"
+        TradingMode.INDICATOR_ORDER -> "Analysis Strategy Mode"
+        TradingMode.CTC_ORDER -> "Fastrade CTC Mode"
+        TradingMode.MULTI_MOMENTUM -> "Momentum Mode"
+        TradingMode.AI_SIGNAL -> "AI Signal Mode"
+    }
+}
+
+
 @Composable
 private fun EnhancedModeMenuItem(
-    iconDrawableId: Int,
+    icon: Any,
     title: String,
     description: String,
     isSelected: Boolean,
@@ -9749,12 +9575,10 @@ private fun EnhancedModeMenuItem(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                // Icon Container
                 Box(
                     modifier = Modifier.size(36.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    // Outer glow
                     if (isSelected) {
                         Box(
                             modifier = Modifier
@@ -9771,7 +9595,6 @@ private fun EnhancedModeMenuItem(
                         )
                     }
 
-                    // Icon background
                     Box(
                         modifier = Modifier
                             .size(32.dp)
@@ -9796,29 +9619,27 @@ private fun EnhancedModeMenuItem(
                             ),
                         contentAlignment = Alignment.Center
                     ) {
-                        // ✅ FIXED: Gunakan icon berbeda untuk mode 5 berdasarkan tema
-                        val finalIconId = if (iconDrawableId == R.drawable.ic_mode_5) {
-                            // Cek apakah sedang dark mode atau light mode
-                            if (colors.background == Color(0xFF161616)) {
-                                // Dark mode - gunakan ic_mode_5 biasa
-                                R.drawable.ic_mode_5
-                            } else {
-                                R.drawable.ic_mode_5_light
+                        when (icon) {
+                            is ImageVector -> {
+                                Icon(
+                                    imageVector = icon,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp),
+                                    tint = if (isSelected) accentColor else colors.textPrimary
+                                )
                             }
-                        } else {
-                            iconDrawableId
+                            is Int -> {
+                                Image(
+                                    painter = painterResource(id = icon),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp),
+                                    colorFilter = null
+                                )
+                            }
                         }
-
-                        Image(
-                            painter = painterResource(id = finalIconId),
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp),
-                            colorFilter = null
-                        )
                     }
                 }
 
-                // Text Content
                 Column(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(1.dp)
@@ -9842,7 +9663,6 @@ private fun EnhancedModeMenuItem(
                     )
                 }
 
-                // Checkmark indicator
                 if (isSelected) {
                     Box(
                         modifier = Modifier
@@ -9892,17 +9712,6 @@ private fun EnhancedDivider(colors: DashboardColors) {
     )
 }
 
-private fun getModeDisplayName(mode: TradingMode): String {
-    return when (mode) {
-        TradingMode.SCHEDULE -> "Signal Mode"
-        TradingMode.FOLLOW_ORDER -> "Fastrade FTT Mode"
-        TradingMode.INDICATOR_ORDER -> "Analysis Strategy Mode"
-        TradingMode.CTC_ORDER -> "Fastrade CTC Mode"
-        TradingMode.MULTI_MOMENTUM -> "Momentum Mode"
-        TradingMode.AI_SIGNAL -> "AI Signal Mode"
-    }
-}
-
 @Composable
 private fun AISignalContent(
     isActive: Boolean,
@@ -9911,7 +9720,8 @@ private fun AISignalContent(
     lastTradeResult: TradeResult?,
     onStartAISignal: () -> Unit,
     onStopAISignal: () -> Unit,
-    colors: DashboardColors
+    colors: DashboardColors,
+    canStart: Boolean,
 ) {
 
     Column(
@@ -9940,7 +9750,7 @@ private fun AISignalContent(
             ) {
 
                 // ======================================================================
-                // MODE AKTIF + ADA ORDER → Determine status
+                // MODE AKTIF + ADA ORDER
                 // ======================================================================
                 if (isActive && aiSignalOrders.isNotEmpty()) {
 
@@ -9948,46 +9758,37 @@ private fun AISignalContent(
 
                     val latestOrder = aiSignalOrders.lastOrNull()
 
-                    // 🔥 Ambil MARTINGALE dari TRADE RESULT
-                    val martingaleFromResult = lastTradeResult?.isMartingaleAttempt == true
-                    val martingaleStepResult = lastTradeResult?.martingaleStep ?: 0
-
-                    // ==================================================================
-                    // STATUS RESOLVER (UPDATED)
-                    // ==================================================================
+                    // ✅ STATUS RESOLVER (FIXED)
+                    // Prioritas: Result > Pending > Martingale > Monitoring
                     val (statusText, statusColor, showIcon) = when {
 
-                        // 1. Pending
+                        // 1. PRIORITAS TERTINGGI: Ada RESULT (WIN/LOSE)
+                        !latestOrder?.result.isNullOrEmpty() -> {
+                            when (latestOrder.result.uppercase()) {
+                                "WIN", "WON" -> Triple("Win", colors.successColor, false)
+                                "LOSE", "LOSS", "LOST" -> Triple("Lose", colors.errorColor, false)
+                                else -> Triple("Unknown", colors.textMuted, false)
+                            }
+                        }
+
+                        // 2. Belum executed → Pending
                         latestOrder == null || !latestOrder.isExecuted -> {
                             Triple("Pending", colors.warningColor, true)
                         }
 
-                        // 2. MARTINGALE dari Trade Result (OVERRIDE)
-                        martingaleFromResult && martingaleStepResult > 0 -> {
-                            Triple(
-                                "M $martingaleStepResult",
-                                colors.warningColor,
-                                true
-                            )
+                        // 3. Martingale active (executed, no result yet, martingale step > 0)
+                        latestOrder.martingaleStep > 0 -> {
+                            Triple("M ${latestOrder.martingaleStep}", colors.warningColor, true)
                         }
 
-                        // 3. WIN / LOSE
-                        !latestOrder.result.isNullOrEmpty() -> {
-                            when (latestOrder.result.uppercase()) {
-                                "WIN", "WON" -> Triple("Win", colors.successColor, false)
-                                "LOSE", "LOSS", "LOST" -> Triple("Lose", colors.errorColor, false)
-                                else -> Triple("Monitoring", colors.warningColor, true)
-                            }
-                        }
-
-                        // 4. Monitoring
+                        // 4. Monitoring (executed, no result yet, no martingale)
                         latestOrder.isExecuted -> {
                             Triple("Monitoring", colors.successColor, true)
                         }
 
                         // 5. Fallback
                         else -> {
-                            Triple("Pending", colors.warningColor, true)
+                            Triple("Waiting", colors.textMuted, true)
                         }
                     }
 
@@ -10041,7 +9842,6 @@ private fun AISignalContent(
                                     color = colors.textSecondary,
                                     textAlign = TextAlign.Center,
                                     lineHeight = 14.sp
-
                                 )
                             }
 
@@ -10095,16 +9895,20 @@ private fun AISignalContent(
                                     color = colors.textPrimary,
                                     textAlign = TextAlign.Center,
                                     lineHeight = 14.sp
-
                                 )
 
                                 Text(
-                                    text = "Trade Result",
+                                    text = when {
+                                        statusText in listOf("Win", "Lose") -> "Trade Result"
+                                        statusText.startsWith("M ") -> "Martingale Active"
+                                        statusText == "Monitoring" -> "Trade Running"
+                                        statusText == "Pending" -> "Awaiting Execution"
+                                        else -> "Current Status"
+                                    },
                                     fontSize = 8.sp,
                                     color = colors.textSecondary,
                                     textAlign = TextAlign.Center,
                                     lineHeight = 14.sp
-
                                 )
 
                                 Text(
@@ -10114,7 +9918,6 @@ private fun AISignalContent(
                                     color = statusColor,
                                     textAlign = TextAlign.Center,
                                     lineHeight = 14.sp
-
                                 )
                             }
                         }
@@ -10173,7 +9976,6 @@ private fun AISignalContent(
                             color = colors.textPrimary,
                             textAlign = TextAlign.Center,
                             lineHeight = 14.sp
-
                         )
 
                         Text(
@@ -10182,7 +9984,6 @@ private fun AISignalContent(
                             color = colors.textSecondary,
                             textAlign = TextAlign.Center,
                             lineHeight = 14.sp
-
                         )
 
                         Spacer(modifier = Modifier.height(15.dp))
@@ -10211,7 +10012,6 @@ private fun AISignalContent(
                             fontWeight = FontWeight.Medium,
                             textAlign = TextAlign.Center,
                             lineHeight = 14.sp
-
                         )
 
                         Text(
@@ -10220,7 +10020,6 @@ private fun AISignalContent(
                             color = colors.textSecondary,
                             textAlign = TextAlign.Center,
                             lineHeight = 14.sp
-
                         )
 
                         Spacer(modifier = Modifier.height(14.dp))
@@ -10236,13 +10035,14 @@ private fun AISignalContent(
 
             Button(
                 onClick = onStartAISignal,
-                enabled = !isActive && canModify,
+                enabled = !isActive && canStart,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(36.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = colors.successColor,
                     contentColor = Color.White,
+                    disabledContainerColor = colors.botButtonDisabledBg,
                     disabledContentColor = colors.textMuted,
                 ),
                 shape = RoundedCornerShape(6.dp)
@@ -10796,91 +10596,14 @@ private fun AISignalInactiveState(colors: DashboardColors) {
 }
 
 @Composable
-private fun MiniSignalCard(
-    order: AISignalOrder,
-    colors: DashboardColors
-) {
-    val trendColor = if (order.trend.uppercase() == "CALL")
-        colors.successColor
-    else
-        colors.errorColor
-
-    Surface(
-        modifier = Modifier
-            .width(60.dp)
-            .height(40.dp),
-        color = trendColor.copy(alpha = 0.1f),
-        shape = RoundedCornerShape(6.dp),
-        border = BorderStroke(0.5.dp, trendColor.copy(alpha = 0.3f))
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(4.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            // Trend
-            Text(
-                text = order.trend.uppercase().take(1),
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                color = trendColor
-            )
-
-            // Execution time
-            Text(
-                text = order.getExecutionTimeFormatted().substring(0, 5), // HH:MM only
-                fontSize = 7.sp,
-                color = colors.textSecondary
-            )
-
-            // Status indicator
-            Box(
-                modifier = Modifier
-                    .size(4.dp)
-                    .background(
-                        color = if (order.isExecuted) colors.successColor else colors.warningColor,
-                        shape = CircleShape
-                    )
-            )
-        }
-    }
-}
-
-@Composable
-private fun FeatureItem(
-    text: String,
-    colors: DashboardColors
-) {
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .size(4.dp)
-                .background(
-                    colors.successColor,
-                    shape = CircleShape
-                )
-        )
-        Text(
-            text = text,
-            fontSize = 8.sp,
-            color = colors.textSecondary
-        )
-    }
-}
-
-@Composable
 private fun MultiMomentumContent(
     isActive: Boolean,
     multiMomentumOrders: List<MultiMomentumOrder>,
     canModify: Boolean,
     onStartMultiMomentum: () -> Unit,
     onStopMultiMomentum: () -> Unit,
-    colors: DashboardColors
+    colors: DashboardColors,
+    canStart: Boolean,
 ) {
     Column(
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -11041,7 +10764,7 @@ private fun MultiMomentumContent(
 
             Button(
                 onClick = onStartMultiMomentum,
-                enabled = !isActive && canModify,
+                enabled = !isActive && canStart,
                 modifier = Modifier.fillMaxWidth().height(36.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = colors.errorColor,
@@ -13400,8 +13123,10 @@ fun TradingModeCard(
     aiSignalOrders: List<AISignalOrder>,
     onStartAISignal: () -> Unit,
     onStopAISignal: () -> Unit,
-    lastTradeResult: TradeResult?
-    ) {
+    lastTradeResult: TradeResult?,
+    canStartMultiMomentum: Boolean,
+    canStartAISignal: Boolean
+) {
     var showMultilineDialog by remember { mutableStateOf(false) }
     var showViewDialog by remember { mutableStateOf(false) }
 
@@ -13429,58 +13154,48 @@ fun TradingModeCard(
             modifier = Modifier.padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
+            // ✅ ALWAYS SHOW MODE SELECTOR
             TradingModeSelector(
                 currentMode = currentMode,
                 onModeChange = { mode ->
-                    // ✅ PINDAHKAN LOGIKA AUTO-OPEN KE SINI
                     onModeChange(mode)
 
-                    // ✅ Auto-open dialog HANYA saat user klik dropdown dan pilih mode
+                    // Auto-open dialogs after mode selection
                     when (mode) {
                         TradingMode.SCHEDULE -> {
-                            // Auto-open multiline dialog untuk input schedule
-                            showMultilineDialog = true
+                            if (scheduledOrders.isEmpty()) {
+                                showMultilineDialog = true
+                            }
                         }
                         TradingMode.INDICATOR_ORDER -> {
-                            // Auto-open settings jika indicator belum active
                             if (!isIndicatorModeActive) {
                                 onShowIndicatorSettings()
                             }
                         }
-                        else -> {
-                            // Mode lain tidak perlu auto-open dialog
-                        }
+                        else -> { /* No auto-open */ }
                     }
                 },
                 canModify = canModify,
                 isFollowModeActive = isFollowModeActive,
                 isIndicatorModeActive = isIndicatorModeActive,
                 isCTCModeActive = isCTCModeActive,
+                isMultiMomentumModeActive = isMultiMomentumModeActive,
+                isAISignalModeActive = isAISignalModeActive,
                 botState = botState,
                 colors = colors,
                 currentLanguage = currentLanguage,
                 isModeSelected = isTradingModeSelected
             )
 
+            // ✅ CONTENT DISPLAY - Fixed logic
             if (isTradingModeSelected) {
                 when (currentMode) {
-                    TradingMode.AI_SIGNAL -> {
-                        AISignalContent(
-                            isActive = isAISignalModeActive,
-                            aiSignalOrders = aiSignalOrders,
-                            canModify = canModify,
-                            onStartAISignal = onStartAISignal,
-                            lastTradeResult = lastTradeResult,
-                            onStopAISignal = onStopAISignal,
-                            colors = colors
-                        )
-                    }
                     TradingMode.SCHEDULE -> {
                         ScheduleContent(
                             scheduleInput = scheduleInput,
                             scheduledOrders = scheduledOrders,
-                            canModify = canModify,
-                            canStartBot = canStartBot,
+                            canModify = canModify && botState == BotState.STOPPED,
+                            canStartBot = canStartBot && botState == BotState.STOPPED,
                             botState = botState,
                             onScheduleInputChange = onScheduleInputChange,
                             onAddSchedule = onAddSchedule,
@@ -13489,7 +13204,30 @@ fun TradingModeCard(
                             onStopBot = onStopBot,
                             onShowMultilineDialog = { showMultilineDialog = true },
                             onRemoveOrder = onRemoveOrder,
-                            colors = colors
+                            colors = colors,
+                        )
+                    }
+                    TradingMode.AI_SIGNAL -> {
+                        AISignalContent(
+                            isActive = isAISignalModeActive,
+                            aiSignalOrders = aiSignalOrders,
+                            canModify = canModify,
+                            canStart = canStartAISignal,
+                            lastTradeResult = lastTradeResult,
+                            onStartAISignal = onStartAISignal,
+                            onStopAISignal = onStopAISignal,
+                            colors = colors,
+                        )
+                    }
+                    TradingMode.MULTI_MOMENTUM -> {
+                        MultiMomentumContent(
+                            isActive = isMultiMomentumModeActive,
+                            multiMomentumOrders = multiMomentumOrders,
+                            canModify = canModify,
+                            canStart = canStartMultiMomentum,
+                            onStartMultiMomentum = onStartMultiMomentum,
+                            onStopMultiMomentum = onStopMultiMomentum,
+                            colors = colors,
                         )
                     }
                     TradingMode.FOLLOW_ORDER -> {
@@ -13525,19 +13263,9 @@ fun TradingModeCard(
                             colors = colors
                         )
                     }
-                    TradingMode.MULTI_MOMENTUM -> {
-                        MultiMomentumContent(
-                            isActive = isMultiMomentumModeActive,
-                            multiMomentumOrders = multiMomentumOrders,
-                            canModify = canModify,
-                            onStartMultiMomentum = onStartMultiMomentum,
-                            onStopMultiMomentum = onStopMultiMomentum,
-                            colors = colors
-                        )
-                    }
                 }
             } else {
-                // Placeholder ketika mode belum dipilih
+                // Placeholder when no mode selected
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -13575,7 +13303,7 @@ fun TradingModeCard(
         }
     }
 
-    // ✅ Dialog View dengan callback remove individual
+    // Dialogs
     if (showViewDialog && currentMode == TradingMode.SCHEDULE) {
         ScheduleListDialog(
             scheduledOrders = scheduledOrders,
@@ -13610,33 +13338,6 @@ fun TradingModeCard(
         )
     }
 }
-
-@Composable
-private fun InfoRow(
-    label: String,
-    value: String
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(
-            text = label,
-            fontSize = 12.sp,
-            color = Color(0xFFBAC1CB)
-        )
-        Text(
-            text = value,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium,
-            color = Color.White
-        )
-    }
-}
-
-
-
-// ✅ COMPACT HELPER COMPOSABLES
 
 @Composable
 private fun ErrorStateCompact(

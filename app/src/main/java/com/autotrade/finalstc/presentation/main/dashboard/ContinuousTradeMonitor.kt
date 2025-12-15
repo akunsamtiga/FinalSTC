@@ -50,6 +50,7 @@ class ContinuousTradeMonitor(
 
     data class OrderMonitoringState(
         val scheduledOrderId: String,
+        val orderSource: OrderSource,  // ✅ ADD THIS
         val trend: String,
         val amount: Long,
         val assetRic: String,
@@ -62,6 +63,7 @@ class ContinuousTradeMonitor(
         var apiResultConfirmed: Boolean = false,
         var isCompleted: Boolean = false
     )
+
 
     fun notifyWebSocketUpdate() {
         lastWebSocketUpdateTime = System.currentTimeMillis()
@@ -117,6 +119,7 @@ class ContinuousTradeMonitor(
 
     fun startMonitoringScheduledOrder(
         scheduledOrderId: String,
+        orderSource: OrderSource,  // ✅ ADD THIS
         trend: String,
         amount: Long,
         assetRic: String,
@@ -131,6 +134,7 @@ class ContinuousTradeMonitor(
 
                 val monitoringState = OrderMonitoringState(
                     scheduledOrderId = scheduledOrderId,
+                    orderSource = orderSource,  // ✅ ADD THIS
                     trend = trend,
                     amount = amount,
                     assetRic = assetRic,
@@ -141,12 +145,14 @@ class ContinuousTradeMonitor(
                 )
                 activeOrderMonitoring[scheduledOrderId] = monitoringState
 
-                println("Memulai monitoring order dengan server time:")
-                println("Order ID: $scheduledOrderId")
-                println("Start Time: $startTimeMillis")
+                println("✅ Monitoring started:")
+                println("   Order ID: $scheduledOrderId")
+                println("   Source: $orderSource")  // ✅ ADD THIS
+                println("   Start Time: $startTimeMillis")
             }
         }
     }
+
 
     fun stopMonitoringOrder(orderId: String) {
         scope.launch {
@@ -354,15 +360,21 @@ class ContinuousTradeMonitor(
                 isCompleted = true
             )
 
-            println("Hasil trade terdeteksi (Monitoring Berkelanjutan):")
-            println("Order ID: ${orderState.scheduledOrderId}")
-            println("Trade ID: ${trade.uuid}")
-            println("Hasil: ${if (isWin) "MENANG" else "KALAH"}")
-            println("Jumlah: ${formatAmount(trade.amount)} IDR")
-            println("Deteksi: API Monitoring Berkelanjutan")
+            // ✅ ENHANCED LOGGING WITH SOURCE
+            println("=" .repeat(60))
+            println("📊 TRADE RESULT DETECTED (API)")
+            println("=" .repeat(60))
+            println("   Order ID: ${orderState.scheduledOrderId}")
+            println("   Source: ${orderState.orderSource.name}") // ✅ NEW
+            println("   Trade ID: ${trade.uuid}")
+            println("   Result: ${if (isWin) "WIN ✅" else "LOSE ❌"}")
+            println("   Amount: ${formatAmount(trade.amount)}")
+            println("   Detection: Continuous API Monitoring")
+            println("=" .repeat(60))
 
             val resultDetails = mapOf(
                 "trade_id" to trade.uuid,
+                "order_source" to orderState.orderSource.name, // ✅ CRITICAL FIX
                 "amount" to trade.amount,
                 "trend" to trade.trend,
                 "asset_ric" to trade.asset_ric,
@@ -377,6 +389,8 @@ class ContinuousTradeMonitor(
             onTradeResultDetected(orderState.scheduledOrderId, isWin, resultDetails)
         }
     }
+
+
 
     fun handleWebSocketTradeUpdate(message: JSONObject) {
         if (!isGlobalMonitoringActive) return
@@ -434,6 +448,7 @@ class ContinuousTradeMonitor(
 
                 println("Hasil trade terdeteksi (WebSocket - Prioritas):")
                 println("Order ID: $matchingOrderId")
+                println("Source: ${orderState.orderSource.name}") // ✅ NEW
                 println("Trade ID: $tradeId")
                 println("Hasil: ${if (isWin) "MENANG" else "KALAH"}")
                 println("Jumlah: ${formatAmount(amount)} IDR")
@@ -441,6 +456,7 @@ class ContinuousTradeMonitor(
 
                 val resultDetails = mapOf(
                     "trade_id" to tradeId,
+                    "order_source" to orderState.orderSource.name, // ✅ CRITICAL FIX
                     "amount" to amount,
                     "trend" to trend,
                     "status" to status,

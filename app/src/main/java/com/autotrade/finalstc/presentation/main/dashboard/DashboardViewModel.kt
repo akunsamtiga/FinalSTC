@@ -198,10 +198,19 @@ class DashboardViewModel @Inject constructor(
         val prefs = context.getSharedPreferences("ai_signal_prefs", android.content.Context.MODE_PRIVATE)
         val wasAISignalActive = prefs.getBoolean("is_ai_signal_active", false)
 
+        // ✅ FIX: Check Schedule orders FIRST
+        val hasScheduledOrders = _scheduledOrders.value.any { !it.isExecuted && !it.isSkipped }
+
+        Log.d("DashboardViewModel", "=" .repeat(60))
+        Log.d("DashboardViewModel", "🔄 RESTORING ACTIVE MODES")
+        Log.d("DashboardViewModel", "=" .repeat(60))
+        Log.d("DashboardViewModel", "   AI Signal was active: $wasAISignalActive")
+        Log.d("DashboardViewModel", "   Has scheduled orders: $hasScheduledOrders")
+        Log.d("DashboardViewModel", "=" .repeat(60))
+
+        // ✅ RESTORE AI SIGNAL FIRST (if was active)
         if (wasAISignalActive) {
-            Log.d("DashboardViewModel", "=" .repeat(60))
-            Log.d("DashboardViewModel", "🔄 RESTORING AI SIGNAL MODE FROM PREVIOUS SESSION")
-            Log.d("DashboardViewModel", "=" .repeat(60))
+            Log.d("DashboardViewModel", "📟 Restoring AI Signal Mode...")
 
             val assetToUse = _uiState.value.selectedAsset ?: _assets.value.firstOrNull()
 
@@ -216,7 +225,7 @@ class DashboardViewModel @Inject constructor(
 
                 viewModelScope.launch {
                     try {
-                        // ✅ 1. Ensure WebSocket connected
+                        // Ensure WebSocket connected
                         if (!webSocketManager.isConnectionHealthy()) {
                             Log.d("DashboardViewModel", "WebSocket not healthy, reconnecting...")
                             webSocketManager.forceReconnect()
@@ -228,7 +237,7 @@ class DashboardViewModel @Inject constructor(
                             }
 
                             if (!webSocketManager.isRequiredChannelsReady()) {
-                                Log.e("DashboardViewModel", "❌ Failed to restore WebSocket connection")
+                                Log.e("DashboardViewModel", "❌ Failed to restore WebSocket")
                                 stopAISignalModeInternal()
                                 return@launch
                             }
@@ -236,23 +245,22 @@ class DashboardViewModel @Inject constructor(
 
                         Log.d("DashboardViewModel", "✅ WebSocket ready for restoration")
 
-                        // ✅ 2. Re-enable AI Signal notifications (CRITICAL)
-                        Log.d("DashboardViewModel", "🔔 Re-enabling AI Signal notifications...")
+                        // Re-enable AI Signal notifications
+                        Log.d("DashboardViewModel", "📢 Re-enabling AI Signal notifications...")
                         com.autotrade.finalstc.service.TradingSignalMessagingService.setAISignalModeActive(true)
                         Log.d("DashboardViewModel", "✅ Notifications re-enabled")
 
-                        // ✅ 3. Start telegram monitoring
+                        // Start telegram monitoring
                         Log.d("DashboardViewModel", "📡 Starting Telegram monitoring...")
                         telegramSignalService.startMonitoring()
                         Log.d("DashboardViewModel", "✅ Telegram monitoring started")
 
-                        // ✅ 4. Start AI trade monitor
+                        // Start AI trade monitor
                         Log.d("DashboardViewModel", "👁️ Starting AI trade monitor...")
                         aiSignalTradeMonitor.startMonitoring()
                         Log.d("DashboardViewModel", "✅ AI trade monitor started")
 
-                        // ✅ 5. Re-initialize AISignalOrderManager
-                        Log.d("DashboardViewModel", "🚀 Re-initializing AI Signal Order Manager...")
+                        // Re-initialize AISignalOrderManager
                         val result = aiSignalOrderManager.startAISignalMode(
                             asset = assetToUse,
                             isDemoAccount = _uiState.value.isDemoAccount,
@@ -266,15 +274,7 @@ class DashboardViewModel @Inject constructor(
                                     aiSignalOrderStatus = "🤖 AI Signal Restored & Active",
                                     connectionStatus = "Connected - AI Signal Mode Active"
                                 )
-                                Log.d("DashboardViewModel", "=" .repeat(60))
                                 Log.d("DashboardViewModel", "✅ AI SIGNAL MODE SUCCESSFULLY RESTORED")
-                                Log.d("DashboardViewModel", "=" .repeat(60))
-                                Log.d("DashboardViewModel", "   🔔 Notifications: ACTIVE")
-                                Log.d("DashboardViewModel", "   📡 Telegram: MONITORING")
-                                Log.d("DashboardViewModel", "   👁️ Trade Monitor: ACTIVE")
-                                Log.d("DashboardViewModel", "   🌐 WebSocket: CONNECTED")
-                                Log.d("DashboardViewModel", "   ✅ Bot: READY TO RECEIVE SIGNALS")
-                                Log.d("DashboardViewModel", "=" .repeat(60))
                             },
                             onFailure = { e ->
                                 Log.e("DashboardViewModel", "❌ Failed to restore AI Signal: ${e.message}")
@@ -288,13 +288,66 @@ class DashboardViewModel @Inject constructor(
                     }
                 }
             } else {
-                Log.w("DashboardViewModel", "⚠️ No asset available, clearing AI Signal status")
+                Log.w("DashboardViewModel", "⚠️ No asset available for AI Signal")
                 saveAISignalStatusToPrefs(false)
             }
+        }
+
+        // ✅ THEN RESTORE SCHEDULE (if has orders)
+        if (hasScheduledOrders) {
+            Log.d("DashboardViewModel", "📋 Restoring Schedule Mode...")
+
+            viewModelScope.launch {
+                delay(2000) // Wait for AI Signal restoration
+
+                if (!webSocketManager.isConnectionHealthy()) {
+                    Log.e("DashboardViewModel", "❌ WebSocket not ready for Schedule")
+                    return@launch
+                }
+
+                try {
+                    // Start continuous monitoring if not already active
+                    if (!continuousTradeMonitor.isActive()) {
+                        Log.d("DashboardViewModel", "🚀 Starting ContinuousTradeMonitor...")
+                        continuousTradeMonitor.startMonitoring()
+                    } else {
+                        Log.d("DashboardViewModel", "✅ ContinuousTradeMonitor already active")
+                    }
+
+                    // Start schedule manager
+                    Log.d("DashboardViewModel", "🚀 Starting ScheduleManager...")
+                    scheduleManager.startBot()
+
+                    _uiState.value = _uiState.value.copy(
+                        botState = BotState.RUNNING,
+                        tradingMode = if (_uiState.value.isAISignalModeActive)
+                            TradingMode.AI_SIGNAL
+                        else
+                            TradingMode.SCHEDULE,
+                        botStatus = if (_uiState.value.isAISignalModeActive)
+                            "Schedule + AI Signal Active"
+                        else
+                            "Schedule Active",
+                        connectionStatus = "Connected - Both modes active"
+                    )
+
+                    Log.d("DashboardViewModel", "=" .repeat(60))
+                    Log.d("DashboardViewModel", "✅ BOTH MODES RESTORED SUCCESSFULLY")
+                    Log.d("DashboardViewModel", "=" .repeat(60))
+                    Log.d("DashboardViewModel", "   📋 Schedule: RUNNING")
+                    Log.d("DashboardViewModel", "   🤖 AI Signal: ${if (_uiState.value.isAISignalModeActive) "ACTIVE" else "INACTIVE"}")
+                    Log.d("DashboardViewModel", "   📊 Pending orders: ${_scheduledOrders.value.count { !it.isExecuted }}")
+                    Log.d("DashboardViewModel", "=" .repeat(60))
+
+                } catch (e: Exception) {
+                    Log.e("DashboardViewModel", "❌ Error restoring Schedule: ${e.message}", e)
+                }
+            }
         } else {
-            Log.d("DashboardViewModel", "ℹ️ AI Signal was not active - no restoration needed")
+            Log.d("DashboardViewModel", "ℹ️ No scheduled orders to restore")
         }
     }
+
 
     // ✅ TAMBAHKAN helper method untuk stop internal (tambahkan di DashboardViewModel)
     private fun stopAISignalModeInternal() {
@@ -336,9 +389,39 @@ class DashboardViewModel @Inject constructor(
                 val userId = userSession.userId
                 val email = userSession.email
 
-                Log.d("DashboardViewModel", "Checking whitelist for:")
+                Log.d("DashboardViewModel", "Checking for:")
                 Log.d("DashboardViewModel", "  UserID: $userId")
                 Log.d("DashboardViewModel", "  Email: $email")
+
+                // ✅ FIX: CEK ADMIN DULU SEBELUM CEK WHITELIST
+                val isAdmin = firebaseRepository.checkIsAdmin(email)
+
+                if (isAdmin) {
+                    Log.d("DashboardViewModel", "✅ User is ADMIN - Bypassing whitelist check")
+
+                    // Update last login for admin
+                    try {
+                        // Gunakan email untuk update admin last login jika ada method-nya
+                        // atau buat method baru di FirebaseRepository
+                        Log.d("DashboardViewModel", "✅ Admin verified: $email")
+                    } catch (e: Exception) {
+                        Log.w("DashboardViewModel", "⚠️ Failed to update admin last login: ${e.message}")
+                    }
+
+                    // ✅ ADMIN LANGSUNG VERIFIED
+                    _whitelistCheckState.value = WhitelistCheckState.Verified(
+                        userId = userId,
+                        email = email
+                    )
+
+                    Log.d("DashboardViewModel", "=" .repeat(60))
+                    Log.d("DashboardViewModel", "👑 ADMIN ACCESS GRANTED")
+                    Log.d("DashboardViewModel", "=" .repeat(60))
+                    return@launch
+                }
+
+                // ✅ BUKAN ADMIN - CEK WHITELIST
+                Log.d("DashboardViewModel", "👤 Regular user - Checking whitelist...")
 
                 // Cek koneksi Firestore
                 val isFirestoreConnected = firebaseRepository.testFirestoreConnection()
@@ -366,7 +449,7 @@ class DashboardViewModel @Inject constructor(
                             message = "Akun Anda terdaftar tapi tidak aktif.\n\n" +
                                     "UserID: $userId\n" +
                                     "Email: $email\n\n" +
-                                    "Silahkan hubungi admin untuk bisa akses permanent di aplikasi ini."
+                                    "Silahkan hubungi admin untuk aktivasi."
                         )
                     } else {
                         WhitelistCheckState.Failed(
@@ -382,7 +465,7 @@ class DashboardViewModel @Inject constructor(
                     return@launch
                 }
 
-                // Update last login
+                // Update last login untuk regular user
                 try {
                     firebaseRepository.updateLastLogin(userId)
                     Log.d("DashboardViewModel", "✅ Last login updated")
@@ -1915,25 +1998,51 @@ class DashboardViewModel @Inject constructor(
                     error = null
                 )
 
-                // Stop other modes
-                if (currentState.botState != BotState.STOPPED) stopBot()
-                if (currentState.isFollowModeActive) stopFollowMode()
-                if (currentState.isIndicatorModeActive) stopIndicatorMode()
-                if (currentState.isCTCModeActive) stopCTCMode()
-                if (currentState.isMultiMomentumModeActive) stopMultiMomentumMode()
+                // ✅ ONLY stop conflicting modes (NOT Schedule, NOT Multi-Momentum)
+                if (currentState.isFollowModeActive) {
+                    Log.d("DashboardViewModel", "Stopping Follow Order to start AI Signal")
+                    stopFollowMode()
+                }
+                if (currentState.isIndicatorModeActive) {
+                    Log.d("DashboardViewModel", "Stopping Indicator Order to start AI Signal")
+                    stopIndicatorMode()
+                }
+                if (currentState.isCTCModeActive) {
+                    Log.d("DashboardViewModel", "Stopping CTC Order to start AI Signal")
+                    stopCTCMode()
+                }
+                // ❌ DIHAPUS: stopMultiMomentumMode()
+
+                // ✅ DON'T stop Schedule or Multi-Momentum - they can run together
+                if (currentState.botState == BotState.RUNNING) {
+                    Log.d("DashboardViewModel", "✅ Schedule is running - Will enable dual mode")
+                }
+                if (currentState.isMultiMomentumModeActive) {
+                    Log.d("DashboardViewModel", "✅ Multi-Momentum is running - Will enable dual mode")
+                }
 
                 delay(1000)
 
-                stopLossProfitManager.startNewSession()
+                if (!ensureStableConnection()) {
+                    _uiState.value = currentState.copy(
+                        error = "WebSocket connection became unstable during mode switching. Try force reconnect.",
+                        aiSignalOrderStatus = "AI Signal inactive"
+                    )
+                    return@launch
+                }
 
-                // ✅ CRITICAL: Save FCM token
-                Log.d("DashboardViewModel", "🔔 AI Signal Mode starting - Saving FCM token...")
+                // ✅ Only start new session if NOT already running
+                if (currentState.tradingSession.startTime == 0L ||
+                    currentState.tradingSession.totalTrades == 0) {
+                    stopLossProfitManager.startNewSession()
+                }
+
+                // Save FCM token
+                Log.d("DashboardViewModel", "🔟 AI Signal Mode starting - Saving FCM token...")
                 try {
                     val app = application as? TradingApplication
                     app?.saveFCMTokenManually()
                     Log.d("DashboardViewModel", "✅ FCM token save initiated")
-
-                    // ✅ Wait a bit for token to save
                     delay(2000)
                 } catch (e: Exception) {
                     Log.e("DashboardViewModel", "❌ Error saving FCM token: ${e.message}", e)
@@ -1953,20 +2062,17 @@ class DashboardViewModel @Inject constructor(
                             tradingMode = TradingMode.AI_SIGNAL,
                             aiSignalOrderStatus = "🤖 AI Signal active - Monitoring Telegram...",
                             tradingSession = stopLossProfitManager.getCurrentSession(),
-                            connectionStatus = "Connected - AI Signal active",
+                            connectionStatus = "Connected - AI Signal active" +
+                                    if (currentState.isMultiMomentumModeActive) " + Multi-Momentum" else "",
                             error = null
                         )
 
-                        // ✅ SAVE AI Signal status
                         saveAISignalStatusToPrefs(true)
 
                         Log.d("DashboardViewModel", "=" .repeat(60))
-                        Log.d("DashboardViewModel", "✅ AI SIGNAL MODE STARTED SUCCESSFULLY")
+                        Log.d("DashboardViewModel", "✅ AI SIGNAL MODE STARTED")
                         Log.d("DashboardViewModel", "=" .repeat(60))
-                        Log.d("DashboardViewModel", "   🔔 Notifications: ENABLED")
-                        Log.d("DashboardViewModel", "   📡 Telegram: MONITORING")
-                        Log.d("DashboardViewModel", "   🌐 WebSocket: CONNECTED")
-                        Log.d("DashboardViewModel", "   🔋 Background: GUARANTEED")
+                        Log.d("DashboardViewModel", "   Multi-Momentum Active: ${currentState.isMultiMomentumModeActive}")
                         Log.d("DashboardViewModel", "=" .repeat(60))
                     },
                     onFailure = { exception ->
@@ -2001,14 +2107,13 @@ class DashboardViewModel @Inject constructor(
 
         viewModelScope.launch {
             try {
-                // ✅ 1. CRITICAL: Clear FCM token dari Firestore
+                // Clear FCM token
                 Log.d("DashboardViewModel", "🔕 Clearing FCM token from Firestore...")
                 val userSession = loginRepository.getUserSession()
                 if (userSession != null) {
                     try {
                         val email = userSession.email
                         val userId = userSession.userId
-
                         val isAdmin = firebaseRepository.checkIsAdmin(email)
 
                         if (isAdmin) {
@@ -2023,7 +2128,7 @@ class DashboardViewModel @Inject constructor(
                     }
                 }
 
-                // ✅ 2. Unsubscribe from FCM topic
+                // Unsubscribe from FCM
                 Log.d("DashboardViewModel", "🔕 Unsubscribing from FCM topic...")
                 try {
                     com.google.firebase.messaging.FirebaseMessaging.getInstance()
@@ -2038,24 +2143,44 @@ class DashboardViewModel @Inject constructor(
                     Log.e("DashboardViewModel", "Error unsubscribing: ${e.message}")
                 }
 
-                // ✅ 3. Stop AI Signal Order Manager
+                // Stop AI Signal
                 val result = aiSignalOrderManager.stopAISignalMode()
 
                 result.fold(
                     onSuccess = { message ->
+                        // ✅ Determine tradingMode based on what's still active
+                        val newTradingMode = when {
+                            currentState.isMultiMomentumModeActive -> TradingMode.MULTI_MOMENTUM
+                            currentState.botState == BotState.RUNNING -> TradingMode.SCHEDULE
+                            else -> TradingMode.SCHEDULE
+                        }
+
+                        val newStatus = when {
+                            currentState.isMultiMomentumModeActive -> "Multi-Momentum Active"
+                            currentState.botState == BotState.RUNNING -> "Schedule Active"
+                            else -> "Bot Stopped"
+                        }
+
                         _uiState.value = currentState.copy(
                             isAISignalModeActive = false,
-                            tradingMode = TradingMode.SCHEDULE,
+                            tradingMode = newTradingMode,
                             aiSignalOrderStatus = "AI Signal stopped",
                             activeAISignalOrderId = null,
-                            connectionStatus = "Connected - Mode can be changed",
+                            connectionStatus = "Connected" +
+                                    when {
+                                        currentState.isMultiMomentumModeActive -> " - Multi-Momentum active"
+                                        currentState.botState == BotState.RUNNING -> " - Schedule active"
+                                        else -> ""
+                                    },
+                            botStatus = newStatus,
                             error = null
                         )
 
-                        // ✅ 4. CLEAR AI Signal status from SharedPreferences
                         saveAISignalStatusToPrefs(false)
 
-                        Log.d("DashboardViewModel", "✅ AI Signal mode stopped completely")
+                        Log.d("DashboardViewModel", "✅ AI Signal mode stopped")
+                        Log.d("DashboardViewModel", "   Schedule preserved: ${currentState.botState == BotState.RUNNING}")
+                        Log.d("DashboardViewModel", "   Multi-Momentum preserved: ${currentState.isMultiMomentumModeActive}")
                     },
                     onFailure = { exception ->
                         _uiState.value = currentState.copy(
@@ -2091,12 +2216,13 @@ class DashboardViewModel @Inject constructor(
         println("🚀 EXECUTING AI SIGNAL WITH DEDICATED MONITOR")
         println("=".repeat(60))
         println("   Parent Order ID: $orderId")
+        println("   Source: AI_SIGNAL") // ✅ NEW LOG
         println("   Is Martingale: $isMartingale")
         println("   Step: $martingaleStep")
         println("   Amount: ${currentState.currencySettings.selectedCurrency.formatAmount(amount)}")
         println("   Currency: ${currentState.currencySettings.selectedCurrency.code}")
 
-        // ✅ FIX: Check connection but DON'T block execution
+        // Check connection
         val isConnected = currentState.isWebSocketConnected
         val channelsReady = webSocketManager.isRequiredChannelsReady()
 
@@ -2116,7 +2242,7 @@ class DashboardViewModel @Inject constructor(
             orderId
         }
 
-        // ✅ START DEDICATED MONITORING
+        // ✅ START MONITORING WITH SOURCE INFO
         aiSignalTradeMonitor.startMonitoringOrder(
             parentOrderId = orderId,
             trend = trend,
@@ -2155,7 +2281,6 @@ class DashboardViewModel @Inject constructor(
             println("❌ Trade execution error: ${e.message}")
             e.printStackTrace()
 
-            // Don't fail silently - update UI
             _uiState.value = currentState.copy(
                 aiSignalOrderStatus = "Execution error: ${e.message?.take(50)}"
             )
@@ -2277,65 +2402,35 @@ class DashboardViewModel @Inject constructor(
         amount: Long,
         isMartingaleTrade: Boolean,
         martingaleStep: Int,
-        selectedAsset: Asset // Pass asset langsung agar konsisten
+        selectedAsset: Asset
     ) {
         val currentState = _uiState.value
 
-        // ✅ FIX: Create monitoring order ID ONCE - use this everywhere
         val monitoringOrderId = if (isMartingaleTrade) {
             "${orderId}_martingale_${martingaleStep}"
         } else {
             orderId
         }
 
-        Log.d("DashboardViewModel", "=" .repeat(60))
-        Log.d("DashboardViewModel", "🚀 EXECUTING AI SIGNAL ${if (isMartingaleTrade) "MARTINGALE" else "INITIAL"} ORDER")
-        Log.d("DashboardViewModel", "=" .repeat(60))
-        Log.d("DashboardViewModel", "   Parent Order ID: $orderId")
-        Log.d("DashboardViewModel", "   Monitoring Order ID: $monitoringOrderId")
-        Log.d("DashboardViewModel", "   Trend: $trend")
-        Log.d("DashboardViewModel", "   Amount: ${formatAmount(amount)}") // Pastikan fungsi formatAmount bisa diakses
-        Log.d("DashboardViewModel", "   Is Martingale: $isMartingaleTrade")
-        if (isMartingaleTrade) {
-            Log.d("DashboardViewModel", "   Martingale Step: $martingaleStep")
-        }
-        Log.d("DashboardViewModel", "=" .repeat(60))
+        Log.d("AISignalOrderManager", "Executing AI Signal trade:")
+        Log.d("AISignalOrderManager", "  Parent Order ID: $orderId")
+        Log.d("AISignalOrderManager", "  Monitoring ID: $monitoringOrderId")
+        Log.d("AISignalOrderManager", "  Is Martingale: $isMartingaleTrade")
+        Log.d("AISignalOrderManager", "  Step: $martingaleStep")
 
-        // Update UI State
-        _uiState.value = currentState.copy(
-            activeAISignalOrderId = orderId,
-            aiSignalOrderStatus = if (isMartingaleTrade) {
-                "🔥 AI Signal Martingale Step $martingaleStep - ${formatAmount(amount)}"
-            } else {
-                "🚀 Executing: $trend - ${formatAmount(amount)}"
-            }
-        )
-
-        val currentServerTime = serverTimeService.getCurrentServerTimeMillis()
-
-        // ✅ STOP MONITORING PREVIOUS MARTINGALE STEPS
-        if (isMartingaleTrade && martingaleStep > 1) {
-            val prevMartingaleOrderId = "${orderId}_martingale_${martingaleStep - 1}"
-            continuousTradeMonitor.stopMonitoringOrder(prevMartingaleOrderId)
-            Log.d("DashboardViewModel", "   🛑 Stopped monitoring previous step: $prevMartingaleOrderId")
-        }
-
-        // ✅ START MONITORING WITH FULL MARTINGALE ORDER ID
-        continuousTradeMonitor.startMonitoringScheduledOrder(
-            scheduledOrderId = monitoringOrderId,
+        // ✅ ONLY use AISignalTradeMonitor (NOT ContinuousTradeMonitor)
+        aiSignalTradeMonitor.startMonitoringOrder(
+            parentOrderId = orderId,
             trend = trend,
             amount = amount,
             assetRic = selectedAsset.ric,
             isDemoAccount = currentState.isDemoAccount,
-            martingaleSettings = currentState.martingaleSettings,
-            startTimeMillis = currentServerTime
+            isMartingale = isMartingaleTrade,
+            martingaleStep = martingaleStep
         )
 
-        Log.d("DashboardViewModel", "   ✅ Monitoring started: $monitoringOrderId")
-
-        // ✅ EXECUTE WITH SAME MONITORING ID
+        // Execute trade
         if (isMartingaleTrade) {
-            Log.d("DashboardViewModel", "   📤 Executing via executeMartingaleTrade")
             tradeManager.executeMartingaleTrade(
                 assetRic = selectedAsset.ric,
                 trend = trend,
@@ -2345,20 +2440,18 @@ class DashboardViewModel @Inject constructor(
                 martingaleStep = martingaleStep
             )
         } else {
-            Log.d("DashboardViewModel", "   📤 Executing via executeScheduledTrade")
             tradeManager.executeScheduledTrade(
                 assetRic = selectedAsset.ric,
                 trend = trend,
                 amount = amount,
                 isDemoAccount = currentState.isDemoAccount,
                 scheduledOrderId = monitoringOrderId,
-                startTimeMillis = currentServerTime
+                startTimeMillis = serverTimeService.getCurrentServerTimeMillis()
             )
         }
-
-        Log.d("DashboardViewModel", "   ✅ AI Signal trade execution completed")
-        Log.d("DashboardViewModel", "=" .repeat(60))
     }
+
+
 
     private fun handleTradingEventForTodayProfit(message: org.json.JSONObject) {
         try {
@@ -2369,9 +2462,11 @@ class DashboardViewModel @Inject constructor(
                 val status = payload?.optString("status", "") ?: ""
 
                 if (status.lowercase() in listOf("won", "lost", "win", "lose", "loss", "stand", "draw")) {
-                    // ✅ REMOVED: Direct AI Signal handling
-                    // Now handled by ContinuousTradeMonitor -> callback -> handleInstantTradeResult()
+                    // ✅ AI Signal handled by AISignalTradeMonitor
+                    // ✅ Schedule handled by ContinuousTradeMonitor
+                    // Both will call their respective callbacks
 
+                    // Multi-momentum, CTC, Follow, Indicator still use their own handlers
                     if (_uiState.value.isMultiMomentumModeActive) {
                         multiMomentumOrderManager.handleWebSocketTradeUpdate(message)
                     }
@@ -3642,7 +3737,6 @@ class DashboardViewModel @Inject constructor(
     fun startBot() {
         val currentState = _uiState.value
 
-        // ✅ 1. CHECK CONNECTION FIRST
         if (!ensureStableConnection()) {
             _uiState.value = currentState.copy(
                 error = "WebSocket connection not stable. Please wait or force reconnect."
@@ -3650,7 +3744,7 @@ class DashboardViewModel @Inject constructor(
             return
         }
 
-        // ✅ 2. CHECK FOR ACTIVE MODES
+        // ✅ Check conflicting modes (NOT AI Signal and NOT Multi-Momentum)
         if (currentState.isFollowModeActive) {
             _uiState.value = currentState.copy(
                 error = "Follow Order mode is active. Stop Follow Order first."
@@ -3669,20 +3763,9 @@ class DashboardViewModel @Inject constructor(
             )
             return
         }
-        if (currentState.isMultiMomentumModeActive) {
-            _uiState.value = currentState.copy(
-                error = "Multi-Momentum mode is active. Stop it first."
-            )
-            return
-        }
-        if (currentState.isAISignalModeActive) {
-            _uiState.value = currentState.copy(
-                error = "AI Signal mode is active. Stop it first."
-            )
-            return
-        }
+        // ✅ AI Signal is ALLOWED to run with Schedule
+        // ✅ Multi-Momentum is ALLOWED to run with Schedule
 
-        // ✅ 3. VALIDATE CAN START
         if (!currentState.canStartBot()) {
             _uiState.value = currentState.copy(
                 error = "Cannot start bot: ${getBotStartError(currentState)}"
@@ -3690,7 +3773,6 @@ class DashboardViewModel @Inject constructor(
             return
         }
 
-        // ✅ 4. CHECK SCHEDULED ORDERS
         val scheduledOrders = _scheduledOrders.value
         if (scheduledOrders.isEmpty()) {
             _uiState.value = currentState.copy(
@@ -3699,15 +3781,12 @@ class DashboardViewModel @Inject constructor(
             return
         }
 
-        // ✅ 5. ENSURE MANAGERS ARE CLEAN BEFORE START
+        // ✅ Don't cleanup if managers are shared with AI Signal or Multi-Momentum
         if (martingaleManager.isActive()) {
-            println("⚠️ WARNING: MartingaleManager still active before start - cleaning up...")
-            martingaleManager.cleanup()
+            println("⚠️ MartingaleManager active (possibly from AI Signal or Multi-Momentum) - NOT cleaning up")
         }
-
         if (continuousTradeMonitor.isActive()) {
-            println("⚠️ WARNING: ContinuousTradeMonitor still active before start - stopping...")
-            continuousTradeMonitor.stopMonitoring()
+            println("⚠️ ContinuousTradeMonitor active (possibly from AI Signal or Multi-Momentum) - NOT stopping")
         }
 
         viewModelScope.launch {
@@ -3717,7 +3796,6 @@ class DashboardViewModel @Inject constructor(
                     error = null
                 )
 
-                // ✅ 6. DOUBLE-CHECK CONNECTION AFTER DELAY
                 delay(500)
                 if (!ensureStableConnection()) {
                     _uiState.value = currentState.copy(
@@ -3727,10 +3805,12 @@ class DashboardViewModel @Inject constructor(
                     return@launch
                 }
 
-                // ✅ 7. START NEW SESSION
-                stopLossProfitManager.startNewSession()
+                // ✅ Only start new session if NOT already running
+                if (currentState.tradingSession.startTime == 0L ||
+                    currentState.tradingSession.totalTrades == 0) {
+                    stopLossProfitManager.startNewSession()
+                }
 
-                // ✅ 8. GET NEXT ORDER INFO
                 val currentTime = System.currentTimeMillis()
                 val nextOrder = scheduledOrders.filter { !it.isExecuted && !it.isSkipped }
                     .minByOrNull { it.timeInMillis }
@@ -3742,25 +3822,29 @@ class DashboardViewModel @Inject constructor(
                     "No pending orders"
                 }
 
-                // ✅ 9. UPDATE STATE TO RUNNING
                 _uiState.value = currentState.copy(
                     botState = BotState.RUNNING,
-                    tradingMode = TradingMode.SCHEDULE,
-                    botStatus = "Bot Started ($timingInfo)",
+                    tradingMode = TradingMode.SCHEDULE,  // ✅ SELALU SCHEDULE
+                    botStatus = "Schedule Started ($timingInfo)",
                     tradingSession = stopLossProfitManager.getCurrentSession(),
                     connectionStatus = "Connected - Schedule mode active",
                     error = null
                 )
 
-                // ✅ 10. START MANAGERS
                 println("🚀 Starting ScheduleManager...")
                 scheduleManager.startBot()
 
-                println("🚀 Starting ContinuousTradeMonitor...")
-                continuousTradeMonitor.startMonitoring()
+                // ✅ Only start monitor if not already active
+                if (!continuousTradeMonitor.isActive()) {
+                    println("🚀 Starting ContinuousTradeMonitor...")
+                    continuousTradeMonitor.startMonitoring()
+                } else {
+                    println("✅ ContinuousTradeMonitor already active (shared with other modes)")
+                }
 
-                println("✅ Bot started successfully with ${scheduledOrders.size} orders")
-                println("   Next execution: ${nextOrder?.time ?: "None"}")
+                println("✅ Schedule started with ${scheduledOrders.size} orders")
+                println("   AI Signal Active: ${currentState.isAISignalModeActive}")
+                println("   Multi-Momentum Active: ${currentState.isMultiMomentumModeActive}")
 
             } catch (e: Exception) {
                 Log.e("DashboardViewModel", "Error starting bot: ${e.message}", e)
@@ -3772,6 +3856,7 @@ class DashboardViewModel @Inject constructor(
             }
         }
     }
+
 
     fun pauseBot() {
         val currentState = _uiState.value
@@ -3875,46 +3960,68 @@ class DashboardViewModel @Inject constructor(
         val selectedAsset = currentState.selectedAsset ?: _assets.value.firstOrNull()
         val originalOrders = _scheduledOrders.value.toList()
 
-        println("🛑 Menghentikan bot dengan cleanup lengkap...")
-        println("   - Scheduled orders: ${originalOrders.size}")
-        println("   - Active martingale: ${martingaleManager.isActive()}")
-        println("   - Continuous monitoring: ${continuousTradeMonitor.isActive()}")
+        println("🛑 Stopping Schedule bot...")
+        println("   AI Signal Active: ${currentState.isAISignalModeActive}")
+        println("   Multi-Momentum Active: ${currentState.isMultiMomentumModeActive}")
 
         try {
-            // ✅ 1. STOP ALL MANAGERS COMPLETELY
-            println("🔄 Stopping ScheduleManager...")
+            // ✅ 1. Stop ScheduleManager
+            println("🔴 Stopping ScheduleManager...")
             scheduleManager.stopBot()
 
-            println("🔄 Stopping MartingaleManager with FULL cleanup...")
-            martingaleManager.cleanup() // ⚠️ USE cleanup() instead of stopMartingale()
+            // ✅ 2. ONLY stop martingale if NOT from AI Signal or Multi-Momentum
+            if (!currentState.isAISignalModeActive && !currentState.isMultiMomentumModeActive) {
+                println("🔴 Stopping MartingaleManager (no other modes active)...")
+                martingaleManager.cleanup()
+            } else {
+                println("✅ Keeping MartingaleManager active (AI Signal or Multi-Momentum running)")
+            }
 
-            println("🔄 Stopping ContinuousTradeMonitor...")
-            continuousTradeMonitor.stopMonitoring()
+            // ✅ 3. ONLY stop monitor if NOT shared with AI Signal or Multi-Momentum
+            if (!currentState.isAISignalModeActive && !currentState.isMultiMomentumModeActive) {
+                println("🔴 Stopping ContinuousTradeMonitor (no other modes active)...")
+                continuousTradeMonitor.stopMonitoring()
+            } else {
+                println("✅ Keeping ContinuousTradeMonitor active (shared with other modes)")
+            }
 
-            println("✅ Semua services berhasil dihentikan")
+            println("✅ Schedule services stopped")
 
         } catch (e: Exception) {
-            println("❌ Error saat menghentikan services: ${e.message}")
+            println("❌ Error stopping schedule services: ${e.message}")
             e.printStackTrace()
         }
 
-        // ✅ 2. CLEAR UI STATE COMPLETELY
+        // ✅ 4. Update UI State
         _uiState.value = currentState.copy(
             botState = BotState.STOPPED,
-            tradingMode = TradingMode.SCHEDULE,
-            botStatus = "Bot Dihentikan - Ready untuk restart",
+            tradingMode = when {
+                currentState.isAISignalModeActive -> TradingMode.AI_SIGNAL  // Keep AI Signal
+                currentState.isMultiMomentumModeActive -> TradingMode.MULTI_MOMENTUM  // Keep Momentum
+                else -> TradingMode.SCHEDULE
+            },
+            botStatus = "Schedule Stopped" +
+                    when {
+                        currentState.isAISignalModeActive -> " - AI Signal Still Active"
+                        currentState.isMultiMomentumModeActive -> " - Multi-Momentum Still Active"
+                        else -> ""
+                    },
             activeOrderId = null,
             activeMartingaleStep = 0,
             selectedAsset = selectedAsset,
             error = null,
-            lastTradeResult = null // ⚠️ TAMBAHAN: Clear last trade result
+            lastTradeResult = null,
+            connectionStatus = "Connected" +
+                    when {
+                        currentState.isAISignalModeActive -> " - AI Signal active"
+                        currentState.isMultiMomentumModeActive -> " - Multi-Momentum active"
+                        else -> ""
+                    }
         )
 
-        // ✅ 3. OPTIONAL: Keep scheduled orders for restart capability
-        // Orders tetap di-keep agar bisa di-restart
-        println("✅ Bot stopped completely - Ready untuk restart dengan ${originalOrders.size} orders")
-        println("   Martingale state: ${martingaleManager.isActive()}")
-        println("   Monitoring state: ${continuousTradeMonitor.isActive()}")
+        println("✅ Schedule bot stopped - Other modes preserved:")
+        println("   AI Signal: ${currentState.isAISignalModeActive}")
+        println("   Multi-Momentum: ${currentState.isMultiMomentumModeActive}")
     }
 
     private fun executeScheduledTrade(trend: String, orderId: String, martingaleStep: Int = 0) {
@@ -3941,10 +4048,8 @@ class DashboardViewModel @Inject constructor(
             return
         }
 
-        // ✅ GET CURRENT CURRENCY
         val currentCurrency = currentState.currencySettings.selectedCurrency
 
-        // ✅ CALCULATE AMOUNT BERDASARKAN MARTINGALE STEP
         val amount = if (martingaleStep > 0) {
             try {
                 currentState.martingaleSettings.getMartingaleAmountForStep(martingaleStep, currentCurrency)
@@ -3958,11 +4063,11 @@ class DashboardViewModel @Inject constructor(
 
         println("📊 EXECUTING SCHEDULED ORDER:")
         println("   Order ID: $orderId")
+        println("   Source: SCHEDULE") // ✅ NEW LOG
         println("   Trend: $trend")
         println("   Martingale Step: $martingaleStep")
         println("   Amount: ${currentCurrency.formatAmount(amount)}")
         println("   Currency: ${currentCurrency.code}")
-        println("   Is Always Signal: ${currentState.martingaleSettings.isAlwaysSignal}")
 
         _uiState.value = currentState.copy(
             activeOrderId = orderId,
@@ -3982,22 +4087,22 @@ class DashboardViewModel @Inject constructor(
             return
         }
 
-        // ✅ START MONITORING DENGAN AMOUNT YANG BENAR
+        // ✅ FIX: ADD orderSource PARAMETER
         continuousTradeMonitor.startMonitoringScheduledOrder(
             scheduledOrderId = orderId,
+            orderSource = OrderSource.SCHEDULE,  // ✅ This line MUST exist
             trend = trend,
-            amount = amount, // ✅ GUNAKAN CALCULATED AMOUNT
+            amount = amount,
             assetRic = selectedAsset.ric,
             isDemoAccount = currentState.isDemoAccount,
             martingaleSettings = currentState.martingaleSettings,
             startTimeMillis = currentServerTime
         )
 
-        // ✅ EXECUTE DENGAN AMOUNT YANG BENAR
         tradeManager.executeScheduledTrade(
             assetRic = selectedAsset.ric,
             trend = trend,
-            amount = amount, // ✅ GUNAKAN CALCULATED AMOUNT
+            amount = amount,
             isDemoAccount = currentState.isDemoAccount,
             scheduledOrderId = orderId,
             startTimeMillis = currentServerTime
@@ -4008,7 +4113,7 @@ class DashboardViewModel @Inject constructor(
         trend: String,
         amount: Long,
         scheduledOrderId: String,
-        currency: String  // ✅ REMOVE DEFAULT, ALWAYS REQUIRE EXPLICIT CURRENCY
+        currency: String
     ) {
         val currentState = _uiState.value
 
@@ -4084,16 +4189,37 @@ class DashboardViewModel @Inject constructor(
     ) {
         val currentState = _uiState.value
 
-        when {
-            currentState.isAISignalModeActive -> {
-                println("=" .repeat(60))
-                println("🎯 AI SIGNAL TRADE RESULT (via ContinuousTradeMonitor)")
-                println("=" .repeat(60))
-                println("   Monitoring Order ID: $scheduledOrderId")
-                println("   Result: ${if (isWin) "WIN ✅" else "LOSE ❌"}")
-                println("   Detection: ContinuousTradeMonitor (API + WebSocket)")
+        // ✅ CRITICAL: Determine order source from details
+        val orderSource = details["order_source"] as? String
 
-                // ✅ EXTRACT PARENT ORDER ID & MARTINGALE INFO
+        Log.d("DashboardViewModel", "=" .repeat(60))
+        Log.d("DashboardViewModel", "📊 TRADE RESULT RECEIVED")
+        Log.d("DashboardViewModel", "=" .repeat(60))
+        Log.d("DashboardViewModel", "  Order ID: $scheduledOrderId")
+        Log.d("DashboardViewModel", "  Source: $orderSource")
+        Log.d("DashboardViewModel", "  Result: ${if (isWin) "WIN ✅" else "LOSE ❌"}")
+        Log.d("DashboardViewModel", "  Active Modes:")
+        Log.d("DashboardViewModel", "    - Schedule: ${currentState.botState == BotState.RUNNING}")
+        Log.d("DashboardViewModel", "    - AI Signal: ${currentState.isAISignalModeActive}")
+        Log.d("DashboardViewModel", "    - Multi-Momentum: ${currentState.isMultiMomentumModeActive}")
+        Log.d("DashboardViewModel", "    - Follow Order: ${currentState.isFollowModeActive}")
+        Log.d("DashboardViewModel", "    - Indicator: ${currentState.isIndicatorModeActive}")
+        Log.d("DashboardViewModel", "    - CTC: ${currentState.isCTCModeActive}")
+        Log.d("DashboardViewModel", "=" .repeat(60))
+
+        // ✅ ROUTING BASED ON ORDER SOURCE (PRIORITY ORDER)
+        when (orderSource) {
+            // ========================================
+            // 🔵 Route 1: AI SIGNAL
+            // ========================================
+            "AI_SIGNAL" -> {
+                if (!currentState.isAISignalModeActive) {
+                    Log.w("DashboardViewModel", "⚠️ AI Signal result but mode not active - ignoring")
+                    return
+                }
+
+                Log.d("DashboardViewModel", "→ Routing to AI Signal handler")
+
                 val parentOrderId: String
                 val isMartingale: Boolean
                 val martingaleStep: Int
@@ -4102,21 +4228,13 @@ class DashboardViewModel @Inject constructor(
                     parentOrderId = scheduledOrderId.substringBefore("_martingale_")
                     isMartingale = true
                     martingaleStep = scheduledOrderId.substringAfterLast("_").toIntOrNull() ?: 0
-
-                    println("   📋 This is a MARTINGALE order")
-                    println("   📋 Parent Order ID: $parentOrderId")
-                    println("   📋 Martingale Step: $martingaleStep")
-                    println("   📋 Full Monitoring ID: $scheduledOrderId")
                 } else {
                     parentOrderId = scheduledOrderId
                     isMartingale = false
                     martingaleStep = 0
-
-                    println("   📋 This is an INITIAL order")
-                    println("   📋 Order ID: $scheduledOrderId")
                 }
 
-                // ✅ CREATE TRADE RESULT FOR TOAST
+                // Create TradeResult for toast
                 val tradeResult = TradeResult(
                     success = isWin,
                     message = if (isWin) {
@@ -4129,10 +4247,7 @@ class DashboardViewModel @Inject constructor(
                     orderId = parentOrderId,
                     isMartingaleAttempt = isMartingale,
                     martingaleStep = martingaleStep,
-                    details = details + mapOf(
-                        "amount" to (details["amount"] ?: 0L),
-                        "trend" to (details["trend"] ?: "unknown")
-                    ),
+                    details = details,
                     executionType = when {
                         isMartingale && isWin -> "MARTINGALE_WIN"
                         isMartingale && !isWin -> "MARTINGALE_MAX_REACHED"
@@ -4140,24 +4255,12 @@ class DashboardViewModel @Inject constructor(
                     }
                 )
 
-                println("   📤 Created TradeResult for toast:")
-                println("      ExecutionType: ${tradeResult.executionType}")
-                println("      Message: ${tradeResult.message}")
-
-                // ✅ SET LAST TRADE RESULT TO TRIGGER TOAST
                 _uiState.value = currentState.copy(
                     lastTradeResult = tradeResult,
-                    activeAISignalOrderId = null,
-                    aiSignalOrderStatus = if (isWin)
-                        "✅ AI Signal WIN - Waiting for next signal"
-                    else
-                        "❌ AI Signal LOSE - Processing..."
+                    activeAISignalOrderId = null
                 )
 
-                println("✅ lastTradeResult SET - Toast should trigger now")
-                println("=" .repeat(60))
-
-                // ✅ FORWARD TO AI SIGNAL ORDER MANAGER
+                // Forward to AI Signal handler
                 aiSignalOrderManager.handleAISignalTradeResultFromMonitor(
                     parentOrderId = parentOrderId,
                     isWin = isWin,
@@ -4165,84 +4268,250 @@ class DashboardViewModel @Inject constructor(
                     martingaleStep = martingaleStep,
                     details = details
                 )
+
+                Log.d("DashboardViewModel", "✅ AI Signal result processed")
             }
 
-            currentState.isIndicatorModeActive -> {
-                indicatorOrderManager.handleIndicatorTradeResult(scheduledOrderId, isWin, details)
+            // ========================================
+            // 📅 Route 2: SCHEDULE
+            // ========================================
+            "SCHEDULE" -> {
+                if (currentState.botState != BotState.RUNNING) {
+                    Log.w("DashboardViewModel", "⚠️ Schedule result but bot not running - ignoring")
+                    return
+                }
 
-                val result = if (isWin) "WIN" else "LOSE"
-                handleTradeResultForLocalStats(
-                    tradeId = "indicator_${scheduledOrderId}_${System.currentTimeMillis()}",
-                    orderId = scheduledOrderId,
-                    result = result,
-                    isMartingaleAttempt = indicatorOrderManager.isMartingaleActive(),
-                    martingaleStep = indicatorOrderManager.getCurrentMartingaleStep(),
-                    maxMartingaleSteps = currentState.martingaleSettings.maxSteps
-                )
-                return
+                Log.d("DashboardViewModel", "→ Routing to Schedule handler")
+                handleScheduleResult(scheduledOrderId, isWin, details)
+                Log.d("DashboardViewModel", "✅ Schedule result processed")
             }
 
-            currentState.isFollowModeActive -> {
-                followOrderManager.handleFollowTradeResult(scheduledOrderId, isWin, details)
+            // ========================================
+            // 🌊 Route 3: MULTI-MOMENTUM
+            // ========================================
+            "MULTI_MOMENTUM" -> {
+                if (!currentState.isMultiMomentumModeActive) {
+                    Log.w("DashboardViewModel", "⚠️ Multi-Momentum result but mode not active - ignoring")
+                    return
+                }
 
-                val result = if (isWin) "WIN" else "LOSE"
-                handleTradeResultForLocalStats(
-                    tradeId = "follow_${scheduledOrderId}_${System.currentTimeMillis()}",
+                Log.d("DashboardViewModel", "→ Routing to Multi-Momentum handler")
+
+                // Create TradeResult for toast
+                val tradeResult = TradeResult(
+                    success = isWin,
+                    message = if (isWin) {
+                        "Multi-Momentum trade won!"
+                    } else {
+                        "Multi-Momentum trade lost"
+                    },
                     orderId = scheduledOrderId,
-                    result = result,
-                    isMartingaleAttempt = followOrderManager.isMartingaleActive(),
-                    martingaleStep = followOrderManager.getCurrentMartingaleStep(),
-                    maxMartingaleSteps = currentState.martingaleSettings.maxSteps
-                )
-                return
-            }
-
-            currentState.isCTCModeActive -> {
-                ctcOrderManager.handleCTCTradeResult(scheduledOrderId, isWin, details)
-
-                val result = if (isWin) "WIN" else "LOSE"
-                handleTradeResultForLocalStats(
-                    tradeId = "ctc_${scheduledOrderId}_${System.currentTimeMillis()}",
-                    orderId = scheduledOrderId,
-                    result = result,
-                    isMartingaleAttempt = ctcOrderManager.isMartingaleActive(),
-                    martingaleStep = ctcOrderManager.getCurrentMartingaleStep(),
-                    maxMartingaleSteps = currentState.martingaleSettings.maxSteps
-                )
-                return
-            }
-
-            currentState.isMultiMomentumModeActive -> {
-                multiMomentumOrderManager.handleMultiMomentumTradeResult(scheduledOrderId, isWin, details)
-
-                val result = if (isWin) "WIN" else "LOSE"
-                handleTradeResultForLocalStats(
-                    tradeId = "multi_momentum_${scheduledOrderId}_${System.currentTimeMillis()}",
-                    orderId = scheduledOrderId,
-                    result = result,
                     isMartingaleAttempt = false,
                     martingaleStep = 0,
-                    maxMartingaleSteps = currentState.martingaleSettings.maxSteps
+                    details = details,
+                    executionType = "TRADE_CLOSED"
                 )
-                return
+
+                _uiState.value = currentState.copy(
+                    lastTradeResult = tradeResult,
+                    activeMultiMomentumOrderId = null
+                )
+
+                multiMomentumOrderManager.handleMultiMomentumTradeResult(scheduledOrderId, isWin, details)
+                Log.d("DashboardViewModel", "✅ Multi-Momentum result processed")
+            }
+
+            // ========================================
+            // 🎯 Route 4: INDICATOR ORDER
+            // ========================================
+            "INDICATOR_ORDER" -> {
+                if (!currentState.isIndicatorModeActive) {
+                    Log.w("DashboardViewModel", "⚠️ Indicator result but mode not active - ignoring")
+                    return
+                }
+
+                Log.d("DashboardViewModel", "→ Routing to Indicator handler")
+                indicatorOrderManager.handleIndicatorTradeResult(scheduledOrderId, isWin, details)
+                Log.d("DashboardViewModel", "✅ Indicator result processed")
+            }
+
+            // ========================================
+            // 📈 Route 5: FOLLOW ORDER
+            // ========================================
+            "FOLLOW_ORDER" -> {
+                if (!currentState.isFollowModeActive) {
+                    Log.w("DashboardViewModel", "⚠️ Follow Order result but mode not active - ignoring")
+                    return
+                }
+
+                Log.d("DashboardViewModel", "→ Routing to Follow Order handler")
+                followOrderManager.handleFollowTradeResult(scheduledOrderId, isWin, details)
+                Log.d("DashboardViewModel", "✅ Follow Order result processed")
+            }
+
+            // ========================================
+            // 🔄 Route 6: CTC ORDER
+            // ========================================
+            "CTC_ORDER" -> {
+                if (!currentState.isCTCModeActive) {
+                    Log.w("DashboardViewModel", "⚠️ CTC Order result but mode not active - ignoring")
+                    return
+                }
+
+                Log.d("DashboardViewModel", "→ Routing to CTC handler")
+                ctcOrderManager.handleCTCTradeResult(scheduledOrderId, isWin, details)
+                Log.d("DashboardViewModel", "✅ CTC result processed")
+            }
+
+            // ========================================
+            // ⚠️ FALLBACK: Unknown or Missing Source
+            // ========================================
+            null -> {
+                Log.w("DashboardViewModel", "⚠️ Order source is NULL - Attempting fallback routing")
+
+                // Fallback: Route berdasarkan mode yang aktif (priority order)
+                when {
+                    currentState.isAISignalModeActive -> {
+                        Log.d("DashboardViewModel", "→ Fallback: Routing to AI Signal (mode active)")
+                        // Reprocess dengan source AI_SIGNAL
+                        handleInstantTradeResult(
+                            scheduledOrderId,
+                            isWin,
+                            details + ("order_source" to "AI_SIGNAL")
+                        )
+                    }
+
+                    currentState.botState == BotState.RUNNING -> {
+                        Log.d("DashboardViewModel", "→ Fallback: Routing to Schedule (bot running)")
+                        handleScheduleResult(scheduledOrderId, isWin, details)
+                    }
+
+                    currentState.isMultiMomentumModeActive -> {
+                        Log.d("DashboardViewModel", "→ Fallback: Routing to Multi-Momentum (mode active)")
+                        multiMomentumOrderManager.handleMultiMomentumTradeResult(scheduledOrderId, isWin, details)
+                    }
+
+                    currentState.isIndicatorModeActive -> {
+                        Log.d("DashboardViewModel", "→ Fallback: Routing to Indicator (mode active)")
+                        indicatorOrderManager.handleIndicatorTradeResult(scheduledOrderId, isWin, details)
+                    }
+
+                    currentState.isFollowModeActive -> {
+                        Log.d("DashboardViewModel", "→ Fallback: Routing to Follow Order (mode active)")
+                        followOrderManager.handleFollowTradeResult(scheduledOrderId, isWin, details)
+                    }
+
+                    currentState.isCTCModeActive -> {
+                        Log.d("DashboardViewModel", "→ Fallback: Routing to CTC (mode active)")
+                        ctcOrderManager.handleCTCTradeResult(scheduledOrderId, isWin, details)
+                    }
+
+                    else -> {
+                        Log.e("DashboardViewModel", "❌ No active mode found - Cannot route trade result")
+                    }
+                }
             }
 
             else -> {
-                // ===== SCHEDULE MODE HANDLING =====
-                val isAlwaysSignalMode = scheduleManager.isAlwaysSignalMode(currentState.martingaleSettings)
+                Log.e("DashboardViewModel", "❌ Unknown order source: '$orderSource'")
+                Log.e("DashboardViewModel", "   Order ID: $scheduledOrderId")
+                Log.e("DashboardViewModel", "   Details: $details")
+            }
+        }
 
-                if (isAlwaysSignalMode) {
-                    scheduleManager.handleAlwaysSignalOrderResult(
-                        scheduledOrderId,
-                        isWin,
-                        currentState.martingaleSettings
-                    )
+        Log.d("DashboardViewModel", "=" .repeat(60))
+    }
 
-                    scheduleManager.completeOrder(scheduledOrderId, isWin)
+    fun clearLastTradeResult() {
+        _uiState.value = _uiState.value.copy(lastTradeResult = null)
+        println("🧹 lastTradeResult cleared")
+    }
+
+    private fun handleScheduleResult(
+        scheduledOrderId: String,
+        isWin: Boolean,
+        details: Map<String, Any>
+    ) {
+        val currentState = _uiState.value
+        val isAlwaysSignalMode = scheduleManager.isAlwaysSignalMode(currentState.martingaleSettings)
+
+        println("📊 SCHEDULE MODE RESULT:")
+        println("   Order ID: $scheduledOrderId")
+        println("   Result: ${if (isWin) "WIN ✅" else "LOSE ❌"}")
+        println("   Always Signal: $isAlwaysSignalMode")
+
+        if (isAlwaysSignalMode) {
+            // ===== ALWAYS SIGNAL MODE =====
+            scheduleManager.handleAlwaysSignalOrderResult(
+                scheduledOrderId,
+                isWin,
+                currentState.martingaleSettings
+            )
+
+            scheduleManager.completeOrder(scheduledOrderId, isWin)
+
+            val updatedOrders = _scheduledOrders.value.map { order ->
+                if (order.id == scheduledOrderId) {
+                    order.copy(isExecuted = true, result = if (isWin) "WIN" else "LOSE")
+                } else order
+            }
+            _scheduledOrders.value = updatedOrders
+
+            _uiState.value = currentState.copy(
+                activeOrderId = null,
+                activeMartingaleStep = 0,
+                botStatus = if (isWin) "Always Signal WIN - Reset" else "Always Signal LOSE - Continue on next signal"
+            )
+
+            handleTradeResultForLocalStats(
+                tradeId = "schedule_always_signal_${scheduledOrderId}_${System.currentTimeMillis()}",
+                orderId = scheduledOrderId,
+                result = if (isWin) "WIN" else "LOSE",
+                isMartingaleAttempt = false,
+                martingaleStep = 0,
+                maxMartingaleSteps = currentState.martingaleSettings.maxSteps
+            )
+
+        } else {
+            // ===== STANDARD MARTINGALE MODE =====
+            if (isWin) {
+                scheduleManager.completeOrder(scheduledOrderId, true)
+
+                val updatedOrders = _scheduledOrders.value.map { order ->
+                    if (order.id == scheduledOrderId) {
+                        order.copy(isExecuted = true, result = "WIN")
+                    } else order
+                }
+                _scheduledOrders.value = updatedOrders
+
+                _uiState.value = currentState.copy(
+                    activeOrderId = null,
+                    activeMartingaleStep = 0,
+                    botStatus = "Order MENANG"
+                )
+
+                handleTradeResultForLocalStats(
+                    tradeId = "schedule_${scheduledOrderId}_${System.currentTimeMillis()}",
+                    orderId = scheduledOrderId,
+                    result = "WIN",
+                    isMartingaleAttempt = martingaleManager.isActive(),
+                    martingaleStep = if (martingaleManager.isActive()) martingaleManager.getCurrentStep() else 0,
+                    maxMartingaleSteps = currentState.martingaleSettings.maxSteps
+                )
+
+            } else {
+                // LOSE - Check if should start martingale
+                if (currentState.martingaleSettings.isEnabled) {
+                    startInstantMartingaleForLostOrder(scheduledOrderId, "Trade kalah - martingale instan")
+                    println("📊 Schedule: Initial trade LOST - Starting martingale (NOT counted as LOSS yet)")
+
+                } else {
+                    // Direct LOSE (martingale disabled)
+                    scheduleManager.completeOrder(scheduledOrderId, false)
 
                     val updatedOrders = _scheduledOrders.value.map { order ->
                         if (order.id == scheduledOrderId) {
-                            order.copy(isExecuted = true, result = if (isWin) "WIN" else "LOSE")
+                            order.copy(isExecuted = true, result = "LOSE")
                         } else order
                     }
                     _scheduledOrders.value = updatedOrders
@@ -4250,86 +4519,22 @@ class DashboardViewModel @Inject constructor(
                     _uiState.value = currentState.copy(
                         activeOrderId = null,
                         activeMartingaleStep = 0,
-                        botStatus = if (isWin) "Always Signal WIN - Reset" else "Always Signal LOSE - Continue on next signal"
+                        botStatus = "Order KALAH"
                     )
 
                     handleTradeResultForLocalStats(
-                        tradeId = "schedule_always_signal_${scheduledOrderId}_${System.currentTimeMillis()}",
+                        tradeId = "schedule_${scheduledOrderId}_${System.currentTimeMillis()}",
                         orderId = scheduledOrderId,
-                        result = if (isWin) "WIN" else "LOSE",
+                        result = "LOSE",
                         isMartingaleAttempt = false,
-                        martingaleStep = 0,
-                        maxMartingaleSteps = currentState.martingaleSettings.maxSteps
+                        martingaleStep = 1,
+                        maxMartingaleSteps = 1
                     )
 
-                } else {
-                    // ✅ NORMAL MARTINGALE MODE
-                    if (isWin) {
-                        scheduleManager.completeOrder(scheduledOrderId, true)
-
-                        val updatedOrders = _scheduledOrders.value.map { order ->
-                            if (order.id == scheduledOrderId) {
-                                order.copy(isExecuted = true, result = "WIN")
-                            } else order
-                        }
-                        _scheduledOrders.value = updatedOrders
-
-                        _uiState.value = currentState.copy(
-                            activeOrderId = null,
-                            activeMartingaleStep = 0,
-                            botStatus = "Order MENANG"
-                        )
-
-                        handleTradeResultForLocalStats(
-                            tradeId = "schedule_${scheduledOrderId}_${System.currentTimeMillis()}",
-                            orderId = scheduledOrderId,
-                            result = "WIN",
-                            isMartingaleAttempt = martingaleManager.isActive(),
-                            martingaleStep = if (martingaleManager.isActive()) martingaleManager.getCurrentStep() else 0,
-                            maxMartingaleSteps = currentState.martingaleSettings.maxSteps
-                        )
-
-                    } else {
-                        if (currentState.martingaleSettings.isEnabled) {
-                            startInstantMartingaleForLostOrder(scheduledOrderId, "Trade kalah - martingale instan")
-                            println("📊 Schedule: Initial trade LOST - Starting martingale (NOT counted as LOSS yet)")
-
-                        } else {
-                            scheduleManager.completeOrder(scheduledOrderId, false)
-
-                            val updatedOrders = _scheduledOrders.value.map { order ->
-                                if (order.id == scheduledOrderId) {
-                                    order.copy(isExecuted = true, result = "LOSE")
-                                } else order
-                            }
-                            _scheduledOrders.value = updatedOrders
-
-                            _uiState.value = currentState.copy(
-                                activeOrderId = null,
-                                activeMartingaleStep = 0,
-                                botStatus = "Order KALAH"
-                            )
-
-                            handleTradeResultForLocalStats(
-                                tradeId = "schedule_${scheduledOrderId}_${System.currentTimeMillis()}",
-                                orderId = scheduledOrderId,
-                                result = "LOSE",
-                                isMartingaleAttempt = false,
-                                martingaleStep = 1,
-                                maxMartingaleSteps = 1
-                            )
-
-                            println("📊 Schedule: Direct LOSS - Martingale disabled (counted as LOSS)")
-                        }
-                    }
+                    println("📊 Schedule: Direct LOSS - Martingale disabled (counted as LOSS)")
                 }
             }
         }
-    }
-
-    fun clearLastTradeResult() {
-        _uiState.value = _uiState.value.copy(lastTradeResult = null)
-        println("🧹 lastTradeResult cleared")
     }
 
     private fun startInstantMartingaleForLostOrder(scheduledOrderId: String, lossReason: String) {
@@ -4876,39 +5081,76 @@ class DashboardViewModel @Inject constructor(
     fun setTradingMode(mode: TradingMode) {
         val currentState = _uiState.value
 
-        // Don't allow mode change if any trading mode is active
-        if (currentState.botState != BotState.STOPPED ||
-            currentState.isFollowModeActive ||
-            currentState.isIndicatorModeActive ||
-            currentState.isCTCModeActive
-        ) {
-            _uiState.value = currentState.copy(
-                error = "Tidak dapat mengubah trading mode saat ada mode trading aktif"
-            )
-            return
+        // ✅ Allow switching between: SCHEDULE ↔ AI_SIGNAL ↔ MULTI_MOMENTUM
+        val isCompatibleSwitch = (
+                mode == TradingMode.SCHEDULE ||
+                        mode == TradingMode.AI_SIGNAL ||
+                        mode == TradingMode.MULTI_MOMENTUM
+                ) && (
+                currentState.tradingMode == TradingMode.SCHEDULE ||
+                        currentState.tradingMode == TradingMode.AI_SIGNAL ||
+                        currentState.tradingMode == TradingMode.MULTI_MOMENTUM ||
+                        currentState.botState == BotState.STOPPED
+                )
+
+        // ✅ Block switching if incompatible modes are active
+        if (!isCompatibleSwitch) {
+            if (currentState.botState != BotState.STOPPED ||
+                currentState.isFollowModeActive ||
+                currentState.isIndicatorModeActive ||
+                currentState.isCTCModeActive) {
+                _uiState.value = currentState.copy(
+                    error = "Cannot change trading mode while other modes are active"
+                )
+                return
+            }
+
+            // Block switching away from AI Signal/Momentum if active
+            if ((currentState.isAISignalModeActive || currentState.isMultiMomentumModeActive) &&
+                mode != TradingMode.AI_SIGNAL &&
+                mode != TradingMode.SCHEDULE &&
+                mode != TradingMode.MULTI_MOMENTUM) {
+                _uiState.value = currentState.copy(
+                    error = "Cannot change trading mode while AI Signal or Multi-Momentum is active"
+                )
+                return
+            }
         }
 
-        // ✅ TAMBAHAN: Reset Always Signal jika mode bukan SCHEDULE
-        val updatedMartingaleSettings = if (mode != TradingMode.SCHEDULE &&
-            currentState.martingaleSettings.isAlwaysSignal) {
-            // Reset always signal untuk mode non-Schedule
+        // ✅ Reset Always Signal ONLY if switching to incompatible modes
+        val updatedMartingaleSettings = if (
+            mode != TradingMode.SCHEDULE &&
+            mode != TradingMode.AI_SIGNAL &&
+            mode != TradingMode.MULTI_MOMENTUM &&
+            currentState.martingaleSettings.isAlwaysSignal
+        ) {
             currentState.martingaleSettings.copy(isAlwaysSignal = false)
         } else {
             currentState.martingaleSettings
         }
 
+        // ✅ Update UI State
         _uiState.value = currentState.copy(
             tradingMode = mode,
             isTradingModeSelected = true,
-            martingaleSettings = updatedMartingaleSettings,  // ✅ TAMBAH update martingale settings
+            martingaleSettings = updatedMartingaleSettings,
             error = null
         )
 
-        // ✅ TAMBAHAN: Log perubahan
-        if (mode != TradingMode.SCHEDULE && updatedMartingaleSettings != currentState.martingaleSettings) {
+        // ✅ Log changes
+        if (updatedMartingaleSettings != currentState.martingaleSettings) {
             Log.d("DashboardViewModel", "Always Signal disabled - Mode changed to: ${mode.name}")
         }
+
+        // ✅ Log compatible mode switching
+        if (isCompatibleSwitch &&
+            (currentState.botState == BotState.RUNNING ||
+                    currentState.isAISignalModeActive ||
+                    currentState.isMultiMomentumModeActive)) {
+            Log.d("DashboardViewModel", "✅ Compatible mode switch: ${currentState.tradingMode.name} → ${mode.name}")
+        }
     }
+
 
     fun setMartingaleBaseAmount(amount: Long) {
         if (!_uiState.value.canModifySettings()) {
@@ -5346,6 +5588,29 @@ class DashboardViewModel @Inject constructor(
             return
         }
 
+        // ✅ Check conflicting modes (NOT Schedule, NOT AI Signal)
+        if (currentState.isFollowModeActive) {
+            _uiState.value = currentState.copy(
+                error = "Follow Order mode is active. Stop Follow Order first."
+            )
+            return
+        }
+        if (currentState.isIndicatorModeActive) {
+            _uiState.value = currentState.copy(
+                error = "Indicator Order mode is active. Stop Indicator Order first."
+            )
+            return
+        }
+        if (currentState.isCTCModeActive) {
+            _uiState.value = currentState.copy(
+                error = "CTC Order mode is active. Stop CTC Order first."
+            )
+            return
+        }
+        // ❌ DIHAPUS: check isAISignalModeActive
+        // ✅ Schedule is ALLOWED to run with Multi-Momentum
+        // ✅ AI Signal is ALLOWED to run with Multi-Momentum
+
         if (!currentState.canStartMultiMomentumMode()) {
             _uiState.value = currentState.copy(
                 error = "Cannot start Multi-Momentum: ${getMultiMomentumModeStartError(currentState)}"
@@ -5362,18 +5627,27 @@ class DashboardViewModel @Inject constructor(
                     error = null
                 )
 
-                // Stop other modes
-                if (currentState.botState != BotState.STOPPED) {
-                    stopBot()
-                }
+                // ✅ ONLY stop conflicting modes (NOT Schedule, NOT AI Signal)
                 if (currentState.isFollowModeActive) {
+                    Log.d("DashboardViewModel", "Stopping Follow Order to start Multi-Momentum")
                     stopFollowMode()
                 }
                 if (currentState.isIndicatorModeActive) {
+                    Log.d("DashboardViewModel", "Stopping Indicator Order to start Multi-Momentum")
                     stopIndicatorMode()
                 }
                 if (currentState.isCTCModeActive) {
+                    Log.d("DashboardViewModel", "Stopping CTC Order to start Multi-Momentum")
                     stopCTCMode()
+                }
+                // ❌ DIHAPUS: stopAISignalMode()
+
+                // ✅ DON'T stop Schedule or AI Signal - they can run together
+                if (currentState.botState == BotState.RUNNING) {
+                    Log.d("DashboardViewModel", "✅ Schedule is running - Will enable dual mode")
+                }
+                if (currentState.isAISignalModeActive) {
+                    Log.d("DashboardViewModel", "✅ AI Signal is running - Will enable dual mode")
                 }
 
                 delay(1000)
@@ -5386,11 +5660,17 @@ class DashboardViewModel @Inject constructor(
                     return@launch
                 }
 
-                stopLossProfitManager.startNewSession()
+                // ✅ Only start new session if NOT already running
+                if (currentState.tradingSession.startTime == 0L ||
+                    currentState.tradingSession.totalTrades == 0) {
+                    stopLossProfitManager.startNewSession()
+                }
 
                 Log.d("DashboardViewModel", "MULTI-MOMENTUM MODE: Starting with 4 parallel momentums")
                 Log.d("DashboardViewModel", "  Asset: ${selectedAsset.name}")
                 Log.d("DashboardViewModel", "  Account: ${if (currentState.isDemoAccount) "Demo" else "Real"}")
+                Log.d("DashboardViewModel", "  Schedule Active: ${currentState.botState == BotState.RUNNING}")
+                Log.d("DashboardViewModel", "  AI Signal Active: ${currentState.isAISignalModeActive}")
 
                 val result = multiMomentumOrderManager.startMultiMomentumMode(
                     selectedAsset = selectedAsset,
@@ -5405,11 +5685,16 @@ class DashboardViewModel @Inject constructor(
                             tradingMode = TradingMode.MULTI_MOMENTUM,
                             multiMomentumOrderStatus = "Multi-Momentum ACTIVE - ${selectedAsset.name}",
                             tradingSession = stopLossProfitManager.getCurrentSession(),
-                            connectionStatus = "Connected - Multi-Momentum active",
+                            connectionStatus = "Connected - Multi-Momentum active" +
+                                    if (currentState.isAISignalModeActive) " + AI Signal" else "",
                             error = null
                         )
 
-                        Log.d("DashboardViewModel", "Multi-Momentum mode started successfully")
+                        Log.d("DashboardViewModel", "=" .repeat(60))
+                        Log.d("DashboardViewModel", "✅ MULTI-MOMENTUM MODE STARTED")
+                        Log.d("DashboardViewModel", "=" .repeat(60))
+                        Log.d("DashboardViewModel", "   AI Signal Active: ${currentState.isAISignalModeActive}")
+                        Log.d("DashboardViewModel", "=" .repeat(60))
                     },
                     onFailure = { exception ->
                         _uiState.value = currentState.copy(
@@ -5429,7 +5714,7 @@ class DashboardViewModel @Inject constructor(
         }
     }
 
-    // 5. ADD STOP FUNCTION
+
     fun stopMultiMomentumMode() {
         val currentState = _uiState.value
 
@@ -5441,23 +5726,46 @@ class DashboardViewModel @Inject constructor(
         }
 
         Log.d("DashboardViewModel", "Manual stop of Multi-Momentum mode requested")
+        Log.d("DashboardViewModel", "   Schedule Active: ${currentState.botState == BotState.RUNNING}")
+        Log.d("DashboardViewModel", "   AI Signal Active: ${currentState.isAISignalModeActive}")
 
         val result = multiMomentumOrderManager.stopMultiMomentumMode()
 
         result.fold(
             onSuccess = { message ->
+                // ✅ Determine tradingMode based on what's still active
+                val newTradingMode = when {
+                    currentState.isAISignalModeActive -> TradingMode.AI_SIGNAL
+                    currentState.botState == BotState.RUNNING -> TradingMode.SCHEDULE
+                    else -> TradingMode.SCHEDULE
+                }
+
+                val newStatus = when {
+                    currentState.isAISignalModeActive -> "AI Signal Active"
+                    currentState.botState == BotState.RUNNING -> "Schedule Active"
+                    else -> "Bot Stopped"
+                }
+
                 _uiState.value = currentState.copy(
                     isMultiMomentumModeActive = false,
-                    tradingMode = TradingMode.SCHEDULE,
+                    tradingMode = newTradingMode,
                     multiMomentumOrderStatus = "Multi-Momentum manually stopped",
                     activeMultiMomentumOrderId = null,
                     multiMomentumMartingaleSteps = emptyMap(),
                     multiMomentumCandleCount = 0,
-                    connectionStatus = "Connected - Mode can be changed",
+                    connectionStatus = "Connected" +
+                            when {
+                                currentState.isAISignalModeActive -> " - AI Signal active"
+                                currentState.botState == BotState.RUNNING -> " - Schedule active"
+                                else -> ""
+                            },
+                    botStatus = newStatus,
                     error = null
                 )
 
-                Log.d("DashboardViewModel", "Multi-Momentum mode manually stopped")
+                Log.d("DashboardViewModel", "✅ Multi-Momentum mode stopped - Other modes preserved:")
+                Log.d("DashboardViewModel", "   Schedule preserved: ${currentState.botState == BotState.RUNNING}")
+                Log.d("DashboardViewModel", "   AI Signal preserved: ${currentState.isAISignalModeActive}")
             },
             onFailure = { exception ->
                 _uiState.value = currentState.copy(
@@ -5495,14 +5803,28 @@ class DashboardViewModel @Inject constructor(
             return
         }
 
-        Log.d("DashboardViewModel", "Executing Multi-Momentum order:")
-        Log.d("DashboardViewModel", "  Momentum: $momentumType")
-        Log.d("DashboardViewModel", "  Trend: $trend")
-        Log.d("DashboardViewModel", "  Amount: ${formatAmount(amount)}")
+        Log.d("DashboardViewModel", "📊 EXECUTING MULTI-MOMENTUM ORDER:")
+        Log.d("DashboardViewModel", "   Order ID: $orderId")
+        Log.d("DashboardViewModel", "   Source: MULTI_MOMENTUM")  // ✅ LOG SOURCE
+        Log.d("DashboardViewModel", "   Momentum: $momentumType")
+        Log.d("DashboardViewModel", "   Trend: $trend")
+        Log.d("DashboardViewModel", "   Amount: ${formatAmount(amount)}")
 
         _uiState.value = currentState.copy(
             activeMultiMomentumOrderId = orderId,
             multiMomentumOrderStatus = "$momentumType: Executing $trend - ${formatAmount(amount)}"
+        )
+
+        // ✅ PENTING: Gunakan ContinuousTradeMonitor dengan OrderSource.MULTI_MOMENTUM
+        continuousTradeMonitor.startMonitoringScheduledOrder(
+            scheduledOrderId = orderId,
+            orderSource = OrderSource.MULTI_MOMENTUM,  // ✅ SET SOURCE
+            trend = trend,
+            amount = amount,
+            assetRic = selectedAsset.ric,
+            isDemoAccount = currentState.isDemoAccount,
+            martingaleSettings = currentState.martingaleSettings,
+            startTimeMillis = serverTimeService.getCurrentServerTimeMillis()
         )
 
         tradeManager.executeFollowInstantTrade(

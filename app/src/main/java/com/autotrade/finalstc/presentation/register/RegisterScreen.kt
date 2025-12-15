@@ -42,6 +42,7 @@ import androidx.compose.foundation.border
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.autotrade.finalstc.presentation.theme.ThemeViewModel
 import androidx.compose.material.icons.filled.Help
+import com.autotrade.finalstc.utils.WebViewCacheManager
 import com.autotrade.finalstc.utils.WebViewConfigManager
 
 object GoogleColors {
@@ -76,8 +77,8 @@ fun LoadingOverlay(
     val animatedProgress by animateFloatAsState(
         targetValue = progress,
         animationSpec = tween(
-            durationMillis = 800,
-            easing = EaseOutCubic
+            durationMillis = 300,
+            easing = LinearEasing
         ),
         label = "progressAnimation"
     )
@@ -88,7 +89,7 @@ fun LoadingOverlay(
             durationMillis = 300,
             easing = EaseInOutCubic
         ),
-        label = "fadeAnimation"
+        label = "alphaAnimation"
     )
 
     if (isVisible || alpha > 0f) {
@@ -106,11 +107,20 @@ fun LoadingOverlay(
                 SimpleLoadingDots()
                 Spacer(modifier = Modifier.height(32.dp))
                 Text(
-                    text = "Loading ${(animatedProgress * 100).toInt()}%",
+                    text = "Loading",
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Normal,
                     color = GoogleColors.MediumGray,
                     textAlign = TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "${(animatedProgress * 100).toInt()}%",
+                    fontSize = 32.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Black,
+                    textAlign = TextAlign.Center,
+                    letterSpacing = (-1).sp
                 )
             }
         }
@@ -279,6 +289,7 @@ fun RegisterScreen(
 
     var showLoading by remember { mutableStateOf(true) }
     var loadingProgress by remember { mutableStateOf(0f) }
+    var isProgressComplete by remember { mutableStateOf(false) }
 
     var currentDetectedUrl by remember { mutableStateOf<String?>(null) }
 
@@ -286,6 +297,8 @@ fun RegisterScreen(
     var registrationDeviceId by remember { mutableStateOf<String?>(null) }
     var registrationEmail by remember { mutableStateOf<String?>(null) }
     var isDataExtracted by remember { mutableStateOf(false) }
+
+    var shouldClearCookies by remember { mutableStateOf(true) }
 
     val successNavItems = listOf(
         SuccessNavItem("dashboard", Icons.Outlined.Dashboard, "Dashboard"),
@@ -330,106 +343,106 @@ fun RegisterScreen(
         showConfigError = uiState.error != null && uiState.isLoading
     }
 
+    // ✅ Initialize: Clear cookies & start progress
     LaunchedEffect(Unit) {
+        if (shouldClearCookies) {
+            Log.d("RegisterScreen", "🧹 Clearing cookies before registration")
+            WebViewCacheManager.clearCookiesOnly {
+                Log.d("RegisterScreen", "✅ Cookies cleared, ready for fresh registration")
+                shouldClearCookies = false
+            }
+            delay(500)
+        }
+
         showLoading = true
         loadingProgress = 0f
-        for (i in 0..10) {
-            loadingProgress = i / 100f
-            delay(50)
+
+        // ⚡ Progress 0% → 100% dalam 10 detik
+        launch {
+            val totalDuration = 10000L  // 10 detik
+            val steps = 100
+            val delayPerStep = totalDuration / steps
+
+            for (i in 1..steps) {
+                loadingProgress = i / 100f
+                delay(delayPerStep)
+            }
+            isProgressComplete = true
+            Log.d("RegisterScreen", "✅ Loading progress completed (100%)")
         }
 
         registrationDeviceId = UUID.randomUUID().toString().replace("-", "")
         Log.d("RegisterScreen", "Generated Device ID: $registrationDeviceId")
     }
 
+    // ✅ Detect when web is fully loaded
     LaunchedEffect(webViewState.loadingState) {
         when (val loadingState = webViewState.loadingState) {
-            is LoadingState.Loading -> {
-                if (!hasClickedDaftar && loadingProgress < 0.5f) {
-                    coroutineScope.launch {
-                        val currentProgress = loadingProgress
-                        val targetProgress = 0.5f
-                        val steps = 40
-                        val increment = (targetProgress - currentProgress) / steps
-                        for (i in 1..steps) {
-                            loadingProgress = currentProgress + (increment * i)
-                            delay(25)
-                        }
-                    }
-                }
-            }
             is LoadingState.Finished -> {
-                if (!isWebFullyLoaded && !hasClickedDaftar) {
+                if (!isWebFullyLoaded) {
                     isWebFullyLoaded = true
-
-                    coroutineScope.launch {
-                        delay(12000)
-
-                        if (!hasClickedDaftar) {
-                            Log.d("RegisterScreen", "Attempting to click Daftar button")
-
-                            navigator.loadUrl("""javascript:(function() {
-                                var buttons = document.querySelectorAll('button, a, input[type=button], input[type=submit]');
-                                
-                                for (var i = 0; i < buttons.length; i++) {
-                                    var btn = buttons[i];
-                                    var text = (btn.innerText || btn.textContent || btn.value || '').trim().toLowerCase();
-                                    
-                                    if (text.indexOf('daftar') >= 0) {
-                                        try {
-                                            btn.scrollIntoView();
-                                            btn.focus();
-                                            btn.click();
-                                            console.log('DAFTAR_BUTTON_CLICKED');
-                                            break;
-                                        } catch (error) {
-                                            console.log('Error: ' + error.message);
-                                        }
-                                    }
-                                }
-                            })(); void(0);""")
-
-                            delay(2000)
-                            hasClickedDaftar = true
-                            Log.d("RegisterScreen", "Daftar button clicked, hasClickedDaftar = true")
-
-                            val currentProgress = loadingProgress
-                            val targetProgress = 1f
-                            val steps = 50
-                            val increment = (targetProgress - currentProgress) / steps
-                            for (i in 1..steps) {
-                                loadingProgress = currentProgress + (increment * i)
-                                delay(20)
-                            }
-
-                            launch {
-                                repeat(30) {
-                                    delay(1000)
-
-                                    if (!hasShownSuccessDialog) {
-                                        navigator.loadUrl("""javascript:(function() {
-                                            try {
-                                                console.log('Current URL: ' + window.location.href);
-                                                console.log('Current Path: ' + window.location.pathname);
-                                            } catch (e) {
-                                                console.log('Error: ' + e.message);
-                                            }
-                                        })(); void(0);""")
-                                    } else {
-                                        return@repeat
-                                    }
-                                }
-                            }
-
-                            delay(800)
-                            if (!hasShownSuccessDialog) {
-                                showLoading = false
-                            }
-                        }
-                    }
+                    Log.d("RegisterScreen", "✅ Web fully loaded, waiting for progress to complete")
                 }
             }
             else -> {}
+        }
+    }
+
+    // ⚡ AUTO-KLIK SAAT PROGRESS 100% + WEB LOADED
+    LaunchedEffect(isProgressComplete, isWebFullyLoaded, hasClickedDaftar) {
+        if (isProgressComplete && isWebFullyLoaded && !hasClickedDaftar) {
+            Log.d("RegisterScreen", "🎯 Progress 100% & Web loaded - Auto-clicking Daftar button NOW!")
+
+            delay(500) // Small delay untuk memastikan UI ready
+
+            navigator.loadUrl("""javascript:(function() {
+                var buttons = document.querySelectorAll('button, a, input[type=button], input[type=submit]');
+                
+                for (var i = 0; i < buttons.length; i++) {
+                    var btn = buttons[i];
+                    var text = (btn.innerText || btn.textContent || btn.value || '').trim().toLowerCase();
+                    
+                    if (text.indexOf('daftar') >= 0) {
+                        try {
+                            btn.scrollIntoView();
+                            btn.focus();
+                            btn.click();
+                            console.log('DAFTAR_BUTTON_CLICKED');
+                            break;
+                        } catch (error) {
+                            console.log('Error: ' + error.message);
+                        }
+                    }
+                }
+            })(); void(0);""")
+
+            delay(1000)
+            hasClickedDaftar = true
+            Log.d("RegisterScreen", "✅ Daftar button clicked")
+
+            // Monitor URL changes setelah klik
+            launch {
+                repeat(30) {
+                    delay(1000)
+                    if (!hasShownSuccessDialog) {
+                        navigator.loadUrl("""javascript:(function() {
+                            try {
+                                console.log('Current URL: ' + window.location.href);
+                                console.log('Current Path: ' + window.location.pathname);
+                            } catch (e) {
+                                console.log('Error: ' + e.message);
+                            }
+                        })(); void(0);""")
+                    } else {
+                        return@repeat
+                    }
+                }
+            }
+
+            // Hide loading screen
+            delay(500)
+            showLoading = false
+            Log.d("RegisterScreen", "✅ Loading hidden after auto-click")
         }
     }
 
@@ -441,97 +454,98 @@ fun RegisterScreen(
         }
     }
 
-    LaunchedEffect(currentDetectedUrl, hasClickedDaftar, isDataExtracted) {
+    // ✅ Data extraction saat success URL terdeteksi
+    LaunchedEffect(currentDetectedUrl, isDataExtracted) {
         val url = currentDetectedUrl
 
-        if (url != null && hasClickedDaftar && !hasShownSuccessDialog && !isDataExtracted) {
+        if (url != null && !hasShownSuccessDialog && !isDataExtracted) {
             if (isSuccessUrl(url)) {
-                Log.d("RegisterScreen", "Success URL detected: $url")
-                Log.d("RegisterScreen", "Starting data extraction...")
+                Log.d("RegisterScreen", "🎯 Success URL detected: $url")
+                Log.d("RegisterScreen", "⚡ Starting data extraction...")
 
                 isExtractingData = true
 
                 coroutineScope.launch {
                     Log.d("RegisterScreen", "Attempt 1: Extract from cookies")
                     navigator.loadUrl("""
-                        javascript:(function() {
-                            try {
-                                var data = { authtoken: '', deviceId: '', email: '' };
-                                var cookies = document.cookie.split(';');
-                                for (var i = 0; i < cookies.length; i++) {
-                                    var cookie = cookies[i].trim();
-                                    if (cookie.indexOf('authtoken=') === 0) {
-                                        data.authtoken = cookie.substring('authtoken='.length);
-                                    }
-                                    if (cookie.indexOf('device_id=') === 0) {
-                                        data.deviceId = cookie.substring('device_id='.length);
-                                    }
-                                    if (cookie.indexOf('email=') === 0) {
-                                        data.email = cookie.substring('email='.length);
-                                    }
-                                }
-                                console.log('REGDATA_COOKIES:' + JSON.stringify(data));
-                            } catch (e) {
-                                console.log('REGDATA_COOKIES_ERROR:' + e.message);
-                            }
-                        })();
-                    """.trimIndent())
+        javascript:(function() {
+            try {
+                var data = { authtoken: '', deviceId: '', email: '' };
+                var cookies = document.cookie.split(';');
+                for (var i = 0; i < cookies.length; i++) {
+                    var cookie = cookies[i].trim();
+                    if (cookie.indexOf('authtoken=') === 0) {
+                        data.authtoken = cookie.substring('authtoken='.length);
+                    }
+                    if (cookie.indexOf('device_id=') === 0) {
+                        data.deviceId = cookie.substring('device_id='.length);
+                    }
+                    if (cookie.indexOf('email=') === 0) {
+                        data.email = cookie.substring('email='.length);
+                    }
+                }
+                console.log('REGDATA_COOKIES:' + JSON.stringify(data));
+            } catch (e) {
+                console.log('REGDATA_COOKIES_ERROR:' + e.message);
+            }
+        })();
+    """.trimIndent())
 
                     delay(800)
 
                     Log.d("RegisterScreen", "Attempt 2: Extract from localStorage")
                     navigator.loadUrl("""
-                        javascript:(function() {
-                            try {
-                                var data = { authtoken: '', deviceId: '', email: '' };
-                                if (typeof(Storage) !== 'undefined') {
-                                    data.authtoken = localStorage.getItem('authtoken') || '';
-                                    data.deviceId = localStorage.getItem('device_id') || '';
-                                    data.email = localStorage.getItem('email') || localStorage.getItem('user_email') || '';
-                                }
-                                console.log('REGDATA_STORAGE:' + JSON.stringify(data));
-                            } catch (e) {
-                                console.log('REGDATA_STORAGE_ERROR:' + e.message);
-                            }
-                        })();
-                    """.trimIndent())
+        javascript:(function() {
+            try {
+                var data = { authtoken: '', deviceId: '', email: '' };
+                if (typeof(Storage) !== 'undefined') {
+                    data.authtoken = localStorage.getItem('authtoken') || '';
+                    data.deviceId = localStorage.getItem('device_id') || '';
+                    data.email = localStorage.getItem('email') || localStorage.getItem('user_email') || '';
+                }
+                console.log('REGDATA_STORAGE:' + JSON.stringify(data));
+            } catch (e) {
+                console.log('REGDATA_STORAGE_ERROR:' + e.message);
+            }
+        })();
+    """.trimIndent())
 
                     delay(800)
 
                     Log.d("RegisterScreen", "Attempt 3: Extract from sessionStorage")
                     navigator.loadUrl("""
-                        javascript:(function() {
-                            try {
-                                var data = { authtoken: '', deviceId: '', email: '' };
-                                if (typeof(Storage) !== 'undefined') {
-                                    data.authtoken = sessionStorage.getItem('authtoken') || '';
-                                    data.deviceId = sessionStorage.getItem('device_id') || '';
-                                    data.email = sessionStorage.getItem('email') || sessionStorage.getItem('user_email') || '';
-                                }
-                                console.log('REGDATA_SESSION:' + JSON.stringify(data));
-                            } catch (e) {
-                                console.log('REGDATA_SESSION_ERROR:' + e.message);
-                            }
-                        })();
-                    """.trimIndent())
+        javascript:(function() {
+            try {
+                var data = { authtoken: '', deviceId: '', email: '' };
+                if (typeof(Storage) !== 'undefined') {
+                    data.authtoken = sessionStorage.getItem('authtoken') || '';
+                    data.deviceId = sessionStorage.getItem('device_id') || '';
+                    data.email = sessionStorage.getItem('email') || sessionStorage.getItem('user_email') || '';
+                }
+                console.log('REGDATA_SESSION:' + JSON.stringify(data));
+            } catch (e) {
+                console.log('REGDATA_SESSION_ERROR:' + e.message);
+            }
+        })();
+    """.trimIndent())
 
                     delay(800)
 
                     Log.d("RegisterScreen", "Attempt 4: Extract from window variables")
                     navigator.loadUrl("""
-                        javascript:(function() {
-                            try {
-                                var data = { authtoken: '', deviceId: '', email: '' };
-                                if (window.authtoken) data.authtoken = window.authtoken;
-                                if (window.device_id) data.deviceId = window.device_id;
-                                if (window.userEmail) data.email = window.userEmail;
-                                if (window.user && window.user.email) data.email = window.user.email;
-                                console.log('REGDATA_WINDOW:' + JSON.stringify(data));
-                            } catch (e) {
-                                console.log('REGDATA_WINDOW_ERROR:' + e.message);
-                            }
-                        })();
-                    """.trimIndent())
+        javascript:(function() {
+            try {
+                var data = { authtoken: '', deviceId: '', email: '' };
+                if (window.authtoken) data.authtoken = window.authtoken;
+                if (window.device_id) data.deviceId = window.device_id;
+                if (window.userEmail) data.email = window.userEmail;
+                if (window.user && window.user.email) data.email = window.user.email;
+                console.log('REGDATA_WINDOW:' + JSON.stringify(data));
+            } catch (e) {
+                console.log('REGDATA_WINDOW_ERROR:' + e.message);
+            }
+        })();
+    """.trimIndent())
 
                     delay(1000)
 
@@ -547,23 +561,28 @@ fun RegisterScreen(
                         Log.w("RegisterScreen", "AuthToken still empty after all attempts")
                     }
 
-                    val currentProgress = loadingProgress
-                    val targetProgress = 1f
-                    val steps = 50
-                    val increment = (targetProgress - currentProgress) / steps
-                    for (i in 1..steps) {
-                        loadingProgress = currentProgress + (increment * i)
-                        delay(20)
-                    }
-
-                    delay(800)
+                    delay(500)
                     showLoading = false
+                    Log.d("RegisterScreen", "✅ Loading hidden after extraction")
+
                     hasShownSuccessDialog = true
                     showSuccessDialog = true
                     showBottomNavigation = true
 
                     Log.d("RegisterScreen", "Success dialog shown")
                 }
+            }
+        }
+    }
+
+    // ✅ Safety net - force hide loading jika stuck
+    LaunchedEffect(isProgressComplete, showLoading, isDataExtracted) {
+        if (isProgressComplete && showLoading && !isDataExtracted) {
+            Log.w("RegisterScreen", "⚠️ Progress complete but no data extracted yet, waiting...")
+            delay(3000)
+            if (!isDataExtracted && showLoading) {
+                Log.w("RegisterScreen", "⚠️ Force hiding loading screen")
+                showLoading = false
             }
         }
     }
@@ -667,7 +686,6 @@ fun RegisterScreen(
                 )
             },
             confirmButton = {
-                // ✅ PERUBAHAN: Langsung gunakan whatsappUrl dari ViewModel
                 Button(
                     onClick = {
                         Log.d("RegisterScreen", "Opening WhatsApp URL: $whatsappUrl")
@@ -853,15 +871,12 @@ fun RegisterScreen(
                     .systemBarsPadding()
                     .padding(bottom = if (showBottomNavigation) 80.dp else 0.dp),
                 onCreated = { webView ->
-                    // ✅ Gunakan shared configuration
                     WebViewConfigManager.configureWebView(webView)
 
-                    // ✅ Log existing cookies untuk debugging
                     Log.d("RegisterScreen", "=== EXISTING COOKIES ON LOAD ===")
                     val existingCookies = WebViewConfigManager.getAllCookies("https://stockity.id")
                     Log.d("RegisterScreen", "Existing cookies: $existingCookies")
 
-                    // Check if already logged in
                     if (WebViewConfigManager.isUserLoggedIn()) {
                         Log.d("RegisterScreen", "User already has login cookies!")
                     }
@@ -888,7 +903,6 @@ fun RegisterScreen(
                                             registrationAuthToken = authToken
                                             Log.d("RegisterScreen", "AuthToken captured: ${authToken.take(20)}...")
 
-                                            // ✅ Force flush cookies to storage setelah dapat authtoken
                                             WebViewConfigManager.flushCookies()
                                         }
 
@@ -1110,12 +1124,10 @@ fun ModernSuccessDialog(
                         .padding(32.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // Success Icon with Animation
                     SuccessIconAnimated()
 
                     Spacer(modifier = Modifier.height(24.dp))
 
-                    // Title
                     Text(
                         text = "Selamat! 🎉",
                         fontSize = 32.sp,
@@ -1127,7 +1139,6 @@ fun ModernSuccessDialog(
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    // Subtitle
                     Text(
                         text = "Registrasi Berhasil",
                         fontSize = 20.sp,
@@ -1138,7 +1149,6 @@ fun ModernSuccessDialog(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // Description
                     Text(
                         text = "Akun Anda telah berhasil dibuat dan siap digunakan. Pilih langkah selanjutnya untuk melanjutkan.",
                         fontSize = 15.sp,
@@ -1149,12 +1159,10 @@ fun ModernSuccessDialog(
 
                     Spacer(modifier = Modifier.height(32.dp))
 
-                    // Action Buttons
                     Column(
                         modifier = Modifier.fillMaxWidth(),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        // Primary Button - Login
                         Button(
                             onClick = onLoginClick,
                             modifier = Modifier
@@ -1189,7 +1197,6 @@ fun ModernSuccessDialog(
                             }
                         }
 
-                        // Secondary Button - Continue Trading
                         OutlinedButton(
                             onClick = onContinueClick,
                             modifier = Modifier
@@ -1222,7 +1229,6 @@ fun ModernSuccessDialog(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // Info text
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.Center,
@@ -1282,7 +1288,6 @@ fun SuccessIconAnimated() {
             },
         contentAlignment = Alignment.Center
     ) {
-        // Outer circle with gradient effect
         Box(
             modifier = Modifier
                 .size(120.dp)
@@ -1298,7 +1303,6 @@ fun SuccessIconAnimated() {
                 )
         )
 
-        // Middle circle
         Box(
             modifier = Modifier
                 .size(90.dp)
@@ -1308,7 +1312,6 @@ fun SuccessIconAnimated() {
                 )
         )
 
-        // Inner circle with icon
         Box(
             modifier = Modifier
                 .size(70.dp)

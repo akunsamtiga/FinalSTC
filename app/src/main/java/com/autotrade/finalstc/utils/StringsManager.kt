@@ -1454,30 +1454,30 @@ object StringsManager {
         else -> "Mohon tunggu saat kami mengambil aset Anda"
     }
 
-    fun getNoAssetsAvailable(lang: String) = when(lang) {
-        "id" -> "Tidak Ada Aset Tersedia"
-        "en" -> "No Assets Available"
-        "es" -> "No Hay Activos Disponibles"
-        "vi" -> "Không Có Tài Sản"
-        "tr" -> "Kullanılabilir Varlık Yok"
-        "hi" -> "कोई संपत्ति उपलब्ध नहीं"
-        "ms" -> "Tiada Aset Tersedia"
-        "bn" -> "কোনো সম্পদ উপলব্ধ নেই"
-        "ru" -> "Нет доступных активов"
-        else -> "Tidak Ada Aset Tersedia"
+    fun getNoAssetsAvailable(lang: String) = when (lang) {
+        "id" -> "Aset gagal diambil."
+        "en" -> "Failed to retrieve assets."
+        "es" -> "No se pudieron obtener los activos."
+        "vi" -> "Không thể tải tài sản."
+        "tr" -> "Varlıklar alınamadı."
+        "hi" -> "संपत्ति प्राप्त करने में विफल।"
+        "ms" -> "Gagal mendapatkan aset."
+        "bn" -> "সম্পদ সংগ্রহ করতে ব্যর্থ হয়েছে।"
+        "ru" -> "Не удалось получить активы."
+        else -> "Aset gagal diambil."
     }
 
-    fun getNoAssetsToDisplay(lang: String) = when(lang) {
-        "id" -> "Tidak ada aset untuk ditampilkan saat ini.\nCoba muat ulang untuk memuat daftar aset."
-        "en" -> "There are no assets to display at the moment.\nTry refreshing to reload the asset list."
-        "es" -> "No hay activos para mostrar en este momento.\nIntenta actualizar para recargar la lista de activos."
-        "vi" -> "Hiện không có tài sản để hiển thị.\nThử làm mới để tải lại danh sách tài sản."
-        "tr" -> "Şu anda gösterilecek varlık yok.\nVarlık listesini yeniden yüklemek için yenilemeyi deneyin."
-        "hi" -> "इस समय प्रदर्शित करने के लिए कोई संपत्ति नहीं है।\nसंपत्ति सूची पुनः लोड करने के लिए रीफ्रेश करने का प्रयास करें।"
-        "ms" -> "Tiada aset untuk dipaparkan pada masa ini.\nCuba muat semula untuk memuatkan senarai aset."
-        "bn" -> "এই মুহূর্তে প্রদর্শনের জন্য কোনো সম্পদ নেই।\nসম্পদ তালিকা পুনরায় লোড করতে রিফ্রেশ করার চেষ্টা করুন।"
-        "ru" -> "В настоящее время нет активов для отображения.\nПопробуйте обновить, чтобы перезагрузить список активов."
-        else -> "Tidak ada aset untuk ditampilkan saat ini.\nCoba muat ulang untuk memuat daftar aset."
+    fun getNoAssetsToDisplay(lang: String) = when (lang) {
+        "id" -> "Mohon periksa koneksi internet Anda dan muat ulang aset."
+        "en" -> "Please check your internet connection and reload the assets."
+        "es" -> "Por favor, compruebe su conexión a Internet y vuelva a cargar los activos."
+        "vi" -> "Vui lòng kiểm tra kết nối internet của bạn và tải lại tài sản."
+        "tr" -> "Lütfen internet bağlantınızı kontrol edin ve varlıkları yeniden yükleyin."
+        "hi" -> "कृपया अपने इंटरनेट कनेक्शन की जाँच करें और संपत्तियों को पुनः लोड करें।"
+        "ms" -> "Sila periksa sambungan internet anda dan muat semula aset."
+        "bn" -> "অনুগ্রহ করে আপনার ইন্টারনেট সংযোগ পরীক্ষা করুন এবং সম্পদ পুনরায় লোড করুন।"
+        "ru" -> "Пожалуйста, проверьте подключение к интернету и перезагрузите активы."
+        else -> "Mohon periksa koneksi internet Anda dan muat ulang aset."
     }
 
     fun getRefreshAssets(lang: String) = when(lang) {

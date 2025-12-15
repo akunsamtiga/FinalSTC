@@ -62,37 +62,34 @@ data class DashboardUiState(
 ) {
 
     fun canStartAISignalMode(): Boolean {
-        return botState == BotState.STOPPED &&
-                !isFollowModeActive &&
+        return !isFollowModeActive &&
                 !isIndicatorModeActive &&
                 !isCTCModeActive &&
-                !isMultiMomentumModeActive &&
                 !isAISignalModeActive &&
                 selectedAsset != null &&
                 isWebSocketConnected &&
                 currencySettings.validate().isSuccess &&
-                martingaleSettings.validate(currencySettings.selectedCurrency).isSuccess  // ✅ ALWAYS VALIDATE
+                martingaleSettings.validate(currencySettings.selectedCurrency).isSuccess
     }
+
 
     fun canStopAISignalMode(): Boolean = isAISignalModeActive
 
-    fun canModifySettings(): Boolean = botState == BotState.STOPPED &&
-            !isFollowModeActive &&
-            !isIndicatorModeActive &&
-            !isCTCModeActive &&
-            !isMultiMomentumModeActive &&
-            !isAISignalModeActive
+    fun canModifySettings(): Boolean =
+        botState == BotState.STOPPED &&
+                !isFollowModeActive &&
+                !isIndicatorModeActive &&
+                !isCTCModeActive &&
+                !isMultiMomentumModeActive &&
+                !isAISignalModeActive
 
     fun canStartBot(): Boolean {
-        // ✅ Always validate martingale settings, including in Always Signal mode
         val martingaleValid = martingaleSettings.validate(currencySettings.selectedCurrency).isSuccess
 
         return botState == BotState.STOPPED &&
                 !isFollowModeActive &&
                 !isIndicatorModeActive &&
                 !isCTCModeActive &&
-                !isMultiMomentumModeActive &&
-                !isAISignalModeActive &&
                 selectedAsset != null &&
                 isWebSocketConnected &&
                 martingaleValid &&
@@ -149,19 +146,19 @@ data class DashboardUiState(
     }
 
     fun canStartMultiMomentumMode(): Boolean {
-        return botState == BotState.STOPPED &&
-                !isFollowModeActive &&
+        return !isFollowModeActive &&
                 !isIndicatorModeActive &&
                 !isCTCModeActive &&
                 !isMultiMomentumModeActive &&
-                !isAISignalModeActive &&  // ✅ TAMBAH INI
                 selectedAsset != null &&
                 isWebSocketConnected &&
                 martingaleSettings.validate(currencySettings.selectedCurrency).isSuccess &&
                 stopLossSettings.validate().isSuccess &&
                 stopProfitSettings.validate().isSuccess &&
                 getMartingaleValidationError() == null
+        // ✅ Schedule dan AI Signal BISA jalan bersamaan dengan Multi-Momentum
     }
+
 
     fun canStopMultiMomentumMode(): Boolean = isMultiMomentumModeActive
 
@@ -177,7 +174,23 @@ data class DashboardUiState(
 
     fun getBotStatusText(): String {
         return when {
-            isAISignalModeActive -> "AI Signal Mode Active"  // ✅ TAMBAH INI
+            // ✅ TRIPLE Mode: Schedule + Momentum + AI Signal (rare but possible)
+            botState == BotState.RUNNING && isMultiMomentumModeActive && isAISignalModeActive ->
+                "Schedule + Multi-Momentum + AI Signal Active"
+
+            // ✅ Dual Mode: AI Signal + Momentum
+            isAISignalModeActive && isMultiMomentumModeActive ->
+                "AI Signal + Multi-Momentum Active"
+
+            // ✅ Dual Mode: Schedule + Momentum
+            botState == BotState.RUNNING && isMultiMomentumModeActive ->
+                "Schedule + Multi-Momentum Active"
+
+            // ✅ Dual Mode: Schedule + AI Signal
+            isAISignalModeActive && botState == BotState.RUNNING ->
+                "AI Signal + Schedule Active"
+
+            isAISignalModeActive -> "AI Signal Mode Active"
             isMultiMomentumModeActive -> "Multi-Momentum Order Active"
             isCTCModeActive -> "CTC Order Active"
             isIndicatorModeActive -> "Indicator Order Active"
@@ -192,8 +205,24 @@ data class DashboardUiState(
 
     fun getBotStatusColor(): String {
         return when {
-            isAISignalModeActive -> "#E91E63"  // ✅ TAMBAH INI (Pink)
-            isMultiMomentumModeActive -> "#00BCD4"
+            // ✅ Triple mode gets special color
+            (botState == BotState.RUNNING && isMultiMomentumModeActive && isAISignalModeActive) ->
+                "#FF6B00"  // Orange for triple mode
+
+            // ✅ Dual mode AI Signal + Momentum
+            (isAISignalModeActive && isMultiMomentumModeActive) ->
+                "#9C27B0"  // Purple for AI+Momentum
+
+            // ✅ Dual mode Schedule + Momentum
+            (botState == BotState.RUNNING && isMultiMomentumModeActive) ->
+                "#00BCD4"  // Cyan for Schedule+Momentum
+
+            // ✅ Dual mode Schedule + AI Signal
+            (botState == BotState.RUNNING && isAISignalModeActive) ->
+                "#E91E63"  // Pink for Schedule+AI
+
+            isAISignalModeActive -> "#E91E63"  // Pink
+            isMultiMomentumModeActive -> "#00BCD4"  // Cyan
             isCTCModeActive -> "#FF9800"
             isIndicatorModeActive -> "#9C27B0"
             isFollowModeActive -> "#4ECDC4"
@@ -317,6 +346,20 @@ data class DashboardUiState(
 
     fun getCurrentModeInfo(): Map<String, String> {
         return when {
+            isAISignalModeActive && isMultiMomentumModeActive -> mapOf(
+                "mode" to "AI Signal + Multi-Momentum",
+                "status" to "Both modes active - Independent execution",
+                "ai_signal_status" to aiSignalOrderStatus,
+                "momentum_status" to multiMomentumOrderStatus,
+                "description" to "AI Signal from Telegram + 4 momentum strategies in parallel"
+            )
+            botState == BotState.RUNNING && isMultiMomentumModeActive -> mapOf(
+                "mode" to "Schedule + Multi-Momentum",
+                "status" to "Both modes active - Independent execution",
+                "schedule_status" to botStatus,
+                "momentum_status" to multiMomentumOrderStatus,
+                "description" to "Schedule orders + 4 momentum strategies running in parallel"
+            )
             isAISignalModeActive -> mapOf(
                 "mode" to "AI Signal",
                 "status" to aiSignalOrderStatus,

@@ -19,31 +19,13 @@ class AISignalTradeMonitor(
     private val onTradeResultDetected: (AISignalTradeResult) -> Unit,
     private val serverTimeService: ServerTimeService
 ) {
-    private val backgroundScope = kotlinx.coroutines.GlobalScope
-
-    private val retrofit = Retrofit.Builder()
-        .baseUrl("https://api.stockity.id/")
-        .addConverterFactory(GsonConverterFactory.create())
-        .build()
-
-    private val historyApi = retrofit.create(TradingHistoryApi::class.java)
-
-    private var monitoringJob: Job? = null
-    private var isActive = false
-
-    private val activeMonitoring = mutableMapOf<String, AISignalOrderMonitoring>()
-    private val monitoringLock = Mutex()
-    private val processedResults = mutableMapOf<String, String>()
-
-    private val MONITORING_INTERVAL_MS = 50L
-    private val MONITORING_TIMEOUT_MS = 90000L
-    private val WEBSOCKET_PRIORITY_WINDOW_MS = 2000L
-
-    private var lastWebSocketUpdateTime = System.currentTimeMillis()
+    companion object {
+        private const val TAG = "AISignalTradeMonitor"
+    }
 
     data class AISignalOrderMonitoring(
         val parentOrderId: String,
-        val monitoringOrderId: String, // Full ID with martingale suffix if applicable
+        val monitoringOrderId: String,
         val trend: String,
         val amount: Long,
         val assetRic: String,
@@ -66,9 +48,27 @@ class AISignalTradeMonitor(
         val details: Map<String, Any>
     )
 
-    companion object {
-        private const val TAG = "AISignalTradeMonitor"
-    }
+    private val backgroundScope = kotlinx.coroutines.GlobalScope
+
+    private val retrofit = Retrofit.Builder()
+        .baseUrl("https://api.stockity.id/")
+        .addConverterFactory(GsonConverterFactory.create())
+        .build()
+
+    private val historyApi = retrofit.create(TradingHistoryApi::class.java)
+
+    private var monitoringJob: Job? = null
+    private var isActive = false
+
+    private val activeMonitoring = mutableMapOf<String, AISignalOrderMonitoring>()
+    private val monitoringLock = Mutex()
+    private val processedResults = mutableMapOf<String, String>()
+
+    private val MONITORING_INTERVAL_MS = 50L
+    private val MONITORING_TIMEOUT_MS = 90000L
+    private val WEBSOCKET_PRIORITY_WINDOW_MS = 2000L
+
+    private var lastWebSocketUpdateTime = System.currentTimeMillis()
 
     fun startMonitoring() {
         if (isActive) return
@@ -92,6 +92,11 @@ class AISignalTradeMonitor(
         }
 
         println("$TAG: Monitoring stopped")
+    }
+
+    fun cleanup() {
+        stopMonitoring()
+        println("$TAG: Cleanup completed")
     }
 
     fun startMonitoringOrder(
@@ -151,8 +156,47 @@ class AISignalTradeMonitor(
         }
     }
 
+    fun handleWebSocketTradeUpdate(message: JSONObject) {
+        if (!isActive) return
+
+        scope.launch {
+            try {
+                val event = message.optString("event", "")
+                val payload = message.optJSONObject("payload")
+
+                when (event) {
+                    "closed", "deal_result", "trade_update" -> {
+                        lastWebSocketUpdateTime = System.currentTimeMillis()
+
+                        val orderId = payload?.optString("id", "") ?: ""
+                        val status = payload?.optString("status", "") ?: ""
+                        val amount = payload?.optLong("amount", 0L) ?: 0L
+                        val trend = payload?.optString("trend", "") ?: ""
+
+                        if (orderId.isNotEmpty() && status in listOf("won", "lost")) {
+                            processWebSocketResult(orderId, status, amount, trend, payload)
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                println("$TAG: Error processing WebSocket update: ${e.message}")
+            }
+        }
+    }
+
+    fun isActive(): Boolean = isActive
+
+    fun getMonitoringStatus(): Map<String, Any> {
+        return mapOf(
+            "is_active" to isActive,
+            "active_monitoring_count" to activeMonitoring.size,
+            "monitoring_interval_ms" to MONITORING_INTERVAL_MS,
+            "timeout_ms" to MONITORING_TIMEOUT_MS,
+            "processed_results_count" to processedResults.size
+        )
+    }
+
     private fun startMonitoringLoop() {
-        // ✅ CHANGE: Use backgroundScope
         monitoringJob = backgroundScope.launch {
             while (isActive) {
                 try {
@@ -209,7 +253,6 @@ class AISignalTradeMonitor(
         println("   Will continue even if activity destroyed")
         println("=" .repeat(60))
     }
-
 
     private suspend fun checkOrdersViaApi(ordersToCheck: List<AISignalOrderMonitoring>) {
         if (!isActive || ordersToCheck.isEmpty()) return
@@ -344,34 +387,6 @@ class AISignalTradeMonitor(
         }
     }
 
-    fun handleWebSocketTradeUpdate(message: JSONObject) {
-        if (!isActive) return
-
-        scope.launch {
-            try {
-                val event = message.optString("event", "")
-                val payload = message.optJSONObject("payload")
-
-                when (event) {
-                    "closed", "deal_result", "trade_update" -> {
-                        lastWebSocketUpdateTime = System.currentTimeMillis()
-
-                        val orderId = payload?.optString("id", "") ?: ""
-                        val status = payload?.optString("status", "") ?: ""
-                        val amount = payload?.optLong("amount", 0L) ?: 0L
-                        val trend = payload?.optString("trend", "") ?: ""
-
-                        if (orderId.isNotEmpty() && status in listOf("won", "lost")) {
-                            processWebSocketResult(orderId, status, amount, trend, payload)
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                println("$TAG: Error processing WebSocket update: ${e.message}")
-            }
-        }
-    }
-
     private suspend fun processWebSocketResult(
         tradeId: String,
         status: String,
@@ -431,23 +446,6 @@ class AISignalTradeMonitor(
                 onTradeResultDetected(result)
             }
         }
-    }
-
-    fun isActive(): Boolean = isActive
-
-    fun getMonitoringStatus(): Map<String, Any> {
-        return mapOf(
-            "is_active" to isActive,
-            "active_monitoring_count" to activeMonitoring.size,
-            "monitoring_interval_ms" to MONITORING_INTERVAL_MS,
-            "timeout_ms" to MONITORING_TIMEOUT_MS,
-            "processed_results_count" to processedResults.size
-        )
-    }
-
-    fun cleanup() {
-        stopMonitoring()
-        println("$TAG: Cleanup completed")
     }
 
     private fun parseHistoryResponse(responseBody: Any): List<TradingHistoryRaw> {

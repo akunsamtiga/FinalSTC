@@ -7,6 +7,7 @@ data class AdminUser(
     val id: String = "",
     val email: String = "",
     val name: String = "",
+    val userId: String = "",  // ✅ TAMBAHKAN INI
     val role: String = "admin",
 
     @get:PropertyName("isActive")

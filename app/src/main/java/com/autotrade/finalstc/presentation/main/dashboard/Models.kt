@@ -10,7 +10,16 @@ enum class TradingMode {
     INDICATOR_ORDER,
     CTC_ORDER,
     MULTI_MOMENTUM,
-    AI_SIGNAL
+    AI_SIGNAL,
+}
+
+enum class OrderSource {
+    SCHEDULE,
+    AI_SIGNAL,
+    FOLLOW_ORDER,
+    INDICATOR_ORDER,
+    CTC_ORDER,
+    MULTI_MOMENTUM
 }
 
 enum class AISignalOrderStatus {

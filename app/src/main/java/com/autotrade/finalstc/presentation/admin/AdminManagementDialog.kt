@@ -632,6 +632,17 @@ private fun AdminCard(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
+
+                    if (admin.userId.isNotEmpty()) {
+                        Text(
+                            text = "ID: ${admin.userId}",
+                            fontSize = 11.sp,
+                            color = TextTertiary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -766,6 +777,7 @@ private fun AddAdminDialog(
 ) {
     var name by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
+    var userId by remember { mutableStateOf("") }
     var role by remember { mutableStateOf("admin") }
     var emailError by remember { mutableStateOf<String?>(null) }
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -787,6 +799,7 @@ private fun AddAdminDialog(
             Column(
                 modifier = Modifier.padding(20.dp)
             ) {
+                // Header tetap sama
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.padding(bottom = 16.dp)
@@ -806,6 +819,7 @@ private fun AddAdminDialog(
                     )
                 }
 
+                // Name field
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
@@ -824,6 +838,7 @@ private fun AddAdminDialog(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
+                // Email field
                 OutlinedTextField(
                     value = email,
                     onValueChange = { email = it },
@@ -838,10 +853,7 @@ private fun AddAdminDialog(
                     ),
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Email,
-                        imeAction = ImeAction.Done
-                    ),
-                    keyboardActions = KeyboardActions(
-                        onDone = { keyboardController?.hide() }
+                        imeAction = ImeAction.Next  // ✅ UBAH dari Done ke Next
                     ),
                     textStyle = LocalTextStyle.current.copy(fontSize = 14.sp),
                     isError = emailError != null,
@@ -852,6 +864,29 @@ private fun AddAdminDialog(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
+                // ✅ TAMBAHKAN: User ID field
+                OutlinedTextField(
+                    value = userId,
+                    onValueChange = { userId = it },
+                    label = { Text("User ID", fontSize = 13.sp) },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = AccentPrimary,
+                        focusedLabelColor = AccentPrimary,
+                        cursorColor = AccentPrimary,
+                        focusedTextColor = TextPrimary,
+                        unfocusedTextColor = TextSecondary
+                    ),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(
+                        onDone = { keyboardController?.hide() }
+                    ),
+                    textStyle = LocalTextStyle.current.copy(fontSize = 14.sp)
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Role selection tetap sama
                 Column {
                     Text(
                         text = "Role",
@@ -903,6 +938,7 @@ private fun AddAdminDialog(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
+                // Info card tetap sama
                 Card(
                     colors = CardDefaults.cardColors(
                         containerColor = InfoColor.copy(alpha = 0.1f)
@@ -931,6 +967,7 @@ private fun AddAdminDialog(
 
                 Spacer(modifier = Modifier.height(20.dp))
 
+                // Buttons
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -948,11 +985,13 @@ private fun AddAdminDialog(
 
                     Button(
                         onClick = {
-                            if (name.isNotBlank() && email.isNotBlank() && emailError == null) {
+                            // ✅ UBAH: Validasi userId juga
+                            if (name.isNotBlank() && email.isNotBlank() && userId.isNotBlank() && emailError == null) {
                                 onAddAdmin(
                                     AdminUser(
                                         name = name,
                                         email = email,
+                                        userId = userId,  // ✅ TAMBAHKAN INI
                                         role = role
                                     )
                                 )
@@ -964,7 +1003,7 @@ private fun AddAdminDialog(
                             contentColor = Color.White
                         ),
                         shape = RoundedCornerShape(10.dp),
-                        enabled = name.isNotBlank() && email.isNotBlank() && emailError == null
+                        enabled = name.isNotBlank() && email.isNotBlank() && userId.isNotBlank() && emailError == null  // ✅ UBAH
                     ) {
                         Text("Add Admin", fontSize = 13.sp)
                     }
@@ -984,6 +1023,7 @@ private fun EditAdminDialog(
 ) {
     var name by remember { mutableStateOf(admin.name) }
     var email by remember { mutableStateOf(admin.email) }
+    var userId by remember { mutableStateOf(admin.userId) }
     var role by remember { mutableStateOf(admin.role) }
     var emailError by remember { mutableStateOf<String?>(null) }
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -1005,6 +1045,7 @@ private fun EditAdminDialog(
             Column(
                 modifier = Modifier.padding(20.dp)
             ) {
+                // Header
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.padding(bottom = 16.dp)
@@ -1024,6 +1065,7 @@ private fun EditAdminDialog(
                     )
                 }
 
+                // Name field
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
@@ -1042,6 +1084,7 @@ private fun EditAdminDialog(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
+                // Email field
                 OutlinedTextField(
                     value = email,
                     onValueChange = { email = it },
@@ -1056,10 +1099,7 @@ private fun EditAdminDialog(
                     ),
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Email,
-                        imeAction = ImeAction.Done
-                    ),
-                    keyboardActions = KeyboardActions(
-                        onDone = { keyboardController?.hide() }
+                        imeAction = ImeAction.Next  // ✅ UBAH
                     ),
                     textStyle = LocalTextStyle.current.copy(fontSize = 14.sp),
                     isError = emailError != null,
@@ -1070,6 +1110,29 @@ private fun EditAdminDialog(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
+                // ✅ TAMBAHKAN: User ID field
+                OutlinedTextField(
+                    value = userId,
+                    onValueChange = { userId = it },
+                    label = { Text("User ID", fontSize = 13.sp) },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = AccentPrimary,
+                        focusedLabelColor = AccentPrimary,
+                        cursorColor = AccentPrimary,
+                        focusedTextColor = TextPrimary,
+                        unfocusedTextColor = TextSecondary
+                    ),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(
+                        onDone = { keyboardController?.hide() }
+                    ),
+                    textStyle = LocalTextStyle.current.copy(fontSize = 14.sp)
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Role selection tetap sama
                 Column {
                     Text(
                         text = "Role",
@@ -1121,6 +1184,7 @@ private fun EditAdminDialog(
 
                 Spacer(modifier = Modifier.height(20.dp))
 
+                // Buttons
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -1138,11 +1202,13 @@ private fun EditAdminDialog(
 
                     Button(
                         onClick = {
-                            if (name.isNotBlank() && email.isNotBlank() && emailError == null) {
+                            // ✅ UBAH: Include userId
+                            if (name.isNotBlank() && email.isNotBlank() && userId.isNotBlank() && emailError == null) {
                                 onEditAdmin(
                                     admin.copy(
                                         name = name,
                                         email = email,
+                                        userId = userId,  // ✅ TAMBAHKAN INI
                                         role = role
                                     )
                                 )
@@ -1154,7 +1220,7 @@ private fun EditAdminDialog(
                             contentColor = Color.White
                         ),
                         shape = RoundedCornerShape(10.dp),
-                        enabled = name.isNotBlank() && email.isNotBlank() && emailError == null
+                        enabled = name.isNotBlank() && email.isNotBlank() && userId.isNotBlank() && emailError == null  // ✅ UBAH
                     ) {
                         Text("Update", fontSize = 13.sp)
                     }
